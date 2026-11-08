@@ -26,7 +26,7 @@ export class Joystick {
     const r = this.el.getBoundingClientRect();
     this.cx = r.left + r.width / 2;
     this.cy = r.top + r.height / 2;
-    this.radius = r.width * 0.36;
+    this.radius = r.width * 0.42; // 손가락 움직임 범위를 넓혀 덜 예민하게
     this.el.classList.add('active');
     this.move(e);
     e.preventDefault();
@@ -41,7 +41,7 @@ export class Joystick {
       dy /= l;
     }
     this.knob.style.transform = `translate(${dx * this.radius}px, ${dy * this.radius}px)`;
-    const dz = 0.12;
+    const dz = 0.15;
     const shape = (v: number) => (Math.abs(v) < dz ? 0 : Math.sign(v) * ((Math.abs(v) - dz) / (1 - dz)));
     this.x = shape(dx);
     this.y = -shape(dy);

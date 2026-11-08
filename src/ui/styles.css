@@ -238,7 +238,7 @@ body {
 .stick {
   position: absolute;
   bottom: max(18px, env(safe-area-inset-bottom));
-  width: min(34vw, 190px);
+  width: min(40vw, 240px);
   aspect-ratio: 1;
   touch-action: none;
 }
@@ -358,6 +358,45 @@ body {
 input[type='range'] {
   width: 110px;
   accent-color: var(--sun-deep);
+}
+.load {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.load .bar {
+  display: inline-block;
+  width: 70px;
+  height: 12px;
+  border: 2px solid var(--ink);
+  border-radius: 6px;
+  background: #fff;
+  overflow: hidden;
+  position: relative;
+}
+.load .bar > i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  background: var(--ok);
+}
+.load .bar.hot > i {
+  background: var(--danger);
+}
+.load .bar::after {
+  content: '';
+  position: absolute;
+  left: 66%;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: var(--ink);
+}
+.fs-hint {
+  font-size: 12px;
+  margin: 8px 0 0;
+  opacity: 0.75;
 }
 .endring {
   position: absolute;
@@ -618,7 +657,7 @@ input[type='range'] {
     font-size: 13px;
   }
   .console {
-    bottom: calc(min(34vw, 190px) + 24px);
+    bottom: calc(min(40vw, 240px) + 24px);
   }
 }
 @media (max-height: 460px) {
@@ -626,7 +665,7 @@ input[type='range'] {
     bottom: max(10px, env(safe-area-inset-bottom));
   }
   .stick {
-    width: min(30vh, 160px);
+    width: min(46vh, 200px);
   }
   .toasts {
     top: 86px;

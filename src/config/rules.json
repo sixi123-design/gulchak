@@ -67,6 +67,18 @@
       "basis": "자체",
       "kind": "warning",
       "title": "버킷이 굴착구역 선에 가까움"
+    },
+    {
+      "id": "W-OVERLOAD",
+      "basis": "자체",
+      "kind": "warning",
+      "title": "무리한 굴착으로 엔진 과부하"
+    },
+    {
+      "id": "W-LIFT",
+      "basis": "자체(Q2 참고)",
+      "kind": "warning",
+      "title": "버킷으로 땅을 눌러 차체가 들림"
     }
   ],
   "params": {
@@ -79,8 +91,6 @@
     "passTopLimit": null,
     "repeatCooldownSec": 1.5,
     "stallRpm": 0.35,
-    "stallLoadRate": 0.03,
-    "stallHoldSec": 0.8,
     "flattenMinVolume": 0.03,
     "endHoldSec": 1.0,
     "endOpenMarginDeg": 8,
@@ -96,6 +106,13 @@
     "digTargetInset": 0.3,
     "digPosTolGood": 0.1,
     "digPosTolOk": 0.2,
-    "nearLineMargin": 0.15
+    "nearLineMargin": 0.15,
+    "soilResist": 6,
+    "powerBase": 0.11,
+    "powerPerRpm": 0.22,
+    "overloadWarnSec": 0.08,
+    "liftWarnDeg": 2,
+    "liftMaxDeg": 5,
+    "stallOverload": 0.15
   }
 }

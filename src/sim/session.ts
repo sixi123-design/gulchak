@@ -17,8 +17,6 @@ export interface RuleParams {
   passTopLimit: number | null;
   repeatCooldownSec: number;
   stallRpm: number;
-  stallLoadRate: number;
-  stallHoldSec: number;
   flattenMinVolume: number;
   endHoldSec: number;
   endOpenMarginDeg: number;
@@ -41,6 +39,18 @@ export interface RuleParams {
   digPosTolOk: number;
   /** 작업 높이에서 선까지 이 거리 안이면 근접 경고 */
   nearLineMargin: number;
+  /** 흙 저항: 관절 속도 배율 = 1 / (1 + soilResist × 초당 깎는 부피) */
+  soilResist: number;
+  /** 엔진이 감당하는 굴착 힘 (초당 '저항 부피'): powerBase + powerPerRpm × rpm */
+  powerBase: number;
+  powerPerRpm: number;
+  /** 과부하 누적량(∫max(0,부하-1)dt, 1.5초 감쇠)이 이 값을 넘으면 경고 */
+  overloadWarnSec: number;
+  /** rpm이 낮을 때 과부하 누적량이 이 값을 넘으면 엔진 정지 */
+  stallOverload: number;
+  /** 차체 들림 경고 각도, 최대 각도 (도) */
+  liftWarnDeg: number;
+  liftMaxDeg: number;
 }
 
 /** 굴착 진입 위치: 목표점(ⓑ선 안쪽 30cm, 구덩이 중심선) 대비 */
@@ -129,6 +139,17 @@ export class DigSession {
   impacts = 0;
   jolts = 0;
   rock: Rock = { pitch: 0, pitchV: 0, roll: 0, rollV: 0 };
+  /** 엔진 부하 (0~, 1을 넘으면 과부하). 굴착 저항 ÷ 엔진 힘 */
+  engineLoad = 0;
+  /** 차체 들림 각도 (rad, 버킷 쪽이 들림) */
+  lift = 0;
+  /** 이번 스텝 굴착 저항 (저항 부피 m³)과 그중 아래로 누르는 비율 */
+  private effort = 0;
+  private effortDown = 0;
+  /** 과부하 누적량: ∫max(0, 부하-1)dt, 1.5초에 걸쳐 서서히 빠짐 */
+  overloadAcc = 0;
+  maxOverloadAcc = 0;
+  private downAvg = 0;
   /** 마지막 충격 세기 (화면 흔들림·진동용, 렌더에서 읽고 감쇠) */
   lastJolt = 0;
   private joltCd = 0;
@@ -142,6 +163,11 @@ export class DigSession {
   private prevBucket: V3[];
   private prevUnder: V3[][] = [];
   private stallT = 0;
+  /** 직전 스텝의 초당 굴착량 (흙 저항용, m³/s) */
+  cutRate = 0;
+  /** 버킷 상대각 변화 속도 (rad/s, 음수 = 오므림) */
+  bucketRate = 0;
+  private prevBucketAngle: number | null = null;
   private endT = 0;
   pourAcc = 0;
   private impactCd = 0;
@@ -286,6 +312,11 @@ export class DigSession {
     const reachF = clamp(this.frame.P2.r / 6, 0.4, 1.3);
     const loadF = 1 + this.load / this.m.struckCapacity;
     const inertia = { swing: 1.2 * reachF * loadF, boom: 1.0 * reachF * loadF, arm: 0.7 * loadF, bucket: 0.35 * loadF };
+    // 흙 저항: 흙을 많이 깎는 중일수록 느려진다 (한 번에 깊이 박히지 않음)
+    const resist = 1 / (1 + this.params.soilResist * this.cutRate);
+    let curPen = this.penetration(this.frame, this.pose.swing).each;
+    // 과부하면 유압이 더 밀지 못한다 (릴리프)
+    const relief = this.engineLoad > 1 ? 1 / this.engineLoad : 1;
     let pitchImp = 0;
     let rollImp = 0;
     let shock = 0;
@@ -309,7 +340,7 @@ export class DigSession {
       }
       if (Math.abs(this.vel[j]) < 1e-5) continue;
       const old = this.pose[j];
-      let nv = old + this.vel[j] * dt;
+      let nv = old + this.vel[j] * dt * resist * relief;
       if (j !== 'swing') {
         const lim = this.m.limits[j];
         nv = clamp(nv, lim[0], lim[1]);
@@ -327,19 +358,42 @@ export class DigSession {
       this.pose[j] = nv;
       const f = fk(this.m, this.pose);
       const pen = this.penetration(f, this.pose.swing);
-      if (pen.depth > 0.01) {
+      // 단단한 바닥 아래로 '더 깊이' 파고드는 동작만 막는다 (바닥에 닿은 채 오므리기·들기는 허용).
+      // 하부 점마다 따로 비교해서, 느리게 조금씩 뚫거나 다른 점이 새로 뚫는 것도 막는다
+      let deeper = false;
+      for (let q = 0; q < pen.each.length; q++) {
+        if (pen.each[q] > 0.01 && pen.each[q] > (curPen[q] ?? 0) + 1e-4) {
+          deeper = true;
+          break;
+        }
+      }
+      if (deeper) {
         this.pose[j] = old;
         blocked = true;
         impactSpeed = Math.max(impactSpeed, Math.abs(this.vel[j]) * 3);
+        // 단단한 바닥을 미는 힘: 레버를 민 만큼 저항 (붐 내림은 차체를 들어 올림)
+        const push = (Math.abs(tgt[j]) / Math.max(sp[j], 1e-6)) * 0.016;
+        this.effort += push;
+        if (j === 'boom' || j === 'arm') this.effortDown += push;
         this.vel[j] = 0;
-      }
+      } else curPen = pen.each;
     }
     this.frame = fk(this.m, this.pose);
+    if (this.prevBucketAngle !== null) this.bucketRate = (this.pose.bucket - this.prevBucketAngle) / dt;
+    this.prevBucketAngle = this.pose.bucket;
+    // 과부하로 유압이 막힌 상태에서 레버를 계속 밀면(벽을 계속 밂) 부하가 유지된다
+    if (relief < 1 && this.cutRate > 0.002) {
+      const demand = (Math.abs(tgt.boom) / sp.boom + Math.abs(tgt.arm) / sp.arm + Math.abs(tgt.bucket) / sp.bucket) / 3;
+      const hold = demand * (1 - relief) * 0.02;
+      this.effort += hold;
+      this.effortDown += hold * 0.5;
+    }
     this.applyJolt(dt, shock, pitchImp, rollImp, working);
 
     // 2) 흙 상호작용
     let cutTotal = 0;
     if (working || this.phase === 'ready') cutTotal = this.interactSoil();
+    this.cutRate += (cutTotal / dt - this.cutRate) * Math.min(1, dt * 10);
 
     // 3) 쏟기, 입자
     this.pour(dt);
@@ -368,9 +422,10 @@ export class DigSession {
         this.report('W-IMPACT', '버킷이 바닥·지면에 부딪힘');
       }
       // 엔진 정지
-      if (this.engineOn && this.rpm < this.params.stallRpm && (cutTotal / dt > this.params.stallLoadRate || blocked)) {
+      this.updateLoad(dt);
+      if (this.engineOn && this.rpm < this.params.stallRpm && this.overloadAcc > this.params.stallOverload) {
         this.stallT += dt;
-        if (this.stallT > this.params.stallHoldSec) {
+        if (this.stallT > 0) {
           this.engineOn = false;
           this.report('D-STALL', '낮은 rpm에서 무리한 굴착으로 엔진 정지');
         }
@@ -384,6 +439,25 @@ export class DigSession {
       this.checkEnd(dt);
     }
     this.simMs = typeof performance !== 'undefined' ? performance.now() - t0 : 0;
+  }
+
+  /** 굴착 저항 → 엔진 부하 → 과부하 경고·차체 들림 */
+  private updateLoad(dt: number) {
+    const power = this.params.powerBase + this.params.powerPerRpm * clamp(this.rpm, 0, 1);
+    const target = this.engineOn ? this.effort / dt / power : 0;
+    this.engineLoad += (target - this.engineLoad) * Math.min(1, dt / 0.25);
+    const downFrac = this.effort > 1e-9 ? this.effortDown / this.effort : 0;
+    this.effort = 0;
+    this.effortDown = 0;
+    // 아래로 누르는 과부하만큼 버킷 쪽 차체가 들린다
+    const maxL = (this.params.liftMaxDeg * Math.PI) / 180;
+    this.downAvg += (downFrac - this.downAvg) * Math.min(1, dt / 0.3);
+    const want = clamp(this.overloadAcc * 0.45 * (0.4 + 0.6 * this.downAvg), 0, maxL);
+    this.lift += (want - this.lift) * Math.min(1, dt / (want > this.lift ? 0.35 : 0.2));
+    this.overloadAcc = this.overloadAcc * Math.exp(-dt / 1.5) + Math.max(0, this.engineLoad - 1) * dt;
+    this.maxOverloadAcc = Math.max(this.maxOverloadAcc, this.overloadAcc);
+    if (this.overloadAcc > this.params.overloadWarnSec) this.report('W-OVERLOAD', '버킷 날 방향으로 가르지 않고 밀고 있음: 각도를 바꾸거나 덜 깊게');
+    if (this.lift > (this.params.liftWarnDeg * Math.PI) / 180) this.report('W-LIFT', '버킷으로 땅을 너무 눌러 차체가 들림');
   }
 
   /** 충격 → 차체 흔들림, 경고, 고봉 흙 쏟아짐 */
@@ -426,13 +500,15 @@ export class DigSession {
   /** 버킷 하부가 단단한 바닥 아래로 들어간 깊이 */
   private penetration(f: Frame, swing: number) {
     let depth = 0;
+    const each: number[] = [];
     for (const row of this.underWorld(f, swing)) {
       for (const p of row) {
-        const fl = this.soil.floorAt(p.x, p.z);
-        depth = Math.max(depth, fl - p.y);
+        const d = this.soil.floorAt(p.x, p.z) - p.y;
+        each.push(d);
+        if (d > depth) depth = d;
       }
     }
-    return { depth };
+    return { depth, each };
   }
 
   private interactSoil(): number {
@@ -443,6 +519,18 @@ export class DigSession {
     const nOpenW = v3(nOpen.x, nOpen.y, nOpen.z);
     const center = toWorld(swing, { r: (f.tip.r + f.P2.r) / 2, y: (f.tip.y + f.P2.y) / 2 });
     const cell = this.params.soilCell;
+    // 버킷 날 방향 (힐 → 끝)
+    const bl = { r: f.tip.r - f.heel.r, y: f.tip.y - f.heel.y };
+    const bn = Math.hypot(bl.r, bl.y) || 1;
+    const bladeW = toWorld(swing, { r: bl.r / bn, y: bl.y / bn });
+    // 버킷 날 끝의 이동 방향과 날 방향의 어긋남 (0 = 날 방향으로 가름, 1 = 직각으로 밈)
+    const tipNow = under[0][Math.floor(under[0].length / 2)];
+    const tipPrev = (this.prevUnder[0] ?? under[0])[Math.floor(under[0].length / 2)];
+    const tmv = sub(tipNow, tipPrev);
+    const tml = len(tmv);
+    // 0 = 날 방향으로 가름, 1 = 직각이거나 힐이 앞장섬(뒤로 밈)
+    const misBucket = tml > 1e-5 ? 1 - Math.max(0, dot(tmv, bladeW) / tml) : 0.5;
+    const downBucket = tml > 1e-5 ? clamp(-tmv.y / tml, 0, 1) : 0.5;
     let total = 0;
     for (let s = 0; s < under.length; s++) {
       const row = under[s];
@@ -456,12 +544,36 @@ export class DigSession {
         const vol = g.cut(kk, p.y);
         if (vol <= 0) continue;
         total += vol;
-        if (g.name === 'A' && !this.cycle.firstCutRecorded && this.phase === 'working') this.recordEntry(f, swing);
+        {
+          // 굴착 저항 = 흙 단단함 × 부위 × 각도 나쁨
+          //  - 다져진 흙(원래 지면·벽)이 흐트러진 흙보다 무겁다
+          //  - 날이 가른 길을 몸통이 따라가므로 몸통 줄은 절반
+          //  - 날이 날 방향(힐→끝)으로 움직이면 가볍고, 등·바닥으로 밀면 무겁다 (버킷 전체 기준 misBucket)
+          const firm = g.lastFirmCut;
+          // 흐트러진 흙은 밀어낸 것을 다시 미는 경우가 많아 아주 가볍게(5%) 센다
+          const hard = firm + (vol - firm) * 0.05;
+          // 날 끝: 날 방향으로 가르면 가볍고, 힐(등) 쪽이 앞장서면 무겁다
+          // 몸통: 날이 앞장서면 이미 갈라진 길을 따라가므로, 몸통이 다져진 흙을 깎는 것 자체가 나쁜 각도의 신호
+          const e = s === 0 ? hard * (0.3 + 2 * misBucket) : hard * 1.5;
+          this.effort += e;
+          this.effortDown += e * downBucket;
+        }
+        if (s === 0 && g.name === 'A' && !this.cycle.firstCutRecorded && this.phase === 'working') this.recordEntry(f, swing);
         const mv = sub(p, prow[i]);
-        const into = dot(mv, nOpenW) > 1e-4;
-        const front = s <= 1;
-        if (front && into && this.load < this.heapedCap) {
-          const take = Math.min(vol, this.heapedCap - this.load);
+        // 흙은 버킷 날(맨 앞줄)로만, 날이 개구부 쪽(45° 이내)으로 움직일 때만 담긴다.
+        // → 수직으로 찍으면 옆으로 밀릴 뿐이고, 각도를 잡고 오므리거나 당겨야 쓸려 들어온다.
+        // 담기는 비율: 개구부 방향과 잘 맞을수록(45°→18°) 0→1, 아래로 찌르는 동작이면 30%만
+        const ml = len(mv);
+        const cosA = ml > 1e-4 ? dot(mv, nOpenW) / ml : 0;
+        const align = clamp((cosA - 0.7) / 0.25, 0, 1);
+        // 실제로 버킷을 오므리는 정도 (자세 변화 기준이라 레버·자동 조작 모두 반영)
+        const curl = clamp(-this.bucketRate / (0.25 * this.m.speeds.bucket), 0, 1);
+        const stabbing = ml > 1e-4 && mv.y < -0.6 * ml;
+        // 오므리지 않고 끌기만 하면 35%, 오므려야 100%. 오므림 없이 아래로 찌르기만 하면 0
+        const frac = stabbing && curl < 0.2 ? 0 : align * (0.35 + 0.65 * curl);
+        const front = s === 0;
+        if (front && frac > 0 && this.load < this.heapedCap) {
+          const take = Math.min(vol * frac, this.heapedCap - this.load);
           this.load += take;
           if (g.name === 'A') this.cycle.cutInA += take;
           if (vol > take) this.push(g, p, mv, center, vol - take, cell);
@@ -512,6 +624,9 @@ export class DigSession {
 
   private pour(dt: number) {
     const f = this.frame;
+    // 버킷이 흙에 묻혀 있으면(날 끝이 표면 아래) 흙이 빠져나갈 수 없다
+    const tipW = toWorld(this.pose.swing, f.tip);
+    if (tipW.y < this.soil.surfaceAt(tipW.x, tipW.z) - 0.02) return;
     const ny = f.nOpen.y;
     const retain = clamp((ny + 0.35) / 0.9, 0, 1) * this.heapedCap;
     if (this.load <= retain + 1e-6) return;

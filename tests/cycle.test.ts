@@ -31,12 +31,16 @@ function driver(s: DigSession) {
   return { to, tip, wait };
 }
 
-function runCycle(s: DigSession, d: ReturnType<typeof driver>) {
+function runCycle(s: DigSession, d: ReturnType<typeof driver>, c = 0) {
   const [A, C] = s.site.stations;
   const CURL = -PI - 0.6;
-  d.tip(A.pitOut - 0.1, 0.3, -1.0, 40); // A 구덩이 위 (버킷 끝을 앞으로 뻗음)
-  d.tip(A.pitOut - 0.1, -0.75, -1.0, 40); // 내려 찍기
-  d.tip(A.pitIn + 0.3, -0.65, -PI, 100); // 당기며 오므려 퍼 담기
+  // 현재 흙 표면(목표 지점) 기준으로 파기: 구덩이가 깊어져도 같은 동작
+  // 굴착할 때마다 시작 지점을 안쪽으로 옮김 (같은 자리만 파지 않음)
+  const r0 = A.pitOut - 0.1 - 0.35 * c;
+  const surf = Math.max(s.soil.surfaceAt(-r0, 0), -1.3);
+  d.tip(r0, surf + 0.3, -1.0, 40); // A 구덩이 위 (버킷 날을 앞으로 숙임)
+  d.tip(r0, surf - 0.3, -1.0, 40); // 비스듬히 꽂기
+  d.tip(Math.max(A.pitIn + 0.5, r0 - 1.6), surf - 0.25, -2.6, 100); // 당기며 오므려 쓸어 담기
   d.tip(A.pitIn + 0.6, 1.2, CURL, 40); // 오므리며 들어 올리기
   d.to({ boom: 1.0, arm: -1.9, bucket: -1.4 }, 40); // B 통과 자세 (붐 높이 들기)
   d.to({ swing: 0 }, 160); // A → B → C (왼쪽 선회)
@@ -56,7 +60,7 @@ describe('굴착 작업 한 바퀴 (자동 조작)', () => {
     s.ready();
     for (let i = 0; i < 100; i++) s.step();
     const d = driver(s);
-    for (let c = 0; c < 4; c++) runCycle(s, d);
+    for (let c = 0; c < 4; c++) runCycle(s, d, c);
     expect(s.digCount).toBe(4);
     expect(s.dumpCount).toBe(4);
     for (const r of s.loadRatios) expect(r).toBeGreaterThan(0.5);

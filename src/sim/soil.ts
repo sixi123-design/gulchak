@@ -11,6 +11,8 @@ export class SoilGrid {
   readonly h: Float32Array;
   readonly h0: Float32Array;
   readonly floor: Float32Array;
+  /** 다져진 흙의 윗면: 이 아래는 깎을 수는 있지만 흘러내리지 않는다 (원래 지면, 버킷이 깎아낸 면) */
+  readonly firm: Float32Array;
   readonly pit: Uint8Array;
   dirty = true;
   activeT = 0;
@@ -28,6 +30,7 @@ export class SoilGrid {
     this.h = new Float32Array(n);
     this.h0 = new Float32Array(n);
     this.floor = new Float32Array(n);
+    this.firm = new Float32Array(n);
     this.pit = new Uint8Array(n);
     this.area = cell * cell;
   }
@@ -63,11 +66,16 @@ export class SoilGrid {
     return (a * (1 - tx) + b * tx) * (1 - tz) + (c * (1 - tx) + d * tx) * tz;
   }
   /** y 높이까지 깎고 깎은 부피 반환 */
+  /** 직전 cut에서 깎인 다져진 흙 부피 (굴착 저항 계산용) */
+  lastFirmCut = 0;
   cut(k: number, y: number): number {
     const target = Math.max(y, this.floor[k]);
     const dh = this.h[k] - target;
+    this.lastFirmCut = 0;
     if (dh <= 0) return 0;
+    this.lastFirmCut = Math.max(0, Math.min(this.firm[k], this.h[k]) - target) * this.area;
     this.h[k] = target;
+    if (this.firm[k] > target) this.firm[k] = target; // 깎아낸 면은 다져진 채로 남음
     this.dirty = true;
     this.activeT = 2;
     return dh * this.area;
@@ -96,30 +104,31 @@ export class SoilGrid {
   /** 안식각 완화. 이동이 있었으면 true */
   relax(talus: number, iters: number): boolean {
     let moved = false;
-    const { h, floor, nx, nz } = this;
+    const { h, firm, nx, nz } = this;
     for (let it = 0; it < iters; it++) {
       for (let j = 0; j < nz; j++) {
         for (let i = 0; i < nx; i++) {
           const k = j * nx + i;
-          if (i + 1 < nx) moved = this.pair(k, k + 1, talus, h, floor) || moved;
-          if (j + 1 < nz) moved = this.pair(k, k + nx, talus, h, floor) || moved;
+          if (i + 1 < nx) moved = this.pair(k, k + 1, talus, h, firm) || moved;
+          if (j + 1 < nz) moved = this.pair(k, k + nx, talus, h, firm) || moved;
         }
       }
     }
     if (moved) this.dirty = true;
     return moved;
   }
-  private pair(a: number, b: number, talus: number, h: Float32Array, floor: Float32Array): boolean {
+  /** 흐트러진 흙(h - firm)만 이웃으로 흘러간다 */
+  private pair(a: number, b: number, talus: number, h: Float32Array, firm: Float32Array): boolean {
     const diff = h[a] - h[b];
     if (diff > talus) {
-      const mv = Math.min((diff - talus) * 0.25, h[a] - floor[a]);
+      const mv = Math.min((diff - talus) * 0.25, h[a] - firm[a]);
       if (mv > 1e-6) {
         h[a] -= mv;
         h[b] += mv;
         return true;
       }
     } else if (-diff > talus) {
-      const mv = Math.min((-diff - talus) * 0.25, h[b] - floor[b]);
+      const mv = Math.min((-diff - talus) * 0.25, h[b] - firm[b]);
       if (mv > 1e-6) {
         h[b] -= mv;
         h[a] += mv;
@@ -174,6 +183,7 @@ export function makeStationGrid(s: Station, init: SoilInit): SoilGrid {
         g.floor[k] = init.groundFloor;
       }
       g.h0[k] = g.h[k];
+      g.firm[k] = g.h[k];
     }
   }
   return g;

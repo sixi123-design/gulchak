@@ -168,7 +168,25 @@ $('rpm2').oninput = syncPrecheck;
 $('rpm').oninput = () => {
   session.rpm = Number($<HTMLInputElement>('rpm').value) / 100;
 };
+async function goFullscreen() {
+  try {
+    if (!document.fullscreenElement && document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+    const o = screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> };
+    if (o?.lock) await o.lock('landscape');
+  } catch {
+    /* 아이폰 Safari 등 미지원: 홈 화면에 추가 안내 */
+  }
+}
+$('btn-fs').onclick = () => {
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  else goFullscreen();
+};
+const isIOS = /iP(hone|od|ad)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const standalone = (navigator as Navigator & { standalone?: boolean }).standalone || matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches;
+if (isIOS && !standalone) $('fs-hint').hidden = false;
+if (!document.documentElement.requestFullscreen) $('btn-fs').hidden = true;
 $('btn-ready').onclick = () => {
+  if (matchMedia('(pointer: coarse)').matches) goFullscreen();
   session.ready();
   $('precheck').hidden = true;
   const f = $('ready-flash');
@@ -248,6 +266,10 @@ function updateHud() {
   lv.textContent = s.leverUnlocked ? '안전레버 해제됨' : '안전레버 잠김';
   lv.classList.toggle('on', s.leverUnlocked);
   $('btn-engine').hidden = s.engineOn;
+  // 엔진 부하: 눈금(2/3) = 엔진 힘의 100%
+  const lb = $('loadbar2');
+  lb.style.width = `${Math.min(100, (s.engineLoad / 1.5) * 100)}%`;
+  lb.parentElement!.classList.toggle('hot', s.engineLoad > 1);
   const ring = $('endring');
   const p = s.endProgress;
   ring.style.opacity = p > 0 ? '1' : '0';
@@ -355,7 +377,7 @@ function frame(now: number) {
 }
 const clamp1 = (v: number) => Math.max(-1, Math.min(1, v));
 /** 레버 감도 곡선: 조금 기울이면 아주 천천히 (미세 조작) */
-const curve = (v: number) => Math.sign(v) * Math.abs(v) ** 1.6;
+const curve = (v: number) => Math.sign(v) * Math.abs(v) ** 2.2;
 const kb = { lx: 0, ly: 0, rx: 0, ry: 0 };
 let lastBuzz = 0;
 

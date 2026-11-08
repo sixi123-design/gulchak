@@ -4,6 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#7fd3ff" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="굴착 연습장" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="./icon-192.png" />
     <title>굴착 연습장</title>
     <link rel="stylesheet" href="./src/ui/styles.css" />
   </head>
@@ -19,6 +25,7 @@
         </div>
         <div class="timer" id="timer">4:00</div>
         <div class="actions">
+          <button class="btn small" id="btn-fs" title="전체화면">⛶</button>
           <button class="btn small" id="btn-cam">시점</button>
           <button class="btn small danger" id="btn-end">그만하기</button>
         </div>
@@ -46,6 +53,7 @@
       <div class="console">
         <button class="btn toggle" id="btn-lever">안전레버 잠김</button>
         <label class="rpm"><b>RPM</b><input type="range" id="rpm" min="0" max="100" value="30" /></label>
+        <span class="load"><b>부하</b><i class="bar"><i id="loadbar2"></i></i></span>
         <button class="btn small" id="btn-engine" hidden>시동</button>
       </div>
       <div class="endring" id="endring"></div>
@@ -63,6 +71,7 @@
         </div>
         <button class="btn big go" id="btn-ready">준비 완료</button>
         <p class="hint">PC: 왼쪽 레버 W A S D · 오른쪽 레버 I J K L</p>
+        <p class="fs-hint" id="fs-hint" hidden>아이폰: 공유 버튼 → <b>홈 화면에 추가</b>로 열면 주소창 없이 전체화면으로 연습할 수 있어요.</p>
       </div>
     </div>
 
