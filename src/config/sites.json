@@ -3,456 +3,608 @@
 "region": "강원 춘천",
 "name": "강원국가자격시험장",
 "machine": "볼보 EW145B",
-"style": "C"
+"style": "C",
+"lat": 37.88,
+"lng": 127.73
 },
 {
 "region": "강원 원주",
 "name": "원주제일중장비시험장",
 "machine": "볼보 EW145B",
-"style": "C"
+"style": "C",
+"lat": 37.34,
+"lng": 127.92
 },
 {
 "region": "강원 원주",
 "name": "원주코끼리중장비학원",
 "machine": "볼보 EW145B",
-"style": "C"
+"style": "C",
+"lat": 37.34,
+"lng": 127.92
 },
 {
 "region": "강원 동해",
 "name": "동해직업전문학교",
 "machine": "볼보 EW145B",
-"style": "C"
+"style": "C",
+"lat": 37.52,
+"lng": 129.11
 },
 {
 "region": "강원 강릉",
 "name": "산림조합중앙회 강릉교육원(구.임업기계훈련원)",
 "machine": "대우130W-V",
-"style": "B"
+"style": "B",
+"lat": 37.75,
+"lng": 128.88
 },
 {
 "region": "부산 북구",
 "name": "부산국가자격시험장",
 "machine": "두산 DX150W-7",
-"style": "B"
+"style": "B",
+"lat": 35.2,
+"lng": 129.0
 },
 {
 "region": "경남 김해",
 "name": "김해중장비학원",
 "machine": "두산 DX140W",
-"style": "B"
+"style": "B",
+"lat": 35.23,
+"lng": 128.89
 },
 {
 "region": "경남 창원",
 "name": "경남창원중장비학원",
 "machine": "두산 DX140WACE",
-"style": "B"
+"style": "B",
+"lat": 35.23,
+"lng": 128.68
 },
 {
 "region": "경남 함안",
 "name": "경남제일중장비학원",
 "machine": "두산 DX140WA",
-"style": "B"
+"style": "B",
+"lat": 35.27,
+"lng": 128.41
 },
 {
 "region": "경남 창원",
 "name": "창원탑중장비학원",
 "machine": "두산 DX140W",
-"style": "B"
+"style": "B",
+"lat": 35.23,
+"lng": 128.68
 },
 {
 "region": "울산 북구",
 "name": "울산중장비직업전문학교",
 "machine": "두산 DX140 (전용)",
-"style": "B"
+"style": "B",
+"lat": 35.58,
+"lng": 129.36
 },
 {
 "region": "울산 북구",
 "name": "이화중장비학원",
 "machine": "두산 DX140WA / 현대 ROBEX140W",
-"style": "B"
+"style": "B",
+"lat": 35.58,
+"lng": 129.36
 },
 {
 "region": "울산 울주군",
 "name": "울산중장비교육원",
 "machine": "두산 DX140W",
-"style": "B"
+"style": "B",
+"lat": 35.52,
+"lng": 129.24
 },
 {
 "region": "대구 동구",
 "name": "(각산동실습장)경북산업직업전문학교",
 "machine": "DEVELON DX150w-7K",
-"style": "B"
+"style": "B",
+"lat": 35.89,
+"lng": 128.64
 },
 {
 "region": "대구 달성군",
 "name": "한결직업전문학원",
 "machine": "두산 DX140WACE",
-"style": "B"
+"style": "B",
+"lat": 35.77,
+"lng": 128.43
 },
 {
 "region": "경북 영천",
 "name": "영천중장비운전학원",
 "machine": "두산 DX140WACE",
-"style": "B"
+"style": "B",
+"lat": 35.97,
+"lng": 128.94
 },
 {
 "region": "경북 영천",
 "name": "영천제일중장비학원",
 "machine": "볼보 EW145B",
-"style": "C"
+"style": "C",
+"lat": 35.97,
+"lng": 128.94
 },
 {
 "region": "경북 영주",
 "name": "현대중장비직업전문학원",
 "machine": "볼보 EW140E",
-"style": "C"
+"style": "C",
+"lat": 36.81,
+"lng": 128.62
 },
 {
 "region": "경북 안동",
 "name": "대길건설직업전문학원",
 "machine": "볼보 EW140E",
-"style": "C"
+"style": "C",
+"lat": 36.57,
+"lng": 128.73
 },
 {
 "region": "경북 상주",
 "name": "상주중장비운전학원",
 "machine": "볼보 EW145B",
-"style": "C"
+"style": "C",
+"lat": 36.41,
+"lng": 128.16
 },
 {
 "region": "경북 구미",
 "name": "구미대학교",
 "machine": "캐터필러 M314F / 현대 HW155A / DEVELON DX150w-7K",
-"style": "B"
+"style": "B",
+"lat": 36.12,
+"lng": 128.34
 },
 {
 "region": "경북 칠곡",
 "name": "우성중장비직업전문학교",
 "machine": "두산 DX140W-5",
-"style": "B"
+"style": "B",
+"lat": 35.99,
+"lng": 128.4
 },
 {
 "region": "경북 포항",
 "name": "영남직업전문학교",
 "machine": "두산 DX140WACE",
-"style": "B"
+"style": "B",
+"lat": 36.02,
+"lng": 129.34
 },
 {
 "region": "경북 경주",
 "name": "건영직업전문학교",
 "machine": "현대 ROBEX140W",
-"style": "A"
+"style": "A",
+"lat": 35.86,
+"lng": 129.22
 },
 {
 "region": "경북 포항",
 "name": "포항직업전문학교",
 "machine": "현대 ROBEX140W",
-"style": "A"
+"style": "A",
+"lat": 36.02,
+"lng": 129.34
 },
 {
 "region": "경북 경주",
 "name": "외동기술전문학원",
 "machine": "현대 ROBEX140W",
-"style": "A"
+"style": "A",
+"lat": 35.86,
+"lng": 129.22
 },
 {
 "region": "경북 경주",
 "name": "경주직업전문학교",
 "machine": "현대 ROBEX140W",
-"style": "A"
+"style": "A",
+"lat": 35.86,
+"lng": 129.22
 },
 {
 "region": "인천 중구",
 "name": "한국항만연수원 인천연수원",
 "machine": "두산 DX140W",
-"style": "B"
+"style": "B",
+"lat": 37.47,
+"lng": 126.62
 },
 {
 "region": "인천 서구",
 "name": "삼성중장비운전학원",
 "machine": "현대 ROBEX140W",
-"style": "A"
+"style": "A",
+"lat": 37.55,
+"lng": 126.68
 },
 {
 "region": "경기 김포",
 "name": "김포중장비자동차정비학원",
 "machine": "현대 HW145",
-"style": "A"
+"style": "A",
+"lat": 37.62,
+"lng": 126.72
 },
 {
 "region": "경기 안산",
 "name": "두산인프라코어기술교육센터",
 "machine": "두산 DX140W",
-"style": "B"
+"style": "B",
+"lat": 37.32,
+"lng": 126.83
 },
 {
 "region": "경기 화성",
 "name": "화성신진중장비드론전문학원",
 "machine": "현대 ROBEX-140W",
-"style": "A"
+"style": "A",
+"lat": 37.2,
+"lng": 126.83
 },
 {
 "region": "경기 고양",
 "name": "서울중장비직업전문학교",
 "machine": "현대 HW145",
-"style": "A"
+"style": "A",
+"lat": 37.66,
+"lng": 126.83
 },
 {
 "region": "경기 남양주",
 "name": "북부신진중장비직업전문학교",
 "machine": "현대 HW145",
-"style": "A"
+"style": "A",
+"lat": 37.64,
+"lng": 127.22
 },
 {
 "region": "경기 포천",
 "name": "포천일고등학교",
 "machine": "현대 ROBEX140W",
-"style": "A"
+"style": "A",
+"lat": 37.89,
+"lng": 127.2
 },
 {
 "region": "경기 파주",
 "name": "파주신진중장비운전학원",
 "machine": "현대 HW145",
-"style": "A"
+"style": "A",
+"lat": 37.76,
+"lng": 126.78
 },
 {
 "region": "경기 양주",
 "name": "하나중장비학원",
 "machine": "현대 HW145",
-"style": "A"
+"style": "A",
+"lat": 37.79,
+"lng": 127.05
 },
 {
 "region": "경기 광주",
 "name": "그린직업전문학교",
 "machine": "두산 DX150W-7K",
-"style": "B"
+"style": "B",
+"lat": 37.43,
+"lng": 127.26
 },
 {
 "region": "경기 용인",
 "name": "용인신진중장비전문교육학원",
 "machine": "현대 HW145",
-"style": "A"
+"style": "A",
+"lat": 37.24,
+"lng": 127.18
 },
 {
 "region": "경기 안성",
 "name": "안성국가자격시험장",
 "machine": "현대 ROBEX1400W-7A",
-"style": "A"
+"style": "A",
+"lat": 37.01,
+"lng": 127.28
 },
 {
 "region": "경기 용인",
 "name": "수풍중장비교육원",
 "machine": "현대 HW145",
-"style": "A"
+"style": "A",
+"lat": 37.24,
+"lng": 127.18
 },
 {
 "region": "광주 광산구",
 "name": "광주중장비학원",
 "machine": "볼보 EW145B",
-"style": "C"
+"style": "C",
+"lat": 35.14,
+"lng": 126.79
 },
 {
 "region": "광주 서구",
 "name": "상무대학직업전문학교",
 "machine": "볼보 EW145B",
-"style": "C"
+"style": "C",
+"lat": 35.15,
+"lng": 126.89
 },
 {
 "region": "광주 북구",
 "name": "대성직업전문학교",
 "machine": "볼보 EW145B",
-"style": "C"
+"style": "C",
+"lat": 35.17,
+"lng": 126.91
 },
 {
 "region": "전북 전주",
 "name": "현대직업전문학교",
 "machine": "두산 DX140W",
-"style": "B"
+"style": "B",
+"lat": 35.82,
+"lng": 127.15
 },
 {
 "region": "전북 전주",
 "name": "건설기술호남교육원 전주분원",
 "machine": "볼보 EW145B",
-"style": "C"
+"style": "C",
+"lat": 35.82,
+"lng": 127.15
 },
 {
 "region": "전북 남원",
 "name": "남원자동차운전전문학원",
 "machine": "현대 ROBEX140W",
-"style": "A"
+"style": "A",
+"lat": 35.42,
+"lng": 127.39
 },
 {
 "region": "전북 남원",
 "name": "정읍직업전문학교",
 "machine": "볼보 EW145BPRIME",
-"style": "C"
+"style": "C",
+"lat": 35.42,
+"lng": 127.39
 },
 {
 "region": "전남 순천",
 "name": "순천중장비학원",
 "machine": "볼보 EW145B",
-"style": "C"
+"style": "C",
+"lat": 34.95,
+"lng": 127.49
 },
 {
 "region": "전남 여수",
 "name": "여수중장비학원",
 "machine": "볼보 EW145BPRIME",
-"style": "C"
+"style": "C",
+"lat": 34.76,
+"lng": 127.66
 },
 {
 "region": "전남 순천",
 "name": "진명중장비학원",
 "machine": "두산 DX140W-5",
-"style": "B"
+"style": "B",
+"lat": 34.95,
+"lng": 127.49
 },
 {
 "region": "전남 보성",
 "name": "벌교상무중장비학원",
 "machine": "볼보 EW145BPRIME",
-"style": "C"
+"style": "C",
+"lat": 34.77,
+"lng": 127.08
 },
 {
 "region": "전남 순천",
 "name": "조은중장비학원",
 "machine": "현대 HW145",
-"style": "A"
+"style": "A",
+"lat": 34.95,
+"lng": 127.49
 },
 {
 "region": "전남 광양",
 "name": "광양중장비학원",
 "machine": "현대 ROBEX-140W",
-"style": "A"
+"style": "A",
+"lat": 34.94,
+"lng": 127.7
 },
 {
 "region": "전남 목포",
 "name": "목포중앙고등학교",
 "machine": "현대 HW155A",
-"style": "A"
+"style": "A",
+"lat": 34.81,
+"lng": 126.39
 },
 {
 "region": "전남 목포",
 "name": "목포과학대학교 건설기계교육센터",
 "machine": "현대 140W",
-"style": "A"
+"style": "A",
+"lat": 34.81,
+"lng": 126.39
 },
 {
 "region": "전남 목포",
 "name": "중앙종합직업전문학교",
 "machine": "두산 DX150W-7",
-"style": "B"
+"style": "B",
+"lat": 34.81,
+"lng": 126.39
 },
 {
 "region": "전남 목포",
 "name": "목포중장비학원",
 "machine": "볼보 EW140E",
-"style": "C"
+"style": "C",
+"lat": 34.81,
+"lng": 126.39
 },
 {
 "region": "제주 제주",
 "name": "한국폴리텍1대학제주캠퍼스",
 "machine": "현대 1400W-7",
-"style": "A"
+"style": "A",
+"lat": 33.5,
+"lng": 126.53
 },
 {
 "region": "제주 제주",
 "name": "제주고등학교",
 "machine": "현대 140W",
-"style": "A"
+"style": "A",
+"lat": 33.5,
+"lng": 126.53
 },
 {
 "region": "제주 서귀포",
 "name": "서귀포산업과학고등학교",
 "machine": "볼보 EW140E",
-"style": "C"
+"style": "C",
+"lat": 33.25,
+"lng": 126.56
 },
 {
 "region": "충남 논산",
 "name": "논산중기운전학원",
 "machine": "현대 145W",
-"style": "A"
+"style": "A",
+"lat": 36.19,
+"lng": 127.1
 },
 {
 "region": "대전 동구",
 "name": "대한중장비운전학원",
 "machine": "현대 ROBEX140W",
-"style": "A"
+"style": "A",
+"lat": 36.31,
+"lng": 127.45
 },
 {
 "region": "대전 유성구",
 "name": "대전세종중장비학원",
 "machine": "현대 ROBEX140W",
-"style": "A"
+"style": "A",
+"lat": 36.36,
+"lng": 127.36
 },
 {
 "region": "충남 보령",
 "name": "보령직업전문학교",
 "machine": "볼보 EW145B PRIME",
-"style": "C"
+"style": "C",
+"lat": 36.33,
+"lng": 126.61
 },
 {
 "region": "충남 계룡",
 "name": "서부직업전문학교",
 "machine": "현대 ROBEX140W",
-"style": "A"
+"style": "A",
+"lat": 36.27,
+"lng": 127.25
 },
 {
 "region": "충북 청주",
 "name": "충북중장비운전자동차정비학원",
 "machine": "볼보 EW145B",
-"style": "C"
+"style": "C",
+"lat": 36.64,
+"lng": 127.49
 },
 {
 "region": "충북 청주",
 "name": "대영중장비운전학원",
 "machine": "볼보 EW145B",
-"style": "C"
+"style": "C",
+"lat": 36.64,
+"lng": 127.49
 },
 {
 "region": "충남 아산",
 "name": "온양아산중장비학원",
 "machine": "두산 DX-140WACE",
-"style": "B"
+"style": "B",
+"lat": 36.79,
+"lng": 127.0
 },
 {
 "region": "충남 천안",
 "name": "천안중장비운전학원",
 "machine": "현대 HW145",
-"style": "A"
+"style": "A",
+"lat": 36.82,
+"lng": 127.11
 },
 {
 "region": "충남 당진",
 "name": "현대직업전문학교",
 "machine": "두산 DX140WACE",
-"style": "B"
+"style": "B",
+"lat": 36.89,
+"lng": 126.63
 },
 {
 "region": "충북 충주",
 "name": "충주중장비직업전문학교",
 "machine": "볼보 EW145B",
-"style": "C"
+"style": "C",
+"lat": 36.99,
+"lng": 127.93
 },
 {
 "region": "세종",
 "name": "세종능력개발원",
 "machine": "볼보 EW145B",
-"style": "C"
+"style": "C",
+"lat": 36.48,
+"lng": 127.29
 },
 {
 "region": "전북 익산",
 "name": "길중장비전문학원",
 "machine": "두산 DX140W",
-"style": "B"
+"style": "B",
+"lat": 35.95,
+"lng": 126.96
 },
 {
 "region": "전북 익산",
 "name": "애림직업전문학교",
 "machine": "두산 DX140W",
-"style": "B"
+"style": "B",
+"lat": 35.95,
+"lng": 126.96
 },
 {
 "region": "전북 군산",
 "name": "삼영종합중장비학원",
 "machine": "현대 HW145",
-"style": "A"
+"style": "A",
+"lat": 35.97,
+"lng": 126.74
 }
 ]

@@ -8,6 +8,13 @@ import type { DigSession } from '../sim/session';
  *  - 흙: 버킷에서 쏟아지는 '쏴아' + 땅에 떨어지는 '우르르·투둑'
  *  - 덜컹, 호각
  */
+export interface SoundLevels {
+  ambOn: boolean;
+  amb: number;
+  sfxOn: boolean;
+  sfx: number;
+}
+
 export class MachineSound {
   private ctx: AudioContext | null = null;
   private master!: GainNode;
@@ -24,7 +31,11 @@ export class MachineSound {
   private landGain!: GainNode;
   private landFilter!: BiquadFilterNode;
   private lastTick = 0;
+  /** 환경음(엔진·유압·릴리프·흙) / 효과음(덜컹·호각·투둑) 버스 */
+  private amb!: GainNode;
+  private sfx!: GainNode;
   muted = false;
+  levels: SoundLevels = { ambOn: true, amb: 0.8, sfxOn: true, sfx: 0.8 };
 
   /** 사용자 조작(터치·클릭) 안에서 호출해야 소리가 켜진다 */
   start() {
@@ -38,6 +49,11 @@ export class MachineSound {
     this.master = ctx.createGain();
     this.master.gain.value = this.muted ? 0 : 0.8;
     this.master.connect(ctx.destination);
+    this.amb = ctx.createGain();
+    this.sfx = ctx.createGain();
+    this.amb.connect(this.master);
+    this.sfx.connect(this.master);
+    this.applyLevels();
 
     // 엔진: 낮은 톱니파 2개(살짝 어긋나게) → 저역 통과
     this.engFilter = ctx.createBiquadFilter();
@@ -51,7 +67,7 @@ export class MachineSound {
     this.engB.type = 'square';
     this.engA.connect(this.engFilter);
     this.engB.connect(this.engFilter);
-    this.engFilter.connect(this.engGain).connect(this.master);
+    this.engFilter.connect(this.engGain).connect(this.amb);
     this.engA.start();
     this.engB.start();
 
@@ -73,7 +89,7 @@ export class MachineSound {
     this.hydFilter.Q.value = 0.8;
     this.hydGain = ctx.createGain();
     this.hydGain.gain.value = 0;
-    mkNoise().connect(this.hydFilter).connect(this.hydGain).connect(this.master);
+    mkNoise().connect(this.hydFilter).connect(this.hydGain).connect(this.amb);
     // 릴리프 밸브: 좁은 대역 고음 잡음 + 떨리는 고음
     this.relFilter = ctx.createBiquadFilter();
     this.relFilter.type = 'bandpass';
@@ -89,7 +105,7 @@ export class MachineSound {
     relToneGain.gain.value = 0.35;
     this.relTone.connect(relToneGain).connect(this.relGain);
     this.relTone.start();
-    this.relGain.connect(this.master);
+    this.relGain.connect(this.amb);
     // 흙 쏟아짐: 모래가 미끄러지는 중고역 잡음
     const pourF = ctx.createBiquadFilter();
     pourF.type = 'bandpass';
@@ -97,7 +113,7 @@ export class MachineSound {
     pourF.Q.value = 0.6;
     this.pourGain = ctx.createGain();
     this.pourGain.gain.value = 0;
-    mkNoise().connect(pourF).connect(this.pourGain).connect(this.master);
+    mkNoise().connect(pourF).connect(this.pourGain).connect(this.amb);
     // 흙 떨어짐: 낮게 깔리는 '우르르'
     this.landFilter = ctx.createBiquadFilter();
     this.landFilter.type = 'lowpass';
@@ -105,7 +121,26 @@ export class MachineSound {
     this.landFilter.Q.value = 1.2;
     this.landGain = ctx.createGain();
     this.landGain.gain.value = 0;
-    mkNoise().connect(this.landFilter).connect(this.landGain).connect(this.master);
+    mkNoise().connect(this.landFilter).connect(this.landGain).connect(this.amb);
+  }
+
+  setLevels(l: Partial<SoundLevels>) {
+    Object.assign(this.levels, l);
+    this.applyLevels();
+  }
+  private applyLevels() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    const l = this.levels;
+    // 같은 순간에 여러 번 바꿔도 마지막 값이 적용되게 예약을 지우고 다시 건다
+    for (const [g, v] of [
+      [this.amb, l.ambOn ? l.amb * 1.25 : 0],
+      [this.sfx, l.sfxOn ? l.sfx * 1.25 : 0],
+    ] as const) {
+      g.gain.cancelScheduledValues(t);
+      g.gain.setValueAtTime(g.gain.value, t);
+      g.gain.setTargetAtTime(v, t, 0.05);
+    }
   }
 
   setMuted(m: boolean) {
@@ -162,7 +197,7 @@ export class MachineSound {
     g.gain.setValueAtTime(0.0001, t);
     g.gain.exponentialRampToValueAtTime(0.06 + 0.12 * strength, t + 0.004);
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
-    o.connect(g).connect(this.master);
+    o.connect(g).connect(this.sfx);
     o.start(t);
     o.stop(t + 0.1);
   }
@@ -180,7 +215,7 @@ export class MachineSound {
     g.gain.setValueAtTime(0.0001, t);
     g.gain.exponentialRampToValueAtTime(0.35 * Math.min(1, strength), t + 0.01);
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
-    o.connect(g).connect(this.master);
+    o.connect(g).connect(this.sfx);
     o.start(t);
     o.stop(t + 0.3);
   }
@@ -205,7 +240,7 @@ export class MachineSound {
       g.gain.exponentialRampToValueAtTime(0.18, t + 0.02);
       g.gain.setValueAtTime(0.18, t + len - 0.04);
       g.gain.exponentialRampToValueAtTime(0.0001, t + len);
-      o.connect(g).connect(this.master);
+      o.connect(g).connect(this.sfx);
       o.start(t);
       lfo.start(t);
       o.stop(t + len + 0.02);

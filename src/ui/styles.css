@@ -524,6 +524,159 @@ input[type='range'] {
   margin: 8px 10px;
   opacity: 0.6;
 }
+.settings-card {
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+}
+.tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.tabs button {
+  font: 800 15px var(--font);
+  color: var(--ink);
+  background: #fff;
+  border: 3px solid var(--ink);
+  border-radius: 12px;
+  padding: 7px 4px;
+  cursor: pointer;
+}
+.tabs button.on {
+  background: var(--sun);
+}
+.vol-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0;
+  font: 800 16px var(--font);
+}
+.vol-row span {
+  width: 56px;
+  text-align: left;
+}
+.vol-row input {
+  flex: 1;
+}
+.mute {
+  width: 40px;
+  height: 36px;
+  font-size: 18px;
+  background: #fff;
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.mute.off {
+  background: #ddd;
+}
+.site-cur {
+  font-size: 13px;
+  text-align: left;
+  margin-bottom: 6px;
+}
+.machine-pick {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.pickbtn {
+  font: 800 14px var(--font);
+  color: var(--ink);
+  background: #fff;
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  padding: 6px 2px;
+  cursor: pointer;
+}
+.pickbtn.on {
+  background: var(--sun);
+}
+.site-tools {
+  display: flex;
+  gap: 6px;
+}
+.site-tools .site-q {
+  flex: 1;
+  min-width: 0;
+}
+.site-tools .btn {
+  white-space: nowrap;
+}
+.site-row em {
+  float: right;
+  font-style: normal;
+  font-weight: 800;
+  color: var(--sun-deep);
+}
+/* 좌석 높이 탭: 뒤 운전석 화면이 보이도록 창을 오른쪽 좁은 패널로 */
+#settings.seat {
+  background: transparent;
+  place-items: center end;
+}
+#settings.seat .card {
+  width: 210px;
+  padding: 10px 12px;
+}
+#settings.seat .tabs {
+  gap: 3px;
+  margin-bottom: 6px;
+}
+#settings.seat .tabs button {
+  padding: 3px 0;
+  font-size: 12px;
+  border-width: 2px;
+}
+/* 시작 화면에서 열었을 때도 뒤 운전석 화면이 보이게 */
+body:has(#settings.seat:not([hidden])) #precheck {
+  visibility: hidden;
+}
+.seat-note {
+  font-size: 12px;
+  opacity: 0.7;
+  margin: 0 0 8px;
+}
+.ruler {
+  position: relative;
+  height: 150px;
+  width: 44px;
+  margin: 0 0 10px 34px;
+  background: #fff;
+  border: 3px solid var(--ink);
+  border-radius: 10px;
+  touch-action: none;
+  cursor: ns-resize;
+}
+.ruler-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--sun);
+  border-radius: 0 0 7px 7px;
+}
+.ruler-handle {
+  position: absolute;
+  top: -12px;
+  left: 50px;
+  white-space: nowrap;
+  font: 900 16px var(--font);
+}
+.ruler i {
+  position: absolute;
+  left: -30px;
+  font: 600 11px var(--font);
+  font-style: normal;
+  opacity: 0.6;
+  transform: translateY(50%);
+}
+#settings.seat .go {
+  padding: 6px 18px;
+  font-size: 18px;
+}
 .card-gear {
   position: absolute;
   top: 8px;

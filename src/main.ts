@@ -107,98 +107,227 @@ function renderModePicker() {
   }
 }
 
-// 키 → 앉은 눈높이: 앉은 눈높이는 키의 약 45%. 기준 172cm(장비 눈 위치 기준)
+// ---------- 설정: 소리 · 굴착기 · 좌석 높이 ----------
+const save = (k: string, v: string) => {
+  try {
+    localStorage.setItem(k, v);
+  } catch {
+    /* 저장소 사용 불가 */
+  }
+};
+const load = (k: string) => {
+  try {
+    return localStorage.getItem(k);
+  } catch {
+    return null;
+  }
+};
+
+// 좌석 높이: 키에 맞춘 대략적인 눈높이 (앉은 눈높이 ≈ 키의 45%, 기준 172cm)
+const H_MIN = 150;
+const H_MAX = 195;
 let heightCm = 172;
-try {
-  const v = Number(localStorage.getItem('exc-height'));
-  if (v >= 150 && v <= 195) heightCm = v;
-} catch {
-  /* 저장소 사용 불가 */
+{
+  const v = Number(load('exc-height'));
+  if (v >= H_MIN && v <= H_MAX) heightCm = v;
 }
 const eyeOffset = () => (heightCm - 172) * 0.0045;
-function syncSettingsUi() {
-  const cs = curSite();
-  $('site-cur').innerHTML = cs ? `<b>${cs.name}</b> ${cs.machine}` : '선택 안 함';
-  const h = $<HTMLInputElement>('height');
-  h.value = String(heightCm);
+function syncRuler() {
+  const f = (heightCm - H_MIN) / (H_MAX - H_MIN);
+  $('ruler-fill').style.height = `${f * 100}%`;
   $('height-val').textContent = `${heightCm}cm`;
 }
-$<HTMLInputElement>('height').oninput = (e) => {
-  heightCm = Number((e.target as HTMLInputElement).value);
-  try {
-    localStorage.setItem('exc-height', String(heightCm));
-  } catch {
-    /* 무시 */
-  }
-  syncSettingsUi();
-};
-const openSettings = () => {
-  renderStylePicker();
-  syncSettingsUi();
-  $('settings').hidden = false;
-};
-$<HTMLInputElement>('site-q').oninput = () => renderStylePicker();
-$('btn-settings').onclick = openSettings;
-$('btn-settings2').onclick = openSettings;
-$('btn-settings-ok').onclick = () => ($('settings').hidden = true);
+{
+  const ruler = $('ruler');
+  const setFromY = (y: number) => {
+    const r = ruler.getBoundingClientRect();
+    const f = Math.min(1, Math.max(0, (r.bottom - y) / r.height));
+    heightCm = Math.round(H_MIN + f * (H_MAX - H_MIN));
+    save('exc-height', String(heightCm));
+    syncRuler();
+  };
+  let drag = false;
+  ruler.onpointerdown = (e) => {
+    drag = true;
+    try {
+      ruler.setPointerCapture(e.pointerId);
+    } catch {
+      /* 무시 */
+    }
+    setFromY(e.clientY);
+  };
+  ruler.onpointermove = (e) => {
+    if (drag) setFromY(e.clientY);
+  };
+  ruler.onpointerup = ruler.onpointercancel = () => (drag = false);
+}
 
-// 시험장 선택 → 그 시험장 작업용 장비 계열로 (출처: 큐넷 시험장별 기종 현황)
+// 소리: 환경음 / 효과음
+const levels = { ambOn: true, amb: 0.8, sfxOn: true, sfx: 0.8 };
+try {
+  Object.assign(levels, JSON.parse(load('exc-audio') ?? '{}'));
+} catch {
+  /* 무시 */
+}
+function syncSoundUi() {
+  for (const k of ['amb', 'sfx'] as const) {
+    $<HTMLInputElement>(`vol-${k}`).value = String(Math.round(levels[k] * 100));
+    const on = k === 'amb' ? levels.ambOn : levels.sfxOn;
+    const b = $(`mute-${k}`);
+    b.textContent = on ? '🔊' : '🔇';
+    b.classList.toggle('off', !on);
+  }
+}
+for (const k of ['amb', 'sfx'] as const) {
+  $<HTMLInputElement>(`vol-${k}`).oninput = (e) => {
+    levels[k] = Number((e.target as HTMLInputElement).value) / 100;
+    if (k === 'amb') levels.ambOn = true;
+    else levels.sfxOn = true;
+    sound.setLevels(levels);
+    save('exc-audio', JSON.stringify(levels));
+    syncSoundUi();
+  };
+  $(`mute-${k}`).onclick = () => {
+    if (k === 'amb') levels.ambOn = !levels.ambOn;
+    else levels.sfxOn = !levels.sfxOn;
+    sound.setLevels(levels);
+    save('exc-audio', JSON.stringify(levels));
+    syncSoundUi();
+  };
+}
+
+// 굴착기: 시험장 검색 / 가까운 시험장 / 직접 선택 (출처: 큐넷 시험장별 기종 현황)
 interface TestSite {
   region: string;
   name: string;
   machine: string;
   style: MachineStyleKey;
+  lat: number;
+  lng: number;
 }
 const SITES = sitesJson as TestSite[];
-let siteName = '';
-try {
-  siteName = localStorage.getItem('exc-site') ?? '';
-} catch {
-  /* 무시 */
-}
+const STYLE_NAME: Record<MachineStyleKey, string> = { A: '현대 계열', B: '두산 계열', C: '볼보 계열' };
+let siteName = load('exc-site') ?? '';
 const curSite = () => SITES.find((x) => x.name === siteName) ?? null;
 if (curSite()) styleKey = curSite()!.style;
-// 초성 검색: '경기 광주' ← 'ㄱㄱ ㄱㅈ'
+// 초성 검색: '경기 광주' ← 'ㄱㄱㄱㅈ'
 const CHO = 'ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ';
 const cho = (t: string) =>
-  [...t].map((c) => {
-    const k = c.charCodeAt(0) - 0xac00;
-    return k >= 0 && k < 11172 ? CHO[Math.floor(k / 588)] : c;
-  }).join('');
+  [...t]
+    .map((c) => {
+      const k = c.charCodeAt(0) - 0xac00;
+      return k >= 0 && k < 11172 ? CHO[Math.floor(k / 588)] : c;
+    })
+    .join('');
 const norm = (t: string) => t.toLowerCase().replace(/[\s\-·()]/g, '');
 const SITE_KEYS = SITES.map((x) => {
   const t = norm(`${x.region}${x.name}${x.machine}`);
   return { t, c: cho(t) };
 });
-function renderStylePicker() {
+/** 가까운 순 정렬용 거리(km). 위치는 이 기기 안에서만 쓰고 어디에도 보내지 않음 */
+let nearKm: number[] | null = null;
+function setMachine(style: MachineStyleKey, site: string) {
+  siteName = site;
+  save('exc-site', site);
+  save('exc-style', style);
+  if (styleKey !== style) {
+    styleKey = style;
+    rebuildMachine();
+  }
+  renderMachineUi();
+}
+function renderMachineUi() {
+  const cs = curSite();
+  $('site-cur').innerHTML = cs ? `<b>${cs.name}</b> · ${cs.machine}` : `<b>${STYLE_NAME[styleKey]}</b> (직접 선택)`;
+  const pick = $('machine-pick');
+  pick.innerHTML = '';
+  for (const k of ['A', 'B', 'C'] as const) {
+    const b = document.createElement('button');
+    b.className = 'pickbtn' + (!cs && styleKey === k ? ' on' : '');
+    b.textContent = STYLE_NAME[k];
+    b.onclick = () => setMachine(k, '');
+    pick.appendChild(b);
+  }
   const q = norm($<HTMLInputElement>('site-q').value);
+  let hits = SITES.map((x, i) => ({ x, i })).filter(({ i }) => !q || SITE_KEYS[i].t.includes(q) || SITE_KEYS[i].c.includes(q));
+  if (nearKm && !q) hits = hits.sort((p, r) => nearKm![p.i] - nearKm![r.i]).slice(0, 10);
+  else if (!q) hits.sort((p, r) => Number(r.x.name === siteName) - Number(p.x.name === siteName));
   const list = $('site-list');
-  const hits = SITES.map((x, i) => ({ x, k: SITE_KEYS[i] })).filter(({ k }) => !q || k.t.includes(q) || k.c.includes(q));
-  if (!q) hits.sort((p, r) => Number(r.x.name === siteName) - Number(p.x.name === siteName)); // 고른 시험장을 맨 위로
   list.innerHTML = '';
-  for (const { x } of hits) {
+  for (const { x, i } of hits) {
     const b = document.createElement('button');
     b.className = 'site-row' + (x.name === siteName ? ' on' : '');
-    b.innerHTML = `<b>${x.region}</b> ${x.name}<small>${x.machine}</small>`;
+    const km = nearKm ? `<em>${Math.round(nearKm[i])}km</em>` : '';
+    b.innerHTML = `${km}<b>${x.region}</b> ${x.name}<small>${x.machine}</small>`;
     b.onclick = () => {
-      siteName = x.name;
-      try {
-        localStorage.setItem('exc-site', siteName);
-      } catch {
-        /* 무시 */
-      }
-      if (styleKey !== x.style) {
-        styleKey = x.style;
-        rebuildMachine();
-      }
       $<HTMLInputElement>('site-q').value = '';
-      syncSettingsUi();
-      renderStylePicker();
+      setMachine(x.style, x.name);
     };
     list.appendChild(b);
   }
   if (!hits.length) list.innerHTML = '<p class="site-none">없음</p>';
 }
+$<HTMLInputElement>('site-q').oninput = () => renderMachineUi();
+$('btn-near').onclick = () => {
+  const btn = $<HTMLButtonElement>('btn-near');
+  if (!navigator.geolocation) {
+    btn.textContent = '위치 사용 불가';
+    return;
+  }
+  btn.textContent = '찾는 중…';
+  navigator.geolocation.getCurrentPosition(
+    (p) => {
+      const { latitude: la, longitude: lo } = p.coords;
+      const rad = Math.PI / 180;
+      nearKm = SITES.map((x) => {
+        const dLa = (x.lat - la) * rad;
+        const dLo = (x.lng - lo) * rad;
+        const h = Math.sin(dLa / 2) ** 2 + Math.cos(la * rad) * Math.cos(x.lat * rad) * Math.sin(dLo / 2) ** 2;
+        return 2 * 6371 * Math.asin(Math.sqrt(h));
+      });
+      $<HTMLInputElement>('site-q').value = '';
+      btn.textContent = '📍 가까운 순';
+      renderMachineUi();
+    },
+    () => {
+      btn.textContent = '위치 권한 없음';
+    },
+    { maximumAge: 600000, timeout: 10000 },
+  );
+};
+
+// 탭 · 열기/닫기
+let camBeforeSeat: CamMode | null = null;
+function showTab(tab: string) {
+  for (const b of document.querySelectorAll<HTMLElement>('#settings [data-tab]')) b.classList.toggle('on', b.dataset.tab === tab);
+  for (const p of document.querySelectorAll<HTMLElement>('#settings [data-pane]')) p.hidden = p.dataset.pane !== tab;
+  // 좌석 높이: 뒤의 운전석 화면을 보면서 맞추도록 창을 옆으로 비킴
+  $('settings').classList.toggle('seat', tab === 'seat');
+  if (tab === 'seat') {
+    if (camBeforeSeat === null) camBeforeSeat = camMode;
+    camMode = 'cab';
+    syncRuler();
+  } else if (camBeforeSeat !== null) {
+    camMode = camBeforeSeat;
+    camBeforeSeat = null;
+  }
+  save('exc-settab', tab);
+}
+for (const b of document.querySelectorAll<HTMLElement>('#settings [data-tab]')) b.onclick = () => showTab(b.dataset.tab!);
+const openSettings = () => {
+  syncSoundUi();
+  renderMachineUi();
+  syncRuler();
+  $('settings').hidden = false;
+  showTab(load('exc-settab') ?? 'machine');
+};
+$('btn-settings').onclick = openSettings;
+$('btn-settings2').onclick = openSettings;
+$('btn-settings-ok').onclick = () => {
+  showTab('machine');
+  $('settings').hidden = true;
+};
+
 function rebuildMachine() {
   if (!exc) return;
   world.remove(exc.root);
@@ -229,7 +358,6 @@ function newSession() {
   session.leverUnlocked = true;
   session.rpm = 0.8;
   $('precheck').hidden = false;
-  syncSettingsUi();
   renderModePicker();
   $('result').hidden = true;
   $('toasts').innerHTML = '';
@@ -296,6 +424,7 @@ try {
 } catch {
   /* 무시 */
 }
+sound.setLevels(levels);
 const left = new Joystick($('stick-l'));
 const right = new Joystick($('stick-r'));
 const keys = new Keys();
@@ -428,7 +557,7 @@ function updateHud() {
   $('loadbar').style.width = `${Math.min(100, (s.load / s.heapedCap) * 100)}%`;
   const gd = $('guide');
   gd.textContent = s.flags.guide ? s.guide() : '';
-  gd.hidden = !s.flags.guide;
+  gd.hidden = !gd.textContent;
   $('btn-engine').hidden = s.engineOn;
   // 엔진 부하: 눈금(2/3) = 엔진 힘의 100%
   const lb = $('loadbar2');

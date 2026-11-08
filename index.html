@@ -71,13 +71,32 @@
     </div>
 
     <div class="modal" id="settings" hidden>
-      <div class="card">
-        <h1>설정</h1>
-        <div class="pick-label">시험장 <span id="site-cur"></span></div>
-        <input class="site-q" id="site-q" type="search" placeholder="지역·시험장·장비 검색 (예: 광주)" autocomplete="off" />
-        <div class="site-list" id="site-list"></div>
-        <div class="pick-label">키</div>
-        <label class="height-row"><input type="range" id="height" min="150" max="195" step="1" value="172" /><b id="height-val">172cm</b></label>
+      <div class="card settings-card">
+        <div class="tabs">
+          <button data-tab="sound">소리</button>
+          <button data-tab="machine">굴착기</button>
+          <button data-tab="seat">좌석 높이</button>
+        </div>
+        <section data-pane="sound">
+          <div class="vol-row"><span>환경음</span><button class="mute" id="mute-amb">🔊</button><input type="range" id="vol-amb" min="0" max="100" /></div>
+          <div class="vol-row"><span>효과음</span><button class="mute" id="mute-sfx">🔊</button><input type="range" id="vol-sfx" min="0" max="100" /></div>
+        </section>
+        <section data-pane="machine" hidden>
+          <div class="site-cur" id="site-cur"></div>
+          <div class="machine-pick" id="machine-pick"></div>
+          <div class="site-tools">
+            <input class="site-q" id="site-q" type="search" placeholder="시험장 검색 (예: 광주)" autocomplete="off" />
+            <button class="btn small" id="btn-near">📍 가까운 곳</button>
+          </div>
+          <div class="site-list" id="site-list"></div>
+        </section>
+        <section data-pane="seat" hidden>
+          <p class="seat-note">키에 맞춘 대략적인 높이</p>
+          <div class="ruler" id="ruler">
+            <div class="ruler-fill" id="ruler-fill"><span class="ruler-handle">🧍 <b id="height-val">172cm</b></span></div>
+            <i style="bottom: 0%">150</i><i style="bottom: 22.2%">160</i><i style="bottom: 44.4%">170</i><i style="bottom: 66.7%">180</i><i style="bottom: 88.9%">190</i>
+          </div>
+        </section>
         <button class="btn big go" id="btn-settings-ok">확인</button>
       </div>
     </div>

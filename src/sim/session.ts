@@ -981,7 +981,7 @@ export class DigSession {
 
   /** 안내 문구 */
   guide(): string {
-    if (this.phase === 'precheck') return '점검: 벨트 → 안전레버 해제 → RPM 올리기 → 준비 완료';
+    if (this.phase === 'precheck') return '';
     if (this.phase === 'ready') return '호각! 작업을 시작합니다';
     if (this.phase === 'finished') return '작업 종료';
     if (!this.engineOn) return '엔진 꺼짐: 시동 버튼을 누르세요';
