@@ -126,10 +126,10 @@ const load = (k: string) => {
 // 좌석 높이: 키에 맞춘 대략적인 눈높이 (앉은 눈높이 ≈ 키의 45%, 기준 172cm)
 const H_MIN = 150;
 const H_MAX = 195;
-let heightCm = 172;
+let heightCm = 170;
 {
   const v = Number(load('exc-height'));
-  if (v >= H_MIN && v <= H_MAX) heightCm = v;
+  if (v >= H_MIN && v <= H_MAX) heightCm = Math.round(v / 5) * 5;
 }
 const eyeOffset = () => (heightCm - 172) * 0.0045;
 function syncRuler() {
@@ -142,7 +142,7 @@ function syncRuler() {
   const setFromY = (y: number) => {
     const r = ruler.getBoundingClientRect();
     const f = Math.min(1, Math.max(0, (r.bottom - y) / r.height));
-    heightCm = Math.round(H_MIN + f * (H_MAX - H_MIN));
+    heightCm = H_MIN + Math.round((f * (H_MAX - H_MIN)) / 5) * 5; // 5cm 단위
     save('exc-height', String(heightCm));
     syncRuler();
   };
