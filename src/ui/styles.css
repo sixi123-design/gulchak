@@ -477,6 +477,20 @@ input[type='range'] {
   font-weight: 600;
   opacity: 0.6;
 }
+.card-gear {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 36px;
+  height: 36px;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--ink);
+  background: #fff;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  cursor: pointer;
+}
 .setline {
   display: block;
   width: 100%;
@@ -513,7 +527,7 @@ input[type='range'] {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 6px;
-  margin: 8px 0 4px;
+  margin: 30px 0 4px;
 }
 .modebtn {
   font: 800 15px var(--font);

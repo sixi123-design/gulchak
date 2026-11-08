@@ -121,7 +121,6 @@ function syncSettingsUi() {
   $('height-val').textContent = `${heightCm}cm`;
   const d = Math.round(eyeOffset() * 100);
   $('height-note').textContent = d === 0 ? '눈높이: 기준' : `눈높이: 기준보다 ${Math.abs(d)}cm ${d > 0 ? '높음' : '낮음'}`;
-  $('btn-settings2').innerHTML = `⚙ 장비 ${MACHINE_STYLES[styleKey].label} · 키 ${heightCm}cm <small>변경</small>`;
 }
 $<HTMLInputElement>('height').oninput = (e) => {
   heightCm = Number((e.target as HTMLInputElement).value);
