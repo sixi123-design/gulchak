@@ -559,11 +559,6 @@ $('btn-fail-map').onclick = () => {
 
 // ---------- HUD ----------
 const sound = new MachineSound();
-try {
-  sound.muted = localStorage.getItem('exc-mute') === '1';
-} catch {
-  /* 무시 */
-}
 sound.setLevels(levels);
 const left = new Joystick($('stick-l'));
 const right = new Joystick($('stick-r'));
@@ -578,15 +573,10 @@ async function goFullscreen() {
     /* 아이폰 Safari 등 미지원: 홈 화면에 추가 안내 */
   }
 }
-$('btn-fs').onclick = () => {
-  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-  else goFullscreen();
-};
 const isIOS = /iP(hone|od|ad)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const standalone = (navigator as Navigator & { standalone?: boolean }).standalone || matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches;
 if (isIOS && !standalone) $('fs-hint').hidden = false;
 if (matchMedia('(pointer: coarse)').matches) $('pc-hint').hidden = true;
-if (!document.documentElement.requestFullscreen) $('btn-fs').hidden = true;
 function beginWork() {
   setTimeout(() => sound.whistle('start'), 300);
   session.ready();
@@ -653,7 +643,6 @@ $('btn-buy').onclick = () => {
 $('fail-retry-ico').innerHTML = ICON.retry;
 $('pw-perks').innerHTML = ['4분 실전 타이머', '실격 즉시 판정', '실격 사유 리포트'].map((t) => `<li>${ICON.check}${t}</li>`).join('');
 $('btn-settings2').innerHTML = ICON.gear;
-$('btn-fs').innerHTML = ICON.expand;
 $('btn-near').innerHTML = `${ICON.pin} 가까운 곳`;
 $('btn-retry').onclick = () => newSession();
 $('btn-rotate-ok').onclick = () => document.body.classList.add('portrait-ok');
@@ -664,20 +653,6 @@ $('btn-cam').onclick = () => {
 };
 $('btn-cam').title = CAM_LABEL[camMode];
 $('btn-cam').innerHTML = ICON.camera;
-
-const muteBtn = $('btn-mute');
-const syncMute = () => (muteBtn.innerHTML = sound.muted ? ICON.muted : ICON.sound);
-syncMute();
-muteBtn.onclick = () => {
-  sound.start();
-  sound.setMuted(!sound.muted);
-  try {
-    localStorage.setItem('exc-mute', sound.muted ? '1' : '0');
-  } catch {
-    /* 무시 */
-  }
-  syncMute();
-};
 
 function showToast(v: Violation) {
   if (v.kind === 'disqualify') sound.whistle('fail');
