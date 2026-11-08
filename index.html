@@ -63,9 +63,17 @@
       <div class="endring" id="endring"></div>
     </div>
 
-    <div class="modal" id="precheck">
-      <div class="card">
-        <button class="card-gear" id="btn-settings2" title="설정">⚙</button>
+    <div class="modal page" id="precheck">
+      <div class="card start">
+        <header class="sp-head">
+          <!-- 종목 전환: 굴착(실기) · 주행(실기) · 필기. 주행·필기는 준비 중 -->
+          <div class="sp-kind" id="sp-kind">
+            <button class="on" data-kind="dig"></button>
+            <button class="soon" data-kind="drive"></button>
+            <button class="soon" data-kind="written"></button>
+          </div>
+          <button class="card-gear" id="btn-settings2" title="설정">⚙</button>
+        </header>
         <div class="mode-pick" id="mode-pick"></div>
         <button class="btn big go" id="btn-ready">시작</button>
         <p class="fs-hint" id="fs-hint" hidden>전체화면: 공유 → <b>홈 화면에 추가</b></p>

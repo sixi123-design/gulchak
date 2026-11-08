@@ -85,11 +85,11 @@ try {
 } catch {
   /* 저장소 사용 불가 */
 }
-const MODE_INFO: Record<ModeKey, { label: string; cls: string; start: string }> = {
-  tutorial: { label: '배우기', cls: 'tier-learn', start: '스테이지 고르기' },
-  free: { label: '자유 연습', cls: 'tier-free', start: '시작' },
-  practice: { label: '시험 연습', cls: 'tier-mid', start: '도전' },
-  exam: { label: '실제 시험', cls: 'tier-boss', start: '도전!' },
+const MODE_INFO: Record<ModeKey, { label: string; cls: string; start: string; icon: keyof typeof ICON }> = {
+  tutorial: { label: '배우기', cls: 'tier-learn', start: '스테이지 고르기', icon: 'mLearn' },
+  free: { label: '자유 연습', cls: 'tier-free', start: '시작', icon: 'mFree' },
+  practice: { label: '시험 연습', cls: 'tier-mid', start: '도전', icon: 'mPractice' },
+  exam: { label: '실제 시험', cls: 'tier-boss', start: '도전!', icon: 'mExam' },
 };
 // 테스트 결제: 구매하면 그 모드 1판만 열림 (판이 끝나면 다시 결제 유도)
 let testPass: ModeKey | null = null;
@@ -106,7 +106,7 @@ function renderModePicker() {
     const b = document.createElement('button');
     const mi = MODE_INFO[k];
     b.className = `modebtn ${mi.cls}` + (k === modeKey ? ' on' : '');
-    b.innerHTML = `<b>${mi.label}</b>`;
+    b.innerHTML = `${ICON[mi.icon]}<b>${mi.label}</b>`;
     b.onclick = () => {
       if (needPay(k)) return openPaywall(k);
       if (modeKey === k) return;
@@ -779,6 +779,20 @@ $('btn-labels').onclick = () => {
 };
 syncLabels();
 $('btn-paywall-close').innerHTML = ICON.close;
+// 시작 페이지 종목 탭: 굴착만 열림, 주행·필기는 준비 중
+{
+  const KIND: Record<string, [keyof typeof ICON, string]> = { dig: ['stScoop', '굴착'], drive: ['kDrive', '주행'], written: ['kWritten', '필기'] };
+  for (const b of document.querySelectorAll<HTMLButtonElement>('#sp-kind [data-kind]')) {
+    const [ic, name] = KIND[b.dataset.kind!];
+    b.innerHTML = `${ICON[ic]}${name}`;
+    if (b.classList.contains('soon'))
+      b.onclick = () => {
+        b.classList.remove('say');
+        void b.offsetWidth;
+        b.classList.add('say');
+      };
+  }
+}
 // 가격 (임시 값: 실제 가격이 정해지면 여기만 바꿈)
 const PRICE = 9900;
 $('btn-buy').textContent = `${PRICE.toLocaleString('ko-KR')}원 평생 이용하기`;

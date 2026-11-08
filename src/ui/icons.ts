@@ -22,5 +22,13 @@ export const ICON = {
   stCarry: svg('<path d="M5 18V11a6 6 0 0 1 12 0v2"/><path d="M13.5 10.5L17 14l3.5-3.5"/>'),
   stDump: svg('<path d="M2.5 20l6.5-9 4 5 2.5-3 6 7z" fill="currentColor"/><path d="M14 4l3 3M18 3v3"/>'),
   stFlat: svg('<path d="M3 19h18"/><path d="M5 15h14"/><path d="M15 4l-3 11"/><path d="M8 15l1.5-3h5"/>'),
+  // 모드 (시작 페이지)
+  mLearn: svg('<path d="M3 6.5c3-1.5 6-1.5 9 0v13c-3-1.5-6-1.5-9 0z"/><path d="M21 6.5c-3-1.5-6-1.5-9 0v13c3-1.5 6-1.5 9 0z"/>'),
+  mFree: svg('<path d="M4 12a8 8 0 1 0 16 0a8 8 0 1 0-16 0" /><path d="M8.5 12h7M12 8.5v7"/>'),
+  mPractice: svg('<circle cx="12" cy="13.5" r="7"/><path d="M12 13.5V10M10 3.5h4M18.5 6.5l1.5-1.5"/>'),
+  mExam: svg('<path d="M5 21V4"/><path d="M5 4.5h12l-2.5 4 2.5 4H5" fill="currentColor"/>'),
+  // 종목
+  kDrive: svg('<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.2" fill="currentColor"/><path d="M12 4v5.8M5.3 15.5l4.8-2.3M18.7 15.5l-4.8-2.3"/>'),
+  kWritten: svg('<path d="M15.5 4.5l4 4L9 19H5v-4z"/><path d="M13 7l4 4"/>'),
   retry: svg('<path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4 4.5v4.5h4.5"/>'),
 };
