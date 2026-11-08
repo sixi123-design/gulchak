@@ -364,6 +364,7 @@ function showResult() {
     ['연결동작 비율', pct(r.connectedRatio)],
     ['평탄도 (C 구덩이)', fl ? `기준면 편차 ${Math.round(fl.meanDev * 100)}cm · 높낮이 ${Math.round(fl.range * 100)}cm` : '-'],
     ['구덩이 밖 흙', fl ? `${(fl.outsideVol * 1000).toFixed(0)}L` : '-'],
+    ['운반 중 흘린 흙 (A→C 선회 중)', `${Math.round(r.carrySpill * 1000)}L`],
     ['끝까지 담김 (안쪽까지 밀어 넣은 비율)', r.packRatios.length ? `평균 ${pct(avg(r.packRatios))} · 최저 ${pct(Math.min(...r.packRatios))}` : '기록 없음'],
     ['평탄 요령 (버킷 펴고 이빨로 앞으로 민 비율)', r.flattenOpenRatio > 0 || r.flatness ? pct(r.flattenOpenRatio) : '-'],
     ['바닥 충격 / 덜컹', `${r.impacts}회 / ${r.jolts}회`],

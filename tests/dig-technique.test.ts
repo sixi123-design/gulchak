@@ -187,3 +187,27 @@ describe('자연스러운 퍼 올리기', () => {
     expect(s.engine.violations.filter((v) => v.id === 'W-JOLT')).toEqual([]);
   });
 });
+
+describe('끝까지 오므리기 (시험 기본 동작)', () => {
+  it('흙 밖에서 버킷을 끝까지 오므리는 데 오래 걸리지 않는다 (쿠션 구간 짧음)', () => {
+    const s = sess();
+    s.setPose({ boom: 0.8, arm: -1.5, bucket: 0.5 });
+    let t = 0;
+    while (s.pose.bucket > MACHINE.limits.bucket[0] + 0.02 && t < 600) {
+      s.input = { lx: 0, ly: 0, rx: -1, ry: 0 };
+      s.step();
+      t++;
+    }
+    // 205° 회전: 최대 속도(약 48°/s)로 약 4.3초 + 가속·쿠션 여유
+    expect(t / 60).toBeLessThan(5.2);
+    expect(s.engine.violations.filter((v) => v.id === 'W-JOLT')).toEqual([]);
+  });
+  it('끝까지 오므린 채 선회하면 흙을 거의 흘리지 않는다', () => {
+    const s = sess();
+    s.setPose(ik(MACHINE, s.digTarget.rho, 0.2, -0.9)!);
+    run(s, [[26, { ry: 1 }], [12, {}], [130, { ly: -0.7, rx: -0.6, ry: -0.1 }], [150, { rx: -1, ry: -0.6 }], [80, { ry: -0.6 }]]);
+    const before = s.load;
+    run(s, [[200, { lx: -0.5 }]]); // A → B 쪽으로 선회
+    expect(s.carrySpill).toBeLessThan(before * 0.05);
+  });
+});

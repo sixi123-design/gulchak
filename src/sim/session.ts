@@ -114,6 +114,7 @@ export interface DigResult {
   flattenVol: number;
   jolts: number;
   packRatios: number[];
+  carrySpill: number;
   flattenOpenRatio: number;
 }
 
@@ -136,6 +137,8 @@ export class DigSession {
   load = 0;
   /** 버킷 안쪽(바닥)까지 밀려 들어간 흙. 나머지(load - loadBack)는 입구 쪽에 수북한 흙 */
   loadBack = 0;
+  /** 운반 중(A를 떠나 C에 닿기 전) 흘린 흙 */
+  carrySpill = 0;
   /** 굴착마다 안쪽까지 담긴 비율 */
   packRatios: number[] = [];
   /** 평탄작업 중 '버킷을 펴고 이빨로 앞으로 민' 부피 */
@@ -375,11 +378,12 @@ export class DigSession {
         if (j === 'swing') rollImp += imp * Math.sign(e0);
         else pitchImp += imp * (j === 'boom' ? -Math.sign(e0) : Math.sign(e0)); // 붐 내리다 멈춤 → 앞으로 숙임
       }
-      // 실린더 쿠션: 관절 한계 15° 앞부터 저절로 감속해 부드럽게 멈춘다 (이 감속은 충격이 아님)
+      // 실린더 쿠션: 관절 한계 6° 앞부터 저절로 감속해 부드럽게 멈춘다 (이 감속은 충격이 아님).
+      // 시험에서는 퍼 담은 뒤 버킷을 끝까지 오므리는 게 기본이라, 끝까지 시원하게 가도록 구간을 짧게
       if (j !== 'swing') {
         const lim = this.m.limits[j];
         const dist = this.vel[j] < 0 ? this.pose[j] - lim[0] : lim[1] - this.pose[j];
-        const cap = sp[j] * rf * clamp(dist / ((15 * Math.PI) / 180), 0.08, 1);
+        const cap = sp[j] * rf * clamp(dist / ((6 * Math.PI) / 180), 0.25, 1);
         if (Math.abs(this.vel[j]) > cap) this.vel[j] = Math.sign(this.vel[j]) * cap;
       }
       if (Math.abs(this.vel[j]) < 1e-5) continue;
@@ -538,6 +542,7 @@ export class DigSession {
     const sc = this.m.struckCapacity;
     if (shock >= this.params.joltSpill && this.load > sc) {
       const v = Math.min(this.load - sc, (this.load - sc) * clamp(shock, 0, 1) + 0.01);
+      if (this.isCarrying()) this.carrySpill += v;
       this.load -= v;
       this.loadBack = Math.min(this.loadBack, this.load);
       const W = this.m.bucketWidth;
@@ -681,6 +686,16 @@ export class DigSession {
     }
   }
 
+  /** 흙을 담아 A에서 C로 옮기는 중인지 (버킷 끝이 A·C 영역 밖) */
+  isCarrying() {
+    if (this.phase !== 'working') return false;
+    const st = this.stationOf(toWorld(this.pose.swing, this.frame.tip))?.name ?? null;
+    return st === null;
+  }
+  /** 버킷이 끝까지(한계 20° 이내) 오므려졌는지 */
+  get fullyCurled() {
+    return this.pose.bucket <= this.m.limits.bucket[0] + (20 * Math.PI) / 180;
+  }
   get backCap() {
     return this.m.struckCapacity * this.params.backCapRatio;
   }
@@ -710,6 +725,7 @@ export class DigSession {
     this.load -= v;
     this.loadBack = Math.min(this.loadBack, this.load);
     this.pourAcc += v;
+    if (this.isCarrying()) this.carrySpill += v;
     const st = this.stationOf(toWorld(this.pose.swing, f.tip));
     if (st?.name === 'C') this.cycle.pouredInC += v;
     if (this.pourAcc > 0.004 || this.load < 1e-4) {
@@ -909,6 +925,7 @@ export class DigSession {
       flattenVol: this.flattenVol,
       jolts: this.jolts,
       packRatios: this.packRatios,
+      carrySpill: this.carrySpill,
       flattenOpenRatio: this.flattenVol > 0 ? this.flattenOpenVol / this.flattenVol : 0,
     };
   }
@@ -924,6 +941,7 @@ export class DigSession {
     const tipSt = this.stationOf(toWorld(this.pose.swing, this.frame.tip))?.name ?? null;
     if (this.load >= 0.3 * sc) {
       if (tipSt === 'C') return 'C지점 구덩이 위에서 버킷을 펴 흙을 쏟으세요';
+      if (!this.fullyCurled) return '흙을 담았으면 버킷을 끝까지 오므린 채 들어 올려 선회하세요 (흘리지 않게)';
       return '흙을 담은 채 붐을 올리고 B지점 통과구역(두 폴 사이, 줄 위)으로 선회하세요';
     }
     if (this.digCount < this.params.minDigCount)
