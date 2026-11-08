@@ -4,7 +4,7 @@ import rulesJson from './config/rules.json';
 import { PRACTICE, type Violation } from './core/ruleEngine';
 import { ExcavatorView } from './render/excavatorView';
 import { FxView, SiteView, SoilView } from './render/siteView';
-import { DigSession, type RulesFile } from './sim/session';
+import { DigSession, type DigEntry, type RulesFile } from './sim/session';
 import { ik } from './sim/kinematics';
 import { Joystick, Keys } from './ui/joystick';
 
@@ -24,7 +24,7 @@ const applySize = () => {
 };
 const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0xcfeeff, 28, 70);
-const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 150);
+const camera = new THREE.PerspectiveCamera(62, 1, 0.05, 150);
 scene.add(new THREE.HemisphereLight(0xffffff, 0x9a8a70, 1.4));
 const sunLight = new THREE.DirectionalLight(0xffffff, 1.6);
 sunLight.position.set(-6, 14, 9);
@@ -34,6 +34,7 @@ scene.add(sunLight);
 let session: DigSession;
 let exc: ExcavatorView;
 let soilView: SoilView;
+let siteView: SiteView;
 let fx: FxView;
 let world = new THREE.Group();
 scene.add(world);
@@ -71,9 +72,12 @@ function newSession() {
   exc = new ExcavatorView(MACHINE);
   soilView = new SoilView(session.soil.grids);
   fx = new FxView();
-  world.add(new SiteView(session.site, session.soil.grids).group, exc.root, ...soilView.meshes, fx.particles, fx.bucketShadow, fx.machineShadow);
+  siteView = new SiteView(session.site, session.soil.grids);
+  if (session.flags.guide) siteView.addDigGuide(session.site, session.digTarget.rho, MACHINE.bucketWidth, session.params.digPosTolGood);
+  world.add(siteView.group, exc.root, ...soilView.meshes, fx.particles, fx.bucketShadow, fx.machineShadow);
   session.onViolation(showToast);
   session.onFinish(showResult);
+  session.onDigEntry(showEntry);
   // 점검 화면 초기화
   setCheck('ck-belt', false);
   setCheck('ck-lever', false);
@@ -89,7 +93,9 @@ function newSession() {
 // ---------- 카메라 ----------
 type CamMode = 'chase' | 'cab' | 'overview' | 'free';
 const CAM_LABEL: Record<CamMode, string> = { chase: '시점: 뒤', cab: '시점: 운전석', overview: '시점: 전체', free: '시점: 자유' };
-let camMode: CamMode = 'chase';
+let camMode: CamMode = 'cab'; // 실제 시험처럼 운전석 시점이 기본
+const gaze = new THREE.Vector3();
+const tmpV = new THREE.Vector3();
 const camPos = new THREE.Vector3(0, 12, 14);
 const camLook = new THREE.Vector3();
 function updateCamera(dt: number) {
@@ -105,14 +111,27 @@ function updateCamera(dt: number) {
     pos.copy(fwd).multiplyScalar(-6.5).addScaledVector(lat, 5.2).setY(10.5);
     look.copy(fwd).multiplyScalar(5.2).setY(-0.6);
   } else if (camMode === 'cab') {
-    // 운전석 앞유리 위치 (운전석은 붐 왼쪽 = -lat)
-    pos.copy(fwd).multiplyScalar(0.9).addScaledVector(lat, -0.7).setY(3.0);
-    look.copy(fwd).multiplyScalar(7).addScaledVector(lat, -0.2).setY(-0.4);
+    // 운전석 눈 (붐 왼쪽, 지면에서 약 2.6m). 차체 흔들림을 그대로 받는다
+    exc.root.updateMatrixWorld(true);
+    exc.eyeWorld(pos);
+    // 시선: 정면 아래(구덩이 쪽)와 버킷 사이 — 사람이 버킷을 눈으로 좇는 것처럼
+    const ahead = tmpV.copy(fwd).multiplyScalar(6.2).addScaledVector(lat, -0.3).setY(-0.6);
+    exc.bucketWorld(look);
+    look.lerp(ahead, 0.45);
+    gaze.lerp(look, 1 - Math.exp(-dt * 5));
+    look.copy(gaze);
   } else {
     pos.set(0, 15, -9.5);
     look.set(0, 0, 1.2);
   }
   exc.setCabView(camMode === 'cab');
+  for (const l of siteView.labels) l.visible = camMode !== 'cab';
+  // 화각: 운전석은 넓게(가로 약 95°), 세로 화면이면 더 넓힘
+  const wantFov = camMode === 'cab' ? (camera.aspect >= 1 ? 62 : 85) : 55;
+  if (Math.abs(camera.fov - wantFov) > 0.1) {
+    camera.fov = wantFov;
+    camera.updateProjectionMatrix();
+  }
   const k = camMode === 'cab' ? 1 : 1 - Math.exp(-dt * 6);
   camPos.lerp(pos, k);
   camLook.lerp(look, k);
@@ -164,7 +183,7 @@ $('btn-end').onclick = () => session.abandon();
 $('btn-retry').onclick = () => newSession();
 $('btn-rotate-ok').onclick = () => document.body.classList.add('portrait-ok');
 $('btn-cam').onclick = () => {
-  const order: CamMode[] = ['chase', 'cab', 'overview'];
+  const order: CamMode[] = ['cab', 'chase', 'overview'];
   camMode = order[(order.indexOf(camMode) + 1) % order.length];
   $('btn-cam').textContent = CAM_LABEL[camMode];
 };
@@ -186,6 +205,22 @@ function showToast(v: Violation) {
       navigator.vibrate([40, 30, 25]); // 덜컹
     }
   }
+}
+
+/** 첫 삽 위치 피드백: 목표(ⓑ선 안쪽 30cm, 중심) 대비 앞뒤·좌우 */
+function showEntry(e: DigEntry) {
+  if (!session.flags.guide) return;
+  const cm = (v: number) => Math.round(Math.abs(v) * 100);
+  const fb = Math.abs(e.dr) < 0.02 ? '앞뒤 정확' : e.dr > 0 ? `${cm(e.dr)}cm 바깥(ⓑ선 쪽)` : `${cm(e.dr)}cm 안쪽(장비 쪽)`;
+  const lr = Math.abs(e.dl) < 0.02 ? '좌우 정확' : `${e.dl > 0 ? 'B 쪽' : 'B 반대쪽'}으로 ${cm(e.dl)}cm`;
+  const head = e.grade === 'good' ? '굴착 위치 좋음 👍' : e.grade === 'ok' ? '굴착 위치 조금 벗어남' : '굴착 위치 많이 벗어남';
+  const el = document.createElement('div');
+  el.className = 'toast entry ' + e.grade;
+  el.innerHTML = `<b>${head}</b>${fb} · ${lr}`;
+  const box = $('toasts');
+  box.prepend(el);
+  while (box.children.length > 3) box.lastElementChild!.remove();
+  setTimeout(() => el.remove(), 3500);
 }
 
 let lastDig = -1;
@@ -248,7 +283,12 @@ function showResult() {
     ['작업 시간', `${Math.floor(r.elapsed / 60)}분 ${Math.round(r.elapsed % 60)}초 (제한 4분)`],
     ['유효 굴착 / 덤프', `${r.digCount}회 / ${r.dumpCount}회`],
     ['흙량 (평적 = 100%)', r.loadRatios.length ? `평균 ${pct(avg(r.loadRatios))} · 최저 ${pct(Math.min(...r.loadRatios))}` : '기록 없음'],
-    ['굴착 위치 오차', r.positionErrors.length ? `평균 ${Math.round(avg(r.positionErrors) * 100)}cm` : '기록 없음'],
+    [
+      '굴착 위치 (ⓑ선 안쪽 30cm 목표)',
+      r.entries.length
+        ? `앞뒤 평균 ${Math.round(avg(r.entries.map((e) => Math.abs(e.dr))) * 100)}cm · 좌우 평균 ${Math.round(avg(r.entries.map((e) => Math.abs(e.dl))) * 100)}cm · 좋음 ${r.entries.filter((e) => e.grade === 'good').length}/${r.entries.length}회`
+        : '기록 없음',
+    ],
     ['연결동작 비율', pct(r.connectedRatio)],
     ['평탄도 (C 구덩이)', fl ? `기준면 편차 ${Math.round(fl.meanDev * 100)}cm · 높낮이 ${Math.round(fl.range * 100)}cm` : '-'],
     ['구덩이 밖 흙', fl ? `${(fl.outsideVol * 1000).toFixed(0)}L` : '-'],

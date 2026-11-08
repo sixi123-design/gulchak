@@ -7,8 +7,13 @@ export const PALETTE = {
   steel: 0x3a3850,
   glass: 0x8fe3ff,
   tire: 0x2b2a3a,
-  dirt: 0x9a5b2e,
-  yard: 0xe2c896,
+  dirt: 0xb3804c, // 퍼낸 흙 (모래 섞인 황토)
+  yard: 0xbfbdb6, // 포장 바닥 (콘크리트)
+  sand: 0xd8bd8c, // 굴착장 다진 흙
+  rust: 0x6b4a36, // 버킷 몸체
+  rustDark: 0x3b2f2a,
+  metal: 0xc8c2b8,
+  cabin: 0x24232e, // 운전석 내부 프레임
   grass: 0x9bd36a,
   rope: 0xff7a1a,
   pole: 0xff4d5e,

@@ -1,6 +1,8 @@
 /**
  * 가상 장비 사양 (자체 설정, 특정 제조사 모델 아님).
- * 14t급 타이어식 굴착기를 가정한 근사치. 시험장 치수는 이 값에서 자동 계산된다.
+ * 시험장 주력 기종(14t급 타이어식: 현대 HW145/R140W, 두산 DX140W, 볼보 EW145B 계열)의
+ * 공통 치수에 맞춘 근사치: 버킷 고봉 약 0.58㎥·폭 약 1.05m, 최대 도달거리 약 7.9m.
+ * 시험장 치수는 이 값에서 자동 계산된다.
  */
 export interface MachineSpec {
   boomFoot: { r: number; y: number };
@@ -24,14 +26,14 @@ const d = (deg: number) => (deg * Math.PI) / 180;
 
 export const MACHINE: MachineSpec = {
   boomFoot: { r: 0.6, y: 1.9 },
-  L1: 4.6,
+  L1: 4.2,
   L2: 2.3,
-  L3: 1.15,
-  heelLen: 0.85,
+  L3: 1.3,
+  heelLen: 0.95,
   heelAngle: d(55),
-  bucketWidth: 0.9,
-  bucketLength: 0.9,
-  struckCapacity: 0.24,
+  bucketWidth: 1.05,
+  bucketLength: 1.0,
+  struckCapacity: 0.45,
   heapedFactor: 1.3,
   limits: { boom: [d(-35), d(60)], arm: [d(-155), d(-30)], bucket: [d(-100), d(95)] },
   speeds: { swing: d(40), boom: d(28), arm: d(35), bucket: d(55) },

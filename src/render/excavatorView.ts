@@ -7,12 +7,14 @@ import { box, outlineMat, PALETTE, toon, withOutline } from './toon';
 function bucketShapes(m: MachineSpec) {
   const tip = new THREE.Vector2(m.L3, 0);
   const heel = new THREE.Vector2(Math.cos(m.heelAngle) * m.heelLen, Math.sin(m.heelAngle) * m.heelLen);
+  // 범용(GP) 버킷: 곧은 뒷판 → 둥근 바닥 → 곧은 바닥판 → 날 끝
   const outer: THREE.Vector2[] = [
     new THREE.Vector2(0, 0),
-    new THREE.Vector2(-0.05, 0.3),
-    new THREE.Vector2(heel.x * 0.55, heel.y * 1.05),
+    new THREE.Vector2(-0.07, 0.38),
+    new THREE.Vector2(heel.x * 0.35, heel.y * 1.0),
+    new THREE.Vector2(heel.x * 0.75, heel.y * 1.06),
     heel,
-    new THREE.Vector2(heel.x + (tip.x - heel.x) * 0.55, heel.y * 0.55),
+    new THREE.Vector2(heel.x + (tip.x - heel.x) * 0.5, heel.y * 0.52),
     tip,
   ];
   const chord = (p: THREE.Vector2) => {
@@ -33,6 +35,9 @@ export class ExcavatorView {
   readonly bucket = new THREE.Group();
   private loadMesh: THREE.Mesh;
   private cabParts: THREE.Object3D[] = [];
+  private cabInterior!: THREE.Group;
+  /** 운전석 눈 위치 (상부 선회체 로컬) */
+  static readonly EYE = new THREE.Vector3(0.32, 2.62, -0.7);
   private cylinders: { mesh: THREE.Mesh; a: THREE.Object3D; b: THREE.Object3D }[] = [];
   private tmpA = new THREE.Vector3();
   private tmpB = new THREE.Vector3();
@@ -63,22 +68,32 @@ export class ExcavatorView {
 
     // 상부 선회체 (로컬 +x = 작업 방향, -z = 운전석 쪽)
     this.root.add(this.upper);
-    const house = box(2.6, 1.05, 2.3, C.sun);
-    house.position.set(-0.75, 1.95, 0.15);
+    // 차체는 운전석 오른쪽(붐 쪽)과 뒤쪽에만 — 운전석 자리를 비운다
+    const house = box(2.6, 1.05, 1.45, C.sun);
+    house.position.set(-0.75, 1.95, 0.52);
     this.upper.add(house);
+    const hood = box(1.75, 0.95, 0.95, C.sun);
+    hood.position.set(-1.18, 1.9, -0.7);
+    this.upper.add(hood);
+    const deck = box(1.35, 0.12, 1.0, C.steel, 0.03); // 운전석 바닥 받침
+    deck.position.set(0.35, 1.39, -0.7);
+    this.upper.add(deck);
     const counter = box(0.7, 0.9, 2.3, C.sunDeep);
     counter.position.set(-2.25, 1.85, 0.15);
     this.upper.add(counter);
-    const cab = box(1.35, 1.35, 0.95, C.sun);
-    cab.position.set(0.35, 2.75, -0.7);
+    // 운전석: 붐 왼쪽 앞 (바닥 약 1.45m, 지붕 약 3.15m)
+    const cab = box(1.3, 1.7, 0.95, C.sun);
+    cab.position.set(0.35, 2.3, -0.7);
     this.upper.add(cab);
-    const glass = box(0.05, 0.85, 0.8, C.glass, 0);
-    glass.position.set(1.04, 2.85, -0.7);
+    const glass = box(0.05, 1.35, 0.8, C.glass, 0);
+    glass.position.set(1.01, 2.35, -0.7);
     this.upper.add(glass);
-    const glassSide = box(0.9, 0.75, 0.05, C.glass, 0);
-    glassSide.position.set(0.4, 2.85, -1.18);
+    const glassSide = box(0.9, 1.0, 0.05, C.glass, 0);
+    glassSide.position.set(0.35, 2.5, -1.18);
     this.upper.add(glassSide);
     this.cabParts.push(cab, glass, glassSide);
+    this.cabInterior = this.buildCabInterior();
+    this.upper.add(this.cabInterior);
     const pipe = box(0.16, 0.6, 0.16, C.ink, 0);
     pipe.position.set(-1.5, 2.75, 0.8);
     this.upper.add(pipe);
@@ -102,20 +117,34 @@ export class ExcavatorView {
     const W = m.bucketWidth;
     const shellG = new THREE.ExtrudeGeometry(shell, { depth: W, bevelEnabled: false });
     shellG.translate(0, 0, -W / 2);
-    const shellM = new THREE.Mesh(shellG, toon(C.steel));
-    withOutline(shellM, new THREE.Vector3(1.2, 0.8, W), 0.035);
+    const shellM = new THREE.Mesh(shellG, toon(C.rust));
+    withOutline(shellM, new THREE.Vector3(1.4, 0.9, W), 0.035);
     this.bucket.add(shellM);
-    const sideG = new THREE.ExtrudeGeometry(side, { depth: 0.04, bevelEnabled: false });
-    for (const z of [-W / 2 - 0.04, W / 2]) {
-      const sm = new THREE.Mesh(sideG, toon(C.steel));
+    // 두꺼운 옆판
+    const sideG = new THREE.ExtrudeGeometry(side, { depth: 0.06, bevelEnabled: false });
+    for (const z of [-W / 2 - 0.06, W / 2]) {
+      const sm = new THREE.Mesh(sideG, toon(C.rustDark));
       sm.position.z = z;
-      sm.add(new THREE.Mesh(sideG, outlineMat)).scale.set(1.04, 1.06, 2.2);
+      sm.add(new THREE.Mesh(sideG, outlineMat)).scale.set(1.04, 1.06, 2.0);
       this.bucket.add(sm);
     }
-    // 이빨
-    const teeth = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.05, W * 0.95), toon(C.poleCap));
-    teeth.position.set(m.L3 + 0.02, 0, 0);
-    this.bucket.add(teeth);
+    // 날판 + 이빨 5개 (닳은 금속색)
+    const edge = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.04, W + 0.1), toon(C.metal));
+    edge.position.set(m.L3 - 0.04, 0.01, 0);
+    this.bucket.add(edge);
+    const toothG = new THREE.ConeGeometry(0.045, 0.2, 4);
+    toothG.rotateZ(-Math.PI / 2);
+    for (let i = 0; i < 5; i++) {
+      const t = new THREE.Mesh(toothG, toon(C.metal));
+      t.position.set(m.L3 + 0.08, 0.0, -W / 2 + 0.08 + ((W - 0.16) * i) / 4);
+      this.bucket.add(t);
+    }
+    // 위쪽 링크 브래킷
+    for (const z of [-0.18, 0.18]) {
+      const ear = box(0.34, 0.16, 0.05, C.rustDark, 0.02);
+      ear.position.set(0.05, 0.22, z);
+      this.bucket.add(ear);
+    }
     // 적재 흙
     this.loadMesh = new THREE.Mesh(new THREE.SphereGeometry(0.5, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), toon(C.dirt));
     this.bucket.add(this.loadMesh);
@@ -139,9 +168,68 @@ export class ExcavatorView {
     cyl(anchor(this.arm, 0.5, 0.22), anchor(this.bucket, -0.08, 0.32), 0.07);
   }
 
-  /** 운전석 시점에서는 운전석 모형을 숨겨 카메라가 갇히지 않게 한다 */
+  /** 운전석 시점: 외부 모형을 숨기고 내부 프레임(기둥·지붕·핸들·미러)을 보인다 */
   setCabView(on: boolean) {
     for (const o of this.cabParts) o.visible = !on;
+    this.cabInterior.visible = on;
+  }
+
+  /** 월드 좌표: 운전석 눈, 버킷 끝 */
+  eyeWorld(out: THREE.Vector3) {
+    return this.upper.localToWorld(out.copy(ExcavatorView.EYE));
+  }
+  bucketWorld(out: THREE.Vector3) {
+    return this.bucket.localToWorld(out.set(0.6, -0.1, 0));
+  }
+
+  /** 운전석 내부: 실제 휠 굴착기 운전석 시야 구성 (리서치_시험장_화면.md 3장) */
+  private buildCabInterior() {
+    const g = new THREE.Group();
+    g.visible = false;
+    const mat = new THREE.MeshBasicMaterial({ color: PALETTE.cabin });
+    const dash = new THREE.MeshBasicMaterial({ color: 0x3a3946 });
+    const add = (w: number, h: number, d: number, x: number, y: number, z: number, m: THREE.Material = mat) => {
+      const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
+      b.position.set(x, y, z);
+      g.add(b);
+      return b;
+    };
+    // 앞유리 테두리: 양쪽 기둥, 위·아래 프레임
+    add(0.07, 1.7, 0.06, 1.0, 2.3, -1.15); // 왼쪽 A필러
+    add(0.07, 1.7, 0.07, 1.0, 2.3, -0.25); // 오른쪽 A필러 (붐 쪽)
+    add(0.12, 0.12, 1.0, 1.0, 3.1, -0.7); // 위 프레임
+    add(0.1, 0.12, 1.0, 1.0, 1.55, -0.7); // 아래 프레임 (앞유리가 바닥 근처까지)
+    add(1.4, 0.06, 1.0, 0.35, 3.17, -0.7); // 지붕
+    // 옆창 프레임
+    add(0.09, 1.7, 0.09, -0.3, 2.3, -1.15);
+    add(1.3, 0.1, 0.09, 0.35, 3.1, -1.15);
+    add(1.3, 0.5, 0.09, 0.35, 1.7, -1.15);
+    add(1.3, 0.1, 0.09, 0.35, 3.1, -0.25);
+    add(1.3, 0.55, 0.09, 0.35, 1.72, -0.25);
+    // 계기판·핸들 (휠 굴착기): 낮게, 핸들 너머로 구덩이가 보이게
+    add(0.22, 0.16, 0.42, 0.78, 1.88, -0.72, dash);
+    const col = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.36, 6), mat);
+    col.position.set(0.76, 1.95, -0.72);
+    col.rotation.z = 0.75;
+    g.add(col);
+    const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.024, 6, 22), mat);
+    wheel.position.set(0.66, 2.06, -0.72);
+    wheel.rotation.y = Math.PI / 2;
+    wheel.rotation.x = 0.7;
+    g.add(wheel);
+    // 왼쪽 기둥 바깥 둥근 미러
+    const mirror = new THREE.Mesh(new THREE.CircleGeometry(0.11, 16), new THREE.MeshBasicMaterial({ color: 0x8fb4c8, side: THREE.DoubleSide }));
+    mirror.position.set(1.12, 2.75, -1.32);
+    mirror.rotation.y = Math.PI / 2 + 0.5;
+    g.add(mirror);
+    add(0.2, 0.03, 0.03, 1.06, 2.75, -1.22);
+    // 좌우 레버 손잡이
+    for (const z of [-1.02, -0.38]) {
+      const k = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), mat);
+      k.position.set(0.3, 1.95, z);
+      g.add(k);
+    }
+    return g;
   }
 
   private qa = new THREE.Quaternion();

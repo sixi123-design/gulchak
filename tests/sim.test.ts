@@ -24,10 +24,10 @@ describe('기하', () => {
     expect(segSegDist2(v3(0, 0, 0), v3(1, 0, 0), v3(0, 1, 0), v3(1, 1, 0))).toBeCloseTo(1);
     expect(segSegDist2(v3(0, 0, 0), v3(1, 0, 0), v3(0.5, -1, 1), v3(0.5, 1, 1))).toBeCloseTo(1);
   });
-  it('최대 도달거리 위치에서 버킷 끝이 지면', () => {
+  it('최대 도달거리는 14t급 실측(약 7.8m) 근처', () => {
     const reach = groundReach(MACHINE);
-    expect(reach).toBeGreaterThan(6);
-    expect(reach).toBeLessThan(10);
+    expect(reach).toBeGreaterThan(7.5);
+    expect(reach).toBeLessThan(8.2);
   });
 });
 
@@ -64,7 +64,7 @@ describe('시험장 생성 (공개문제 치수)', () => {
 
 describe('흙 격자', () => {
   const site = buildSite(MACHINE);
-  const init = { cell: 0.1, digSurface: -0.5, digFloor: -1.6, dumpFloor: -0.5 };
+  const init = { cell: 0.1, digSurface: -0.5, digFloor: -1.6, dumpFloor: -0.5, groundFloor: -1.2 };
   it('A 구덩이는 기준면 -0.5, C 구덩이 바닥 -0.5', () => {
     const gA = makeStationGrid(site.stations[0], init);
     const gC = makeStationGrid(site.stations[1], init);
@@ -243,6 +243,49 @@ describe('굴착 세션', () => {
     }
     expect(s.load).toBeLessThan(before);
     expect(Math.abs(s.ledgerError())).toBeLessThan(1e-5);
+  });
+  it('선회가 3° 비뚤어도 레버로 A 구덩이에 버킷이 박힘 (구덩이 둘레도 흙)', () => {
+    const s = startedSession();
+    const A = s.site.stations[0];
+    const q = ik(MACHINE, (A.pitIn + A.pitOut) / 2, 0.2, -Math.PI / 2)!;
+    s.setPose({ ...q, swing: Math.PI + (3 * Math.PI) / 180 });
+    for (let i = 0; i < 240; i++) {
+      s.input = { lx: 0, ly: 0, rx: 0, ry: 1 };
+      s.step();
+    }
+    expect(s.frame.tip.y).toBeLessThan(-0.8);
+  });
+  it('굴착 위치 교육: 첫 삽 위치를 목표(ⓑ선 안쪽 30cm) 대비 앞뒤·좌우로 알려줌', () => {
+    const s = startedSession();
+    const got: { dr: number; dl: number; grade: string }[] = [];
+    s.onDigEntry((e) => got.push(e));
+    const T = s.digTarget.rho;
+    // 목표보다 15cm 바깥, 정중앙에서 버킷을 수직으로 내려 찍음
+    const q = ik(MACHINE, T + 0.15, 0.1, -1.2)!;
+    s.setPose(q);
+    s.step();
+    for (let i = 1; i <= 40; i++) {
+      s.setPose(ik(MACHINE, T + 0.15, 0.1 - i * 0.02, -1.2)!);
+      s.step();
+    }
+    expect(got.length).toBe(1);
+    expect(got[0].dr).toBeGreaterThan(0.1);
+    expect(got[0].dr).toBeLessThan(0.2);
+    expect(Math.abs(got[0].dl)).toBeLessThan(0.02);
+    expect(got[0].grade).toBe('ok');
+  });
+  it('선 근접 경고: 작업 높이에서 ⓑ선 15cm 안쪽이면 W-NEAR (실격 아님)', () => {
+    const s = startedSession();
+    const A = s.site.stations[0];
+    // 버킷 끝(가장 바깥 꼭짓점)이 ⓑ선 8cm 안쪽, 높이 0.3m
+    const q = ik(MACHINE, A.zoneOut - 0.08, 0.3, -0.6);
+    expect(q).not.toBeNull();
+    s.setPose(q!);
+    s.step();
+    s.step();
+    const ids = s.engine.violations.map((v) => v.id);
+    expect(ids).toContain('W-NEAR');
+    expect(ids).not.toContain('D-DIGLINE');
   });
   it('fk: 시작 자세에서 버킷이 흙을 담는 방향', () => {
     const s = startedSession();

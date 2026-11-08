@@ -215,6 +215,20 @@ body {
   font-size: 12px;
   letter-spacing: 0.02em;
 }
+.toast.entry.good {
+  background: var(--ok);
+  color: var(--ink);
+  animation: fade 3.4s forwards;
+}
+.toast.entry.ok {
+  background: var(--sun);
+  color: var(--ink);
+  animation: fade 3.4s forwards;
+}
+.toast.entry.bad {
+  background: #ff9f43;
+  color: var(--ink);
+}
 .toast.warn {
   background: var(--sun);
   color: var(--ink);

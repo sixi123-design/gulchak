@@ -13,6 +13,7 @@ export interface RuleParams {
   digSoilSurface: number;
   digHardFloor: number;
   dumpPitFloor: number;
+  groundSoftFloor: number;
   passTopLimit: number | null;
   repeatCooldownSec: number;
   stallRpm: number;
@@ -33,6 +34,22 @@ export interface RuleParams {
   joltWarn: number;
   /** 고봉 흙이 쏟아지는 충격량 */
   joltSpill: number;
+  /** 굴착 목표: ⓑ선 안쪽 거리 (공개문제 30cm) */
+  digTargetInset: number;
+  /** 굴착 위치 허용 오차: 이내면 좋음 / 이내면 보통 (자체 연습 기준) */
+  digPosTolGood: number;
+  digPosTolOk: number;
+  /** 작업 높이에서 선까지 이 거리 안이면 근접 경고 */
+  nearLineMargin: number;
+}
+
+/** 굴착 진입 위치: 목표점(ⓑ선 안쪽 30cm, 구덩이 중심선) 대비 */
+export interface DigEntry {
+  /** 반경 방향 오차 (+ = ⓑ선 쪽 바깥, - = 장비 쪽 안쪽), m */
+  dr: number;
+  /** 좌우 오차 (+ = B 쪽), m */
+  dl: number;
+  grade: 'good' | 'ok' | 'bad';
 }
 
 /** 차체 흔들림 (감쇠 진동). pitch: 버킷 방향으로 숙임(+), roll: 오른쪽으로 기움(+) */
@@ -71,6 +88,7 @@ export interface DigResult {
   dumpCount: number;
   loadRatios: number[];
   positionErrors: number[];
+  entries: DigEntry[];
   connectedRatio: number;
   flatness: { meanDev: number; std: number; range: number; outsideVol: number } | null;
   impacts: number;
@@ -106,6 +124,8 @@ export class DigSession {
   dumpCount = 0;
   loadRatios: number[] = [];
   positionErrors: number[] = [];
+  entries: DigEntry[] = [];
+  private entryListeners: ((e: DigEntry) => void)[] = [];
   impacts = 0;
   jolts = 0;
   rock: Rock = { pitch: 0, pitchV: 0, roll: 0, rollV: 0 };
@@ -147,6 +167,7 @@ export class DigSession {
       digSurface: this.params.digSoilSurface,
       digFloor: this.params.digHardFloor,
       dumpFloor: this.params.dumpPitFloor,
+      groundFloor: this.params.groundSoftFloor,
     };
     this.soil = new SoilWorld(this.site.stations.map((s) => makeStationGrid(s, init)));
     this.engine = new RuleEngine(rules.rules, flags, this.params.repeatCooldownSec);
@@ -166,6 +187,14 @@ export class DigSession {
   }
   onViolation(fn: (v: Violation) => void) {
     this.listeners.push(fn);
+  }
+  onDigEntry(fn: (e: DigEntry) => void) {
+    this.entryListeners.push(fn);
+  }
+  /** 굴착 목표점 (A지점 국소 좌표) */
+  get digTarget() {
+    const st = this.site.stations[0];
+    return { rho: st.bLine - this.params.digTargetInset, lat: 0 };
   }
   onFinish(fn: () => void) {
     this.finishListeners.push(fn);
@@ -427,6 +456,7 @@ export class DigSession {
         const vol = g.cut(kk, p.y);
         if (vol <= 0) continue;
         total += vol;
+        if (g.name === 'A' && !this.cycle.firstCutRecorded && this.phase === 'working') this.recordEntry(f, swing);
         const mv = sub(p, prow[i]);
         const into = dot(mv, nOpenW) > 1e-4;
         const front = s <= 1;
@@ -434,13 +464,6 @@ export class DigSession {
           const take = Math.min(vol, this.heapedCap - this.load);
           this.load += take;
           if (g.name === 'A') this.cycle.cutInA += take;
-          if (g.name === 'A' && !this.cycle.firstCutRecorded) {
-            this.cycle.firstCutRecorded = true;
-            const st = this.site.stations[0];
-            const tipC = toWorld(swing, f.tip);
-            const rho = dot(tipC, st.axis);
-            this.positionErrors.push(Math.hypot(rho - (st.bLine - 0.3), tipC.z));
-          }
           if (vol > take) this.push(g, p, mv, center, vol - take, cell);
         } else {
           this.push(g, p, mv, center, vol, cell);
@@ -450,6 +473,21 @@ export class DigSession {
     }
     this.prevUnder = under;
     return total;
+  }
+
+  /** 이번 굴착의 첫 삽 위치 기록: 버킷 날 중심 vs 목표점 */
+  private recordEntry(f: Frame, swing: number) {
+    this.cycle.firstCutRecorded = true;
+    const st = this.site.stations[0];
+    const tipC = toWorld(swing, f.tip);
+    const dr = dot(tipC, st.axis) - this.digTarget.rho;
+    const dl = tipC.z;
+    const e = Math.max(Math.abs(dr), Math.abs(dl));
+    const grade = e <= this.params.digPosTolGood ? 'good' : e <= this.params.digPosTolOk ? 'ok' : 'bad';
+    const entry: DigEntry = { dr, dl, grade };
+    this.entries.push(entry);
+    this.positionErrors.push(Math.hypot(dr, dl));
+    for (const fn of this.entryListeners) fn(entry);
   }
 
   private push(g: SoilGrid, p: V3, mv: V3, center: V3, vol: number, cell: number) {
@@ -543,12 +581,36 @@ export class DigSession {
       prev = shape.bucket;
     }
     this.prevBucket = curB;
+    this.nearLine(curB);
     // 위험: 버킷이 흙 속에 있는데 선회
     if (Math.abs(this.vel.swing) > (3 * Math.PI) / 180) {
       for (const p of curB) {
         if (p.y < this.soil.surfaceAt(p.x, p.z) - 0.05) {
           this.report('W-DANGER', '버킷이 흙 속에 있는 상태에서 선회');
           break;
+        }
+      }
+    }
+  }
+
+  /** 작업 높이의 버킷이 굴착구역 안에서 선에 가까우면 미리 경고 (실격 전 교육용) */
+  private nearLine(pts: V3[]) {
+    const M = this.params.nearLineMargin;
+    for (const st of this.site.stations) {
+      for (const p of pts) {
+        if (p.y >= this.params.workHeight + 0.1) continue;
+        const rho = dot(p, st.axis);
+        const lat = p.z;
+        const inZone = rho >= st.zoneIn && rho <= st.zoneOut && Math.abs(lat) <= st.zoneHalfW;
+        if (!inZone) continue;
+        const dOut = st.zoneOut - rho;
+        const dIn = rho - st.zoneIn;
+        const dSide = st.zoneHalfW - Math.abs(lat);
+        const d = Math.min(dOut, dIn, dSide);
+        if (d < M) {
+          const which = d === dOut ? 'ⓑ선' : d === dIn ? '가상굴착제한선' : 'ⓒ선';
+          this.report('W-NEAR', `${st.name}지점 ${which}에 가까움`);
+          return;
         }
       }
     }
@@ -645,6 +707,7 @@ export class DigSession {
       dumpCount: this.dumpCount,
       loadRatios: this.loadRatios,
       positionErrors: this.positionErrors,
+      entries: this.entries,
       connectedRatio: this.tActive > 0 ? this.tMulti / this.tActive : 0,
       flatness: this.flatness(),
       impacts: this.impacts,

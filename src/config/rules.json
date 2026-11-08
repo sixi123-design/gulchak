@@ -61,6 +61,12 @@
       "basis": "자체",
       "kind": "warning",
       "title": "급조작으로 장비가 덜컹거림"
+    },
+    {
+      "id": "W-NEAR",
+      "basis": "자체",
+      "kind": "warning",
+      "title": "버킷이 굴착구역 선에 가까움"
     }
   ],
   "params": {
@@ -85,6 +91,11 @@
     "hydTauDown": 0.09,
     "joltSafeDecel": 3.5,
     "joltWarn": 0.1,
-    "joltSpill": 0.18
+    "joltSpill": 0.18,
+    "groundSoftFloor": -1.2,
+    "digTargetInset": 0.3,
+    "digPosTolGood": 0.1,
+    "digPosTolOk": 0.2,
+    "nearLineMargin": 0.15
   }
 }

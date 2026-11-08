@@ -141,11 +141,13 @@ export interface SoilInit {
   digSurface: number;
   digFloor: number;
   dumpFloor: number;
+  /** 굴착장 격자 안의 지면도 흙이다 (이 깊이까지 깎임). 격자 밖은 단단한 바닥 */
+  groundFloor: number;
 }
 
 /** 지점(A·C)마다 구덩이를 포함한 격자를 만든다 */
 export function makeStationGrid(s: Station, init: SoilInit): SoilGrid {
-  const margin = 0.6;
+  const margin = 1.2; // 굴착장 흙바닥 (구역선 밖 1.2m까지)
   const rho0 = s.zoneIn - margin;
   const rho1 = s.zoneOut + margin;
   const lat = s.zoneHalfW + margin;
@@ -169,7 +171,7 @@ export function makeStationGrid(s: Station, init: SoilInit): SoilGrid {
         }
       } else {
         g.h[k] = 0;
-        g.floor[k] = 0;
+        g.floor[k] = init.groundFloor;
       }
       g.h0[k] = g.h[k];
     }
