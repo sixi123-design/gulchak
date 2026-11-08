@@ -106,6 +106,41 @@ function renderModePicker() {
   }
 }
 
+// 키 → 앉은 눈높이: 앉은 눈높이는 키의 약 45%. 기준 172cm(장비 눈 위치 기준)
+let heightCm = 172;
+try {
+  const v = Number(localStorage.getItem('exc-height'));
+  if (v >= 150 && v <= 195) heightCm = v;
+} catch {
+  /* 저장소 사용 불가 */
+}
+const eyeOffset = () => (heightCm - 172) * 0.0045;
+function syncSettingsUi() {
+  const h = $<HTMLInputElement>('height');
+  h.value = String(heightCm);
+  $('height-val').textContent = `${heightCm}cm`;
+  const d = Math.round(eyeOffset() * 100);
+  $('height-note').textContent = d === 0 ? '눈높이: 기준' : `눈높이: 기준보다 ${Math.abs(d)}cm ${d > 0 ? '높음' : '낮음'}`;
+  $('btn-settings2').innerHTML = `⚙ 장비 ${MACHINE_STYLES[styleKey].label} · 키 ${heightCm}cm <small>변경</small>`;
+}
+$<HTMLInputElement>('height').oninput = (e) => {
+  heightCm = Number((e.target as HTMLInputElement).value);
+  try {
+    localStorage.setItem('exc-height', String(heightCm));
+  } catch {
+    /* 무시 */
+  }
+  syncSettingsUi();
+};
+const openSettings = () => {
+  renderStylePicker();
+  syncSettingsUi();
+  $('settings').hidden = false;
+};
+$('btn-settings').onclick = openSettings;
+$('btn-settings2').onclick = openSettings;
+$('btn-settings-ok').onclick = () => ($('settings').hidden = true);
+
 function renderStylePicker() {
   const box = $('style-pick');
   box.innerHTML = '';
@@ -124,6 +159,7 @@ function renderStylePicker() {
       }
       rebuildMachine();
       renderStylePicker();
+      syncSettingsUi();
     };
     box.appendChild(b);
   }
@@ -159,7 +195,7 @@ function newSession() {
   $<HTMLInputElement>('rpm').value = '30';
   syncPrecheck();
   $('precheck').hidden = false;
-  renderStylePicker();
+  syncSettingsUi();
   renderModePicker();
   $('result').hidden = true;
   $('toasts').innerHTML = '';
@@ -190,7 +226,7 @@ function updateCamera(dt: number) {
   } else if (camMode === 'cab') {
     // 운전석 눈 (붐 왼쪽, 지면에서 약 2.6m). 차체 흔들림을 그대로 받는다
     exc.root.updateMatrixWorld(true);
-    exc.eyeWorld(pos);
+    exc.eyeWorld(pos, eyeOffset());
     // 시선: 정면 아래(구덩이 쪽)와 버킷 사이 — 사람이 버킷을 눈으로 좇는 것처럼
     const ahead = tmpV.copy(fwd).multiplyScalar(6.2).addScaledVector(lat, -0.3).setY(-0.6);
     exc.bucketWorld(look);
@@ -475,6 +511,7 @@ function frame(now: number) {
     ry: curve(clamp1(right.y + kb.ry)),
   };
   acc += dt;
+  if (!$('settings').hidden) acc = 0; // 설정 중에는 일시정지
   let n = 0;
   // 밀린 시간을 버리지 않고 따라잡는다 (저사양에서도 제한시간이 실제 시간과 일치)
   acc = Math.min(acc, 0.5);

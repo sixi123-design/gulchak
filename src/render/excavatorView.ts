@@ -447,8 +447,11 @@ export class ExcavatorView {
   }
 
   /** 월드 좌표: 운전석 눈, 버킷 */
-  eyeWorld(out: THREE.Vector3) {
-    return this.upper.localToWorld(out.copy(ExcavatorView.EYE));
+  /** 운전석 눈 위치. dy: 키에 따른 앉은키 차이(m) */
+  eyeWorld(out: THREE.Vector3, dy = 0) {
+    out.copy(ExcavatorView.EYE);
+    out.y += dy;
+    return this.upper.localToWorld(out);
   }
   bucketWorld(out: THREE.Vector3) {
     return this.bucket.localToWorld(out.set(0.55, -0.1, 0));

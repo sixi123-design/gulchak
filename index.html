@@ -25,6 +25,7 @@
         </div>
         <div class="actions">
           <div class="timer" id="timer">4:00</div>
+          <button class="btn small" id="btn-settings" title="설정">⚙</button>
           <button class="btn small" id="btn-mute" title="소리">🔊</button>
           <button class="btn small" id="btn-fs" title="전체화면">⛶</button>
           <button class="btn small" id="btn-cam">시점</button>
@@ -65,8 +66,7 @@
         <div class="mode-pick" id="mode-pick"></div>
         <h1>시작 전 점검</h1>
         <p class="sub">실기시험에서는 이 조작 상태도 채점됩니다.</p>
-        <div class="pick-label">응시할 시험장 장비 <small>(큐넷 시험장별 기종 현황 참고)</small></div>
-        <div class="style-pick" id="style-pick"></div>
+        <button class="setline" id="btn-settings2"></button>
         <div class="checks">
           <button class="check" id="ck-belt"><i></i>안전벨트 체결</button>
           <button class="check" id="ck-lever"><i></i>안전레버 해제</button>
@@ -75,6 +75,18 @@
         <button class="btn big go" id="btn-ready">준비 완료</button>
         <p class="hint">PC: 왼쪽 레버 W A S D · 오른쪽 레버 I J K L</p>
         <p class="fs-hint" id="fs-hint" hidden>아이폰: 공유 버튼 → <b>홈 화면에 추가</b>로 열면 주소창 없이 전체화면으로 연습할 수 있어요.</p>
+      </div>
+    </div>
+
+    <div class="modal" id="settings" hidden>
+      <div class="card">
+        <h1>설정</h1>
+        <div class="pick-label">시험장 장비 <small>(큐넷 시험장별 기종 현황 참고)</small></div>
+        <div class="style-pick" id="style-pick"></div>
+        <div class="pick-label">내 키 <small>(운전석 눈높이가 달라집니다)</small></div>
+        <label class="height-row"><input type="range" id="height" min="150" max="195" step="1" value="172" /><b id="height-val">172cm</b></label>
+        <p class="sub" id="height-note"></p>
+        <button class="btn big go" id="btn-settings-ok">확인</button>
       </div>
     </div>
 

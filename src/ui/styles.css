@@ -477,6 +477,38 @@ input[type='range'] {
   font-weight: 600;
   opacity: 0.6;
 }
+.setline {
+  display: block;
+  width: 100%;
+  margin: 4px 0 10px;
+  padding: 8px 10px;
+  font: 800 14px var(--font);
+  color: var(--ink);
+  background: #fff;
+  border: 2px dashed var(--ink);
+  border-radius: 12px;
+  cursor: pointer;
+}
+.setline small {
+  margin-left: 6px;
+  color: var(--sun-deep);
+}
+.height-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0;
+}
+.height-row input {
+  flex: 1;
+}
+.height-row b {
+  min-width: 60px;
+  font: 900 18px var(--font);
+}
+#settings {
+  z-index: 12;
+}
 .mode-pick {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
