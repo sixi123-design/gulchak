@@ -58,7 +58,6 @@ const moved = (j: Joint, dir: 1 | -1, amount: number, text: string, labels: stri
   labels,
   begin: (s, mem) => (mem[j] = s.pose[j]),
   done: (s, mem) => (s.pose[j] - mem[j]) * dir >= amount,
-  meter: (s, mem) => ({ v: clamp01(((s.pose[j] - mem[j]) * dir) / amount) }),
 });
 
 /**

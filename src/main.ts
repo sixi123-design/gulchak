@@ -97,6 +97,9 @@ let payFor: ModeKey | null = null;
 const needPay = (k: ModeKey) => isLocked(k) && testPass !== k;
 function openPaywall(k: ModeKey) {
   payFor = k;
+  // 누른 모드를 앞에 (이용권은 두 모드 모두)
+  const other: ModeKey = k === 'exam' ? 'practice' : 'exam';
+  $('pw-title').textContent = `${MODE_INFO[k].label} · ${MODE_INFO[other].label} 열기`;
   $('paywall').hidden = false;
 }
 function renderModePicker() {
@@ -108,23 +111,23 @@ function renderModePicker() {
     b.className = `modebtn ${mi.cls}` + (k === modeKey ? ' on' : '');
     b.innerHTML = `${ICON[mi.icon]}<b>${mi.label}</b>`;
     b.onclick = () => {
+      // 카드를 누르면 바로 시작 (유료 모드는 결제 먼저)
       if (needPay(k)) return openPaywall(k);
-      if (modeKey === k) return;
       sound.start();
       sound.select();
-      modeKey = k;
-      try {
-        localStorage.setItem('exc-mode', k);
-      } catch {
-        /* 무시 */
+      if (modeKey !== k) {
+        modeKey = k;
+        try {
+          localStorage.setItem('exc-mode', k);
+        } catch {
+          /* 무시 */
+        }
+        newSession();
       }
-      newSession();
+      startMode();
     };
     box.appendChild(b);
   }
-  const rb = $('btn-ready');
-  rb.textContent = MODE_INFO[modeKey].start;
-  rb.className = 'btn big go' + (modeKey === 'practice' ? ' mid' : modeKey === 'exam' ? ' boss' : '');
 }
 
 // ---------- 설정: 소리 · 굴착기 · 좌석 높이 ----------
@@ -349,7 +352,8 @@ const openSettings = () => {
   renderMachineUi();
   syncRuler();
   $('settings').hidden = false;
-  showTab(load('exc-settab') ?? 'machine');
+  const t = load('exc-settab') ?? 'machine';
+  showTab(t === 'keys' && matchMedia('(pointer: coarse)').matches ? 'machine' : t);
 };
 $('btn-paywall-close').onclick = () => ($('paywall').hidden = true);
 $('btn-settings').onclick = openSettings;
@@ -417,6 +421,7 @@ function newSession(autoEnd?: boolean) {
   document.body.dataset.mode = modeKey;
   if (modeKey === 'exam') camMode = 'cab';
   $('btn-end').textContent = END_LABEL[modeKey];
+  $('btn-end').classList.toggle('danger', modeKey !== 'tutorial');
   $('precheck').hidden = false;
   renderModePicker();
   $('result').hidden = true;
@@ -726,7 +731,7 @@ function beginWork() {
   f.hidden = false;
   setTimeout(() => (f.hidden = true), 1100);
 }
-$('btn-ready').onclick = () => {
+function startMode() {
   if (session.flags.key === 'tutorial') return openLessonMap();
   if (needPay(session.flags.key)) return openPaywall(session.flags.key);
   if (matchMedia('(pointer: coarse)').matches) goFullscreen();
@@ -751,18 +756,29 @@ $('btn-ready').onclick = () => {
     bi.hidden = true;
     beginWork();
   }, boss ? 2400 : 1600);
-};
+}
 $('btn-engine').onclick = () => session.restartEngine();
 // 그만하기: 실수로 끝나지 않게 길게 눌러야(0.6초) 작동
 {
   const end = $('btn-end');
   let holdT = 0;
+  let tipT = 0;
   const cancel = () => {
     clearTimeout(holdT);
+    // 다 누르기 전에 뗐으면 길게 누르라고 알려줌
+    if (end.classList.contains('holding')) {
+      const box = end.parentElement!;
+      box.classList.add('end-tip');
+      clearTimeout(tipT);
+      tipT = window.setTimeout(() => box.classList.remove('end-tip'), 1500);
+    }
     end.classList.remove('holding');
   };
   end.onpointerdown = (e) => {
     e.preventDefault();
+    // 배우기 '목록'은 이동 버튼: 바로
+    if (session.flags.key === 'tutorial') return session.abandon();
+    end.parentElement!.classList.remove('end-tip');
     end.classList.add('holding');
     holdT = window.setTimeout(() => {
       end.classList.remove('holding');
@@ -823,7 +839,7 @@ $('btn-buy').onclick = () => {
   pd.hidden = false;
   setTimeout(() => {
     pd.hidden = true;
-    $('btn-ready').click();
+    startMode();
   }, 900);
 };
 // TODO: 실제 결제 연동 시 스토어 구매 내역 조회. 지금은 테스트라 복원할 것이 없음
@@ -838,7 +854,11 @@ $('fail-retry-ico').innerHTML = ICON.retry;
 $('pw-perks').innerHTML = ['실제처럼 4분 재기', '실격하면 바로 알려줌', '왜 떨어졌는지 정리'].map((t) => `<li>${ICON.check}${t}</li>`).join('');
 $('btn-settings2').innerHTML = ICON.gear;
 $('btn-near').innerHTML = `${ICON.pin} 가까운 곳`;
-$('btn-retry').onclick = () => newSession();
+$('btn-retry').onclick = () => {
+  newSession();
+  startMode();
+};
+$('btn-home').onclick = () => newSession();
 $('btn-rotate-ok').onclick = () => document.body.classList.add('portrait-ok');
 $('btn-cam').onclick = () => {
   const order: CamMode[] = ['cab', 'chase', 'overview'];
@@ -898,11 +918,13 @@ function updateHud() {
     tm.className = 'timer' + (remain < 0 ? ' over' : remain < 30 ? ' warn' : '');
   } else {
     // 자유 연습: 시간 제한 없음
-    tm.textContent = '∞';
+    const a = Math.floor(s.t);
+    tm.textContent = `${Math.floor(a / 60)}:${String(a % 60).padStart(2, '0')}`;
     tm.className = 'timer';
   }
-  $('dig').textContent = `${s.digCount}/${s.params.minDigCount}`;
-  $('chip-dig').classList.toggle('done', s.digCount >= s.params.minDigCount);
+  const free = s.flags.key === 'free';
+  $('dig').textContent = free ? `${s.digCount}회` : `${s.digCount}/${s.params.minDigCount}`;
+  $('chip-dig').classList.toggle('done', !free && s.digCount >= s.params.minDigCount);
   if (s.digCount !== lastDig) {
     if (lastDig >= 0 && s.flags.feedback && s.packRatios.length) {
       // 끝까지 담겼는지 알려줌
@@ -1029,7 +1051,7 @@ function showResult() {
     ['흙량', r.loadRatios.length ? pct(load) : '-', r.loadRatios.length > 0 && load < 0.8],
     ['시간', mmss(r.elapsed), mode !== 'free' && r.elapsed > 240],
   ];
-  $('res-hero').innerHTML = hero.map(([k, v, bad]) => `<div class="hero-tile${bad ? ' bad' : ''}"><span>${k}</span><b>${v}</b></div>`).join('');
+  $('res-hero').innerHTML = hero.filter(([, v]) => v !== '-').map(([k, v, bad]) => `<div class="hero-tile${bad ? ' bad' : ''}"><span>${k}</span><b>${v}</b></div>`).join('');
   // 자세히 (접힘): [항목, 값, 문제 있음]
   const items: [string, string, boolean][] = [
     ['덤프', `${r.dumpCount}회`, false],
@@ -1043,7 +1065,7 @@ function showResult() {
   ];
   // 실제 시험: 실제처럼 시간·흙량 같은 기록은 알려주지 않음 (실격 판정만)
   $('res-cols').classList.toggle('dq-only', mode === 'exam');
-  $('res-metrics').innerHTML = items.map(([k, v, bad]) => `<li class="row${bad ? ' bad' : ''}"><span>${k}</span><b>${v}</b></li>`).join('');
+  $('res-metrics').innerHTML = items.filter(([, v]) => v !== '-').map(([k, v, bad]) => `<li class="row${bad ? ' bad' : ''}"><span>${k}</span><b>${v}</b></li>`).join('');
   const more = $<HTMLDetailsElement>('res-more');
   more.open = false;
   more.querySelector('summary')!.textContent = items.some((x) => x[2]) ? `자세히 · 확인할 것 ${items.filter((x) => x[2]).length}` : '자세히';
