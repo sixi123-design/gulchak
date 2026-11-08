@@ -2551,3 +2551,9 @@ body[data-mode='tutorial'] .toasts {
 .m-head {
   font-size: 13px;
 }
+/* 시작 카드 설정 버튼: 위 모서리는 실제 시험 카드와 겹침 → 아래 오른쪽 (시작 버튼 옆 빈자리) */
+#precheck .card-gear {
+  top: auto;
+  bottom: 12px;
+  right: 12px;
+}
