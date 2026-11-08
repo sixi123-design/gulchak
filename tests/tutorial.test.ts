@@ -3,7 +3,6 @@ import { MACHINE } from '../src/config/machine';
 import rules from '../src/config/rules.json';
 import { MODES } from '../src/core/ruleEngine';
 import { DigSession, type RulesFile, type Sticks } from '../src/sim/session';
-import { ik, type Pose } from '../src/sim/kinematics';
 import { LESSONS, Tutor } from '../src/sim/tutorial';
 
 const mk = (autoEnd = false) => {
@@ -50,31 +49,22 @@ describe('배우기', () => {
     expect(t.cleared).toBe(true);
     expect(vol() - v0).toBeGreaterThan(0.35);
   });
-  // 자세를 직접 보간하며 진행 (레버 대신) — 미션 판정이 실제 동작으로 풀리는지 확인
-  const via = (t: Tutor, r: number, y: number, thK: number, n: number) => {
-    const q = ik(MACHINE, r, y, thK)!;
-    const from = { ...t.s.pose };
-    for (let i = 1; i <= n; i++) {
-      const p: Partial<Pose> = {};
-      for (const k of Object.keys(q) as (keyof Pose)[]) p[k] = from[k] + (((q as Pose)[k] as number) - from[k]) * (i / n);
-      t.s.setPose(p);
-      t.s.step();
-      t.update();
-    }
-  };
-  it('퍼 담기: 뻗고 → 이빨 세워 꽂고 → 당기며 오므리고 → 들어 올리면 완료', () => {
+  it('퍼 담기: 일렬로 펴고 → 꽂고 → 윗면 수평 → 당겨 긁고 → 오므려 담고 → 들면 완료 (레버 조작)', () => {
     const t = new Tutor(lesson('scoop'), mk());
-    const A = t.s.site.stations[0];
-    const r0 = t.s.digTarget.rho;
-    const surf = t.s.soil.surfaceAt(-r0, 0);
-    via(t, r0, 1.0, -1.0, 60);
-    expect(t.step).toBe(2);
-    via(t, r0, surf - 0.3, -1.0, 40);
-    expect(t.step).toBe(3);
-    via(t, A.pitIn + 0.5, surf - 0.25, -2.6, 100);
-    expect(t.step).toBeGreaterThanOrEqual(5);
-    via(t, A.pitIn + 0.6, 1.4, -Math.PI - 0.6, 40);
+    const deg = Math.PI / 180;
+    const steps: ((s: DigSession) => Partial<Sticks>)[] = [
+      (s) => ({ ly: s.frame.tip.r < s.digTarget.rho - 0.5 ? 1 : 0, rx: s.pose.bucket < -5 * deg ? 1 : s.pose.bucket > 5 * deg ? -1 : 0 }),
+      // 붐을 내리면 날이 바깥으로 나가므로 ⓑ선을 넘지 않게 암을 조금 당겨 줌
+      (s) => ({ ry: 0.6, ly: s.frame.tip.r > s.digTarget.rho - 0.4 ? -0.6 : 0 }),
+      () => ({ rx: -0.6 }),
+      (s) => ({ ly: -1, ry: s.groundGap() > -0.1 ? 0.3 : -0.2 }),
+      (s) => ({ rx: -1, ly: -0.4, ry: s.groundGap() > -0.1 ? 0.2 : 0 }),
+      () => ({ rx: -1 }),
+      () => ({ ry: -1 }),
+    ];
+    for (const [i, f] of steps.entries()) expect(drive(t, f, 900), `단계 ${i + 1}`).toBe(true);
     expect(t.cleared).toBe(true);
+    expect(t.s.engine.disqualifications()).toEqual([]);
   });
   it('평탄·마무리: 뒤집고 → 뻗고 → 끌어오고 → 밀고 → 내려놓으면 완료', () => {
     const t = new Tutor(lesson('flatten'), mk(true));

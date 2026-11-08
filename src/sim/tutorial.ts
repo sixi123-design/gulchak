@@ -59,11 +59,6 @@ function pose(s: DigSession, swing: number, r: number, y: number, bucketAbs: num
   }
 }
 const tipStation = (s: DigSession) => s.stationOf(toWorld(s.pose.swing, s.frame.tip))?.name ?? null;
-/** 버킷 날(힐→이빨)이 수평 아래로 숙인 각(°). 90 = 이빨이 땅을 똑바로 봄 */
-const bladeDown = (s: DigSession) => {
-  const f = s.frame;
-  return (Math.atan2(f.heel.y - f.tip.y, f.tip.r - f.heel.r) * 180) / Math.PI;
-};
 /** 흙에 닿은 채 dir(1 = 바깥, -1 = 몸 쪽)으로 움직인 거리 누적 */
 const contactTravel = (s: DigSession, mem: Record<string, number>, dir: 1 | -1) => {
   const r = s.frame.tip.r;
@@ -104,17 +99,9 @@ export const LESSONS: Lesson[] = [
     },
     steps: [
       {
-        text: '암 펴서 ⓑ선 쪽으로 뻗기',
-        labels: ['암 펴기'],
-        done: (s) => s.frame.tip.r >= s.digTarget.rho - 0.3,
-      },
-      {
-        text: '버킷 펴서 이빨이 땅을 보게',
-        labels: ['버킷 펴기'],
-        done: (s) => {
-          const a = bladeDown(s);
-          return a >= 70 && a <= 120;
-        },
+        text: '암과 버킷을 일렬로 펴기',
+        labels: ['암 펴기', '버킷 펴기'],
+        done: (s) => Math.abs(s.pose.bucket) <= 12 * deg && s.frame.tip.r >= s.digTarget.rho - 0.8,
       },
       {
         text: '붐 내려 ⓑ선 안쪽에 이빨 꽂기',
@@ -122,14 +109,20 @@ export const LESSONS: Lesson[] = [
         done: (s) => tipStation(s) === 'A' && s.groundGap() < -0.05,
       },
       {
-        text: '암 당겨 흙 긁어오기',
-        labels: ['암 당기기'],
-        done: (s) => s.load >= 0.4 * s.m.struckCapacity,
+        text: '버킷 오므려 윗면을 바닥과 평행하게',
+        labels: ['버킷 오므림'],
+        // 버킷 개구부가 몸 쪽을 봄 (핀→이빨 선이 수직 ±15°) = 윗면이 수평
+        done: (s) => Math.abs(s.frame.thK + 90 * deg) <= 15 * deg && s.groundGap() < 0,
       },
       {
-        text: '당기면서 버킷 오므려 가득 담기',
-        labels: ['암 당기기', '버킷 오므림'],
-        done: (s) => s.load >= 0.8 * s.m.struckCapacity,
+        text: '암 당겨 흙 긁어오기',
+        labels: ['암 당기기'],
+        done: (s) => s.load >= 0.35 * s.m.struckCapacity,
+      },
+      {
+        text: '버킷 오므려 흙 담기',
+        labels: ['버킷 오므림'],
+        done: (s) => s.load >= 0.7 * s.m.struckCapacity,
       },
       {
         text: '버킷 끝까지 오므리기',
@@ -137,7 +130,7 @@ export const LESSONS: Lesson[] = [
         done: (s) => s.fullyCurled,
       },
       {
-        text: '붐 올려 들어 올리기',
+        text: '붐 올리기',
         labels: ['붐 올림'],
         done: (s) => s.fullyCurled && s.groundGap() > 0.8 && s.load >= 0.6 * s.m.struckCapacity,
       },
