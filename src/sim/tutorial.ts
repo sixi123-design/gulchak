@@ -99,9 +99,10 @@ export const LESSONS: Lesson[] = [
     },
     steps: [
       {
-        text: '암과 버킷을 일렬로 펴기',
-        labels: ['암 펴기', '버킷 펴기'],
-        done: (s) => Math.abs(s.pose.bucket) <= 12 * deg && s.frame.tip.r >= s.digTarget.rho - 0.8,
+        text: '버킷을 암 각도에 맞춰 펴기',
+        labels: ['버킷 펴기'],
+        // 버킷 관절 0° = 핀→이빨 선이 암과 일직선
+        done: (s) => Math.abs(s.pose.bucket) <= 12 * deg,
       },
       {
         text: '붐 내려 ⓑ선 안쪽에 이빨 꽂기',
@@ -117,7 +118,7 @@ export const LESSONS: Lesson[] = [
       {
         text: '암 당겨 흙 긁어오기',
         labels: ['암 당기기'],
-        done: (s) => s.load >= 0.35 * s.m.struckCapacity,
+        done: (s) => s.load >= 0.2 * s.m.struckCapacity,
       },
       {
         text: '버킷 오므려 흙 담기',
