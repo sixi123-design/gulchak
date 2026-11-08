@@ -83,9 +83,9 @@ try {
   /* 저장소 사용 불가 */
 }
 const MODE_INFO: Record<ModeKey, { label: string; tier: string; cls: string; stars: string; start: string }> = {
-  free: { label: '자유 연습', tier: '연습장', cls: 'tier-free', stars: '★', start: '시작' },
-  practice: { label: '시험 연습', tier: '중간 보스', cls: 'tier-mid', stars: '★★', start: '도전' },
-  exam: { label: '실제 시험', tier: '최종 보스', cls: 'tier-boss', stars: '★★★', start: '도전!' },
+  free: { label: '자유 연습', tier: '연습', cls: 'tier-free', stars: '★', start: '시작' },
+  practice: { label: '시험 연습', tier: '실전 대비', cls: 'tier-mid', stars: '★★', start: '도전' },
+  exam: { label: '실제 시험', tier: '실전', cls: 'tier-boss', stars: '★★★', start: '도전!' },
 };
 function renderModePicker() {
   const box = $('mode-pick');
@@ -471,7 +471,7 @@ $('btn-ready').onclick = () => {
   $('precheck').hidden = true;
   const k = session.flags.key;
   if (k === 'free') return beginWork();
-  // 보스 등장: 중간 보스(시험 연습) / 최종 보스(실제 시험)
+  // 등장 연출: 시험 연습(긴장) / 실제 시험(최고 긴장)
   const boss = k === 'exam';
   const bi = $('boss-intro');
   bi.className = boss ? 'boss' : 'mid';
