@@ -5,6 +5,7 @@ import type { DigSession } from '../sim/session';
  *  - 엔진: rpm에 따라 높낮이·크기, 부하가 걸리면 낮게 깔림
  *  - 유압: 움직이는 만큼 '쉬익' 흐르는 소리
  *  - 릴리프 밸브: 실린더 끝(끝까지 오므림 등)에서 레버를 계속 밀 때 '끼이익' 고음
+ *  - 흙: 버킷에서 쏟아지는 '쏴아' + 땅에 떨어지는 '우르르·투둑'
  *  - 덜컹, 호각
  */
 export class MachineSound {
@@ -19,6 +20,10 @@ export class MachineSound {
   private relGain!: GainNode;
   private relTone!: OscillatorNode;
   private relFilter!: BiquadFilterNode;
+  private pourGain!: GainNode;
+  private landGain!: GainNode;
+  private landFilter!: BiquadFilterNode;
+  private lastTick = 0;
   muted = false;
 
   /** 사용자 조작(터치·클릭) 안에서 호출해야 소리가 켜진다 */
@@ -85,6 +90,22 @@ export class MachineSound {
     this.relTone.connect(relToneGain).connect(this.relGain);
     this.relTone.start();
     this.relGain.connect(this.master);
+    // 흙 쏟아짐: 모래가 미끄러지는 중고역 잡음
+    const pourF = ctx.createBiquadFilter();
+    pourF.type = 'bandpass';
+    pourF.frequency.value = 1100;
+    pourF.Q.value = 0.6;
+    this.pourGain = ctx.createGain();
+    this.pourGain.gain.value = 0;
+    mkNoise().connect(pourF).connect(this.pourGain).connect(this.master);
+    // 흙 떨어짐: 낮게 깔리는 '우르르'
+    this.landFilter = ctx.createBiquadFilter();
+    this.landFilter.type = 'lowpass';
+    this.landFilter.frequency.value = 320;
+    this.landFilter.Q.value = 1.2;
+    this.landGain = ctx.createGain();
+    this.landGain.gain.value = 0;
+    mkNoise().connect(this.landFilter).connect(this.landGain).connect(this.master);
   }
 
   setMuted(m: boolean) {
@@ -114,6 +135,36 @@ export class MachineSound {
     const r = on ? s.reliefLevel : 0;
     this.relGain.gain.setTargetAtTime(0.1 * r * (0.6 + 0.4 * rpm), t, 0.04);
     this.relTone.frequency.setTargetAtTime(1300 + 400 * rpm + Math.sin(t * 37) * 25, t, 0.02);
+    // 흙: 덤프 한 번(약 0.8m³/s)이 1에 가깝게. 매 프레임 흔들어 '자글자글'한 결을 냄
+    const pour = Math.sqrt(Math.min(1.5, s.pourRate / 0.8));
+    const land = Math.sqrt(Math.min(1.5, s.landRate / 0.8));
+    const grit = 0.65 + Math.random() * 0.35;
+    this.pourGain.gain.setTargetAtTime(0.16 * pour * grit, t, 0.03);
+    this.landGain.gain.setTargetAtTime(0.42 * land * (0.55 + Math.random() * 0.45), t, 0.025);
+    this.landFilter.frequency.setTargetAtTime(240 + 160 * land, t, 0.05);
+    // 조금씩 떨어질 때(흘림)는 '투둑' 소리로 들리게
+    if (s.landRate > 0.004 && s.landRate < 0.12 && t - this.lastTick > 0.07 + Math.random() * 0.12) {
+      this.lastTick = t;
+      this.tick(Math.min(1, s.landRate / 0.06));
+    }
+  }
+
+  /** 흙덩이 하나가 툭 떨어지는 짧은 소리 */
+  private tick(strength: number) {
+    const ctx = this.ctx;
+    if (!ctx || this.muted) return;
+    const t = ctx.currentTime;
+    const o = ctx.createOscillator();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(140 + Math.random() * 90, t);
+    o.frequency.exponentialRampToValueAtTime(60, t + 0.06);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.06 + 0.12 * strength, t + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
+    o.connect(g).connect(this.master);
+    o.start(t);
+    o.stop(t + 0.1);
   }
 
   /** 덜컹: 짧고 낮은 쿵 */

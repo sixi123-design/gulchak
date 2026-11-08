@@ -326,15 +326,37 @@ export class SoilView {
   }
 }
 
-/** 떨어지는 흙 입자 + 버킷 그림자 */
+/** 떨어지는 흙 덩어리 + 떨어진 자리 먼지 + 버킷 그림자 */
+const CLUMPS = 3; // 입자 하나를 덩어리 3개로 그림
+const MAX_P = 160;
+const MAX_DUST = 40;
+const hash = (n: number) => {
+  const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
+  return x - Math.floor(x);
+};
 export class FxView {
   readonly particles: THREE.InstancedMesh;
+  readonly dust: THREE.InstancedMesh;
   readonly bucketShadow: THREE.Mesh;
   readonly machineShadow: THREE.Mesh;
   private mtx = new THREE.Matrix4();
+  private q = new THREE.Quaternion();
+  private e = new THREE.Euler();
+  private pos = new THREE.Vector3();
+  private scl = new THREE.Vector3();
+  private puffs: { x: number; y: number; z: number; age: number; life: number; size: number }[] = [];
+  private lastT = performance.now();
   constructor() {
-    this.particles = new THREE.InstancedMesh(new THREE.BoxGeometry(0.09, 0.09, 0.09), toon(PALETTE.dirt), 160);
+    this.particles = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(0.06, 0), toon(0xffffff).clone(), MAX_P * CLUMPS);
     this.particles.count = 0;
+    this.particles.frustumCulled = false;
+    // 흙 덩어리 색: 마른 황토 / 젖은 짙은 흙 / 모래빛 섞기
+    const tones = [new THREE.Color(PALETTE.dirt), new THREE.Color(0x8a5f37), new THREE.Color(0xc9a06a)];
+    for (let i = 0; i < MAX_P * CLUMPS; i++) this.particles.setColorAt(i, tones[Math.floor(hash(i * 3.1) * 3)]);
+    const dustMat = new THREE.MeshBasicMaterial({ color: 0xd8bf96, transparent: true, opacity: 0.4, depthWrite: false });
+    this.dust = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.5, 0), dustMat, MAX_DUST);
+    this.dust.count = 0;
+    this.dust.frustumCulled = false;
     const shadowMat = new THREE.MeshBasicMaterial({ color: 0x1d1b2e, transparent: true, opacity: 0.3, depthWrite: false });
     this.bucketShadow = new THREE.Mesh(new THREE.CircleGeometry(0.55, 20), shadowMat);
     this.bucketShadow.rotation.x = -Math.PI / 2;
@@ -344,14 +366,56 @@ export class FxView {
     (this.machineShadow.material as THREE.MeshBasicMaterial).opacity = 0.22;
   }
   sync(s: DigSession) {
-    const n = Math.min(s.particles.length, 160);
+    const now = performance.now();
+    const dt = Math.min(0.1, (now - this.lastT) / 1000);
+    this.lastT = now;
+    const tsec = now / 1000;
+    // 떨어지는 흙: 입자 하나 = 크기·색이 다른 덩어리 3개, 굴러 떨어지며 회전
+    const n = Math.min(s.particles.length, MAX_P);
+    let k = 0;
     for (let i = 0; i < n; i++) {
-      const p = s.particles[i].p;
-      this.mtx.makeTranslation(p.x, p.y, p.z);
-      this.particles.setMatrixAt(i, this.mtx);
+      const pt = s.particles[i];
+      const big = Math.cbrt(Math.max(pt.vol, 0.0005) / 0.004);
+      for (let j = 0; j < CLUMPS; j++) {
+        const h = pt.id * 7 + j;
+        const sz = (0.7 + hash(h) * 0.9) * THREE.MathUtils.clamp(big, 0.5, 1.6);
+        this.pos.set(
+          pt.p.x + (hash(h + 0.3) - 0.5) * 0.22,
+          pt.p.y + (hash(h + 0.6) - 0.5) * 0.25 + j * 0.06,
+          pt.p.z + (hash(h + 0.9) - 0.5) * 0.22,
+        );
+        this.e.set(tsec * (3 + hash(h + 1.2) * 6), tsec * (2 + hash(h + 1.5) * 5), 0);
+        this.q.setFromEuler(this.e);
+        this.scl.set(sz, sz * (0.7 + hash(h + 1.8) * 0.5), sz);
+        this.mtx.compose(this.pos, this.q, this.scl);
+        this.particles.setMatrixAt(k++, this.mtx);
+      }
     }
-    this.particles.count = n;
+    this.particles.count = k;
     this.particles.instanceMatrix.needsUpdate = true;
+    // 떨어진 자리: 먼지가 피어올라 퍼지며 사라짐 (가까운 곳에 겹치면 키우기만)
+    for (const ev of s.landEvents) {
+      if (ev.vol < 0.0015) continue;
+      const y = s.soil.surfaceAt(ev.p.x, ev.p.z);
+      const size = THREE.MathUtils.clamp(0.35 + Math.cbrt(ev.vol) * 2.2, 0.4, 1.3);
+      const near = this.puffs.find((p) => p.age < 0.25 && Math.hypot(p.x - ev.p.x, p.z - ev.p.z) < 0.5);
+      if (near) near.size = Math.min(1.6, near.size + size * 0.15);
+      else if (this.puffs.length < MAX_DUST) this.puffs.push({ x: ev.p.x, y, z: ev.p.z, age: 0, life: 0.9 + Math.random() * 0.5, size });
+    }
+    s.landEvents.length = 0;
+    let d = 0;
+    this.puffs = this.puffs.filter((p) => (p.age += dt) < p.life);
+    for (const p of this.puffs) {
+      const u = p.age / p.life;
+      const grow = p.size * (0.35 + 0.9 * Math.sqrt(u)) * (1 - u * u); // 퍼졌다가 옅어지듯 줄어듦
+      this.pos.set(p.x, p.y + 0.1 + u * 0.45, p.z);
+      this.scl.set(grow, grow * 0.55, grow);
+      this.q.identity();
+      this.mtx.compose(this.pos, this.q, this.scl);
+      this.dust.setMatrixAt(d++, this.mtx);
+    }
+    this.dust.count = d;
+    this.dust.instanceMatrix.needsUpdate = true;
     // 버킷 끝 바로 아래 그림자: 높을수록 옅게
     const f = s.frame;
     const c = s.pose.swing;

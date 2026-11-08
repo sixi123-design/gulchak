@@ -98,6 +98,14 @@ export interface Particle {
   p: V3;
   v: V3;
   vol: number;
+  /** 화면에서 덩어리 모양을 고정하기 위한 번호 */
+  id: number;
+}
+
+/** 흙이 땅에 떨어진 자리 (화면 먼지·소리용, 화면이 꺼내 감) */
+export interface LandEvent {
+  p: V3;
+  vol: number;
 }
 
 export interface DigResult {
@@ -148,6 +156,15 @@ export class DigSession {
   /** 평탄작업 중 '버킷을 펴고 이빨로 앞으로 민' 부피 */
   flattenOpenVol = 0;
   particles: Particle[] = [];
+  private particleId = 0;
+  /** 버킷에서 흙이 빠져나가는 양 (m³/s, 부드럽게): '쏴아' 소리 */
+  pourRate = 0;
+  /** 흙이 땅에 떨어지는 양 (m³/s, 부드럽게): '우르르' 소리 */
+  landRate = 0;
+  /** 최근 떨어진 자리 (최대 48개, 화면이 비움) */
+  landEvents: LandEvent[] = [];
+  private pourStep = 0;
+  private landStep = 0;
   spilled = 0;
   belt = false;
   leverUnlocked = false;
@@ -465,6 +482,10 @@ export class DigSession {
     // 쏟기, 입자
     this.pour(dt);
     this.updateParticles(dt);
+    this.pourRate += (this.pourStep / dt - this.pourRate) * Math.min(1, dt * 12);
+    this.landRate += (this.landStep / dt - this.landRate) * Math.min(1, dt * 12);
+    this.pourStep = 0;
+    this.landStep = 0;
     for (const g of this.soil.grids) {
       if (g.activeT > 0) {
         g.activeT -= dt;
@@ -560,12 +581,13 @@ export class DigSession {
       const v = Math.min(this.load - sc, (this.load - sc) * clamp(shock, 0, 1) + 0.01);
       if (this.isCarrying()) this.carrySpill += v;
       this.load -= v;
+      this.pourStep += v;
       this.loadBack = Math.min(this.loadBack, this.load);
       const W = this.m.bucketWidth;
       const n = Math.max(1, Math.min(6, Math.round(v / 0.004)));
       for (let i = 0; i < n; i++) {
         const tip = toWorld(this.pose.swing, this.frame.tip, (this.rand() - 0.5) * W * 0.8);
-        const p = { p: tip, v: v3((this.rand() - 0.5) * 0.8, 0.3, (this.rand() - 0.5) * 0.8), vol: v / n };
+        const p = { p: tip, v: v3((this.rand() - 0.5) * 0.8, 0.3, (this.rand() - 0.5) * 0.8), vol: v / n, id: this.particleId++ };
         if (this.particles.length < 140) this.particles.push(p);
         else this.land(tip, v / n);
       }
@@ -739,6 +761,7 @@ export class DigSession {
     if (this.load <= retain + 1e-6) return;
     const v = Math.min(this.load - retain, 0.8 * dt);
     this.load -= v;
+    this.pourStep += v;
     this.loadBack = Math.min(this.loadBack, this.load);
     this.pourAcc += v;
     if (this.isCarrying()) this.carrySpill += v;
@@ -748,13 +771,15 @@ export class DigSession {
       const W = this.m.bucketWidth;
       const tip = toWorld(this.pose.swing, f.tip, (this.rand() - 0.5) * W * 0.8);
       const vel = v3((this.rand() - 0.5) * 0.4, -0.5, (this.rand() - 0.5) * 0.4);
-      if (this.particles.length < 140) this.particles.push({ p: tip, v: vel, vol: this.pourAcc });
+      if (this.particles.length < 140) this.particles.push({ p: tip, v: vel, vol: this.pourAcc, id: this.particleId++ });
       else this.land(tip, this.pourAcc);
       this.pourAcc = 0;
     }
   }
 
   private land(p: V3, vol: number) {
+    this.landStep += vol;
+    if (this.landEvents.length < 48) this.landEvents.push({ p: v3(p.x, p.y, p.z), vol });
     const g = this.soil.gridAt(p.x, p.z);
     if (g) g.depositSpread(g.cellAt(p.x, p.z), vol);
     else this.spilled += vol;

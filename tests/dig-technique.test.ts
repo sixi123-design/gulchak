@@ -221,4 +221,27 @@ describe('소리 상태', () => {
     run(s, [[40, {}]]);
     expect(s.reliefLevel).toBeLessThan(0.1); // 레버를 놓으면 멈춤
   });
+  it('버킷을 펴서 흙을 쏟으면 쏟는 소리 → 떨어지는 소리·먼지 자리가 생긴다', () => {
+    const s = sess();
+    s.setPose({ boom: 0.6, arm: -1.2, bucket: -2.0 });
+    s.load = SC;
+    s.loadBack = SC * 0.8;
+    expect(s.pourRate).toBe(0);
+    let maxPour = 0;
+    let maxLand = 0;
+    let events = 0;
+    for (let i = 0; i < 300; i++) {
+      s.input = { lx: 0, ly: 0, rx: i < 160 ? 1 : 0, ry: 0 };
+      s.step();
+      maxPour = Math.max(maxPour, s.pourRate);
+      maxLand = Math.max(maxLand, s.landRate);
+      events += s.landEvents.length;
+      s.landEvents.length = 0;
+    }
+    expect(maxPour).toBeGreaterThan(0.2);
+    expect(maxLand).toBeGreaterThan(0.1);
+    expect(events).toBeGreaterThan(5);
+    expect(s.pourRate).toBeLessThan(0.01); // 다 쏟고 나면 조용해짐
+    expect(s.landRate).toBeLessThan(0.01);
+  });
 });

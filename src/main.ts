@@ -114,7 +114,7 @@ function newSession() {
   fx = new FxView();
   siteView = new SiteView(session.site, session.soil.grids);
   if (session.flags.guide) siteView.addDigGuide(session.site, session.digTarget.rho, MACHINE.bucketWidth, session.params.digPosTolGood);
-  world.add(siteView.group, exc.root, ...soilView.meshes, fx.particles, fx.bucketShadow, fx.machineShadow);
+  world.add(siteView.group, exc.root, ...soilView.meshes, fx.particles, fx.dust, fx.bucketShadow, fx.machineShadow);
   session.onViolation(showToast);
   session.onFinish(showResult);
   session.onDigEntry(showEntry);
