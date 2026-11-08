@@ -3,6 +3,7 @@ import { MACHINE } from './config/machine';
 import rulesJson from './config/rules.json';
 import sitesJson from './config/sites.json';
 import { MODES, type ModeKey, type Violation } from './core/ruleEngine';
+import { isLocked } from './core/entitlement';
 import { ExcavatorView, type MachineStyleKey } from './render/excavatorView';
 import { FxView, SiteView, SoilView } from './render/siteView';
 import { DigSession, type DigEntry, type RulesFile } from './sim/session';
@@ -74,10 +75,10 @@ try {
   /* 저장소 사용 불가 */
 }
 // 모드: 자유 연습 / 시험 연습 / 실제 시험 — 선택은 기억
-let modeKey: ModeKey = 'practice';
+let modeKey: ModeKey = 'free';
 try {
   const v = localStorage.getItem('exc-mode');
-  if (v === 'free' || v === 'practice' || v === 'exam') modeKey = v;
+  if ((v === 'free' || v === 'practice' || v === 'exam') && !isLocked(v)) modeKey = v;
 } catch {
   /* 저장소 사용 불가 */
 }
@@ -91,9 +92,14 @@ function renderModePicker() {
   box.innerHTML = '';
   for (const k of ['free', 'practice', 'exam'] as const) {
     const b = document.createElement('button');
-    b.className = 'modebtn' + (k === modeKey ? ' on' : '');
-    b.innerHTML = `<b>${MODE_INFO[k].label}</b>`;
+    const locked = isLocked(k);
+    b.className = 'modebtn' + (k === modeKey ? ' on' : '') + (locked ? ' locked' : '');
+    b.innerHTML = `<b>${locked ? '🔒 ' : ''}${MODE_INFO[k].label}</b>`;
     b.onclick = () => {
+      if (locked) {
+        $('paywall').hidden = false;
+        return;
+      }
       if (modeKey === k) return;
       modeKey = k;
       try {
@@ -321,6 +327,7 @@ const openSettings = () => {
   $('settings').hidden = false;
   showTab(load('exc-settab') ?? 'machine');
 };
+$('btn-paywall-close').onclick = () => ($('paywall').hidden = true);
 $('btn-settings').onclick = openSettings;
 $('btn-settings2').onclick = openSettings;
 $('btn-settings-ok').onclick = () => {
