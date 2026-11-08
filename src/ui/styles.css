@@ -2282,3 +2282,56 @@ body:has(#dq-banner:not([hidden])) #hud {
   margin-top: 0;
   animation: none;
 }
+
+/* 미션 도움 게이지 */
+.m-meter {
+  position: relative;
+  height: 12px;
+  margin: 2px auto 6px;
+  width: min(240px, 80%);
+  border-radius: 6px;
+  background: #fff2;
+  border: 2px solid #fff5;
+  overflow: visible;
+}
+.m-meter[hidden] {
+  display: none;
+}
+.m-meter b {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: none;
+}
+.m-meter .fill {
+  display: block;
+  left: 0;
+  border-radius: 4px;
+  background: var(--sun);
+  transition: width 0.08s linear;
+}
+.m-meter.ok .fill {
+  background: var(--ok);
+}
+.m-meter.is-band .fill {
+  display: none;
+}
+.m-meter.is-band .band {
+  display: block;
+  background: #2bb67399;
+  border-left: 2px solid var(--ok);
+  border-right: 2px solid var(--ok);
+}
+.m-meter.is-band .needle {
+  display: block;
+  top: -4px;
+  bottom: -4px;
+  width: 4px;
+  margin-left: -2px;
+  border-radius: 2px;
+  background: var(--sun);
+  box-shadow: 0 0 0 1px var(--ink);
+}
+.m-meter.is-band.ok .needle {
+  background: #fff;
+}

@@ -18,7 +18,24 @@ export interface Step {
   done: (s: DigSession, mem: Record<string, number>) => boolean;
   /** 이 단계부터 '버킷 내려놓기' 종료 판정을 켬 (앞 단계에서 미리 끝나지 않게) */
   armEnd?: boolean;
+  /** 미묘한 단계의 도움 게이지 (0~1). band가 있으면 바늘+목표 구간, 없으면 채워지는 막대 */
+  meter?: (s: DigSession, mem: Record<string, number>) => Meter;
 }
+
+export interface Meter {
+  v: number;
+  band?: [number, number];
+}
+const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
+/** 시작값 → 목표값까지 얼마나 왔는가 (begin에서 mem.g0 기록) */
+const toward = (now: number, mem: Record<string, number>, goal: number): Meter => ({
+  v: clamp01((now - mem.g0) / (goal - mem.g0 || 1e-6)),
+});
+/** 값 x를 [lo, hi] 범위의 바늘로, 목표 [a, b] */
+const needle = (x: number, lo: number, hi: number, a: number, b: number): Meter => ({
+  v: clamp01((x - lo) / (hi - lo)),
+  band: [(a - lo) / (hi - lo), (b - lo) / (hi - lo)],
+});
 
 export interface Lesson {
   id: string;
@@ -40,6 +57,7 @@ const moved = (j: Joint, dir: 1 | -1, amount: number, text: string, labels: stri
   labels,
   begin: (s, mem) => (mem[j] = s.pose[j]),
   done: (s, mem) => (s.pose[j] - mem[j]) * dir >= amount,
+  meter: (s, mem) => ({ v: clamp01(((s.pose[j] - mem[j]) * dir) / amount) }),
 });
 
 /**
@@ -60,11 +78,12 @@ function pose(s: DigSession, swing: number, r: number, y: number, bucketAbs: num
 }
 const tipStation = (s: DigSession) => s.stationOf(toWorld(s.pose.swing, s.frame.tip))?.name ?? null;
 /** 흙에 닿은 채 dir(1 = 바깥, -1 = 몸 쪽)으로 움직인 거리 누적 */
-/** 버킷 바닥(힐→이빨)이 수평(이빨이 몸 쪽)에서 기운 각(°) */
-const bottomTilt = (s: DigSession) => {
+/** 버킷 바닥(힐→이빨)이 수평(이빨이 몸 쪽)에서 기운 각(°, +면 이빨이 위) */
+const bottomSigned = (s: DigSession) => {
   const f = s.frame;
-  return (Math.abs(Math.atan2(f.tip.y - f.heel.y, f.heel.r - f.tip.r)) * 180) / Math.PI;
+  return (Math.atan2(f.tip.y - f.heel.y, f.heel.r - f.tip.r) * 180) / Math.PI;
 };
+const bottomTilt = (s: DigSession) => Math.abs(bottomSigned(s));
 const contactTravel = (s: DigSession, mem: Record<string, number>, dir: 1 | -1) => {
   const r = s.frame.tip.r;
   const dr = (r - mem.r) * dir;
@@ -108,38 +127,46 @@ export const LESSONS: Lesson[] = [
         labels: ['붐 올림', '버킷 펴기'],
         // 버킷 관절 0° = 핀→이빨 선이 암과 일직선
         done: (s) => Math.abs(s.pose.bucket) <= 12 * deg,
+        meter: (s) => needle(s.pose.bucket / deg, -90, 90, -12, 12),
       },
       {
         text: '암 펴서 ⓑ선 안쪽까지 뻗기',
         labels: ['암 펴기'],
+        begin: (s, mem) => (mem.g0 = s.frame.tip.r),
         done: (s) => s.frame.tip.r >= s.digTarget.rho - 0.5,
+        meter: (s, mem) => toward(s.frame.tip.r, mem, s.digTarget.rho - 0.5),
       },
       {
         text: '붐 내려 이빨 꽂기',
         labels: ['붐 내림'],
         done: (s) => tipStation(s) === 'A' && s.groundGap() < -0.05,
+        meter: (s) => ({ v: clamp01((0.6 - s.groundGap()) / 0.65) }),
       },
       {
         text: '버킷 오므려 바닥면을 수평으로',
         labels: ['버킷 오므림'],
         // 버킷 바닥(힐→이빨)이 수평 ±20°, 이빨이 몸 쪽
         done: (s) => bottomTilt(s) <= 20 && s.groundGap() < 0,
+        meter: (s) => needle(bottomSigned(s), -60, 60, -20, 20),
       },
       {
         text: '암 당겨 흙 긁어오기',
         labels: ['암 당기기'],
         begin: (s, mem) => ((mem.r = s.frame.tip.r), (mem.d = 0)),
         done: (s, mem) => contactTravel(s, mem, -1) >= 0.6,
+        meter: (_s, mem) => ({ v: clamp01(mem.d / 0.6) }),
       },
       {
         text: '버킷 오므리며 암 한 번 더 당겨 가득 담기',
         labels: ['버킷 오므림', '암 당기기'],
         done: (s) => s.load >= 0.8 * s.m.struckCapacity,
+        meter: (s) => ({ v: clamp01(s.load / (0.8 * s.m.struckCapacity)) }),
       },
       {
         text: '붐 올리며 버킷 끝까지 오므리기',
         labels: ['붐 올림', '버킷 오므림'],
         done: (s) => s.fullyCurled && s.groundGap() > 0.8 && s.load >= 0.6 * s.m.struckCapacity,
+        meter: (s) => ({ v: Math.min(clamp01(s.groundGap() / 0.8), s.fullyCurled ? 1 : 0.5) }),
       },
     ],
   },
@@ -198,29 +225,37 @@ export const LESSONS: Lesson[] = [
       {
         text: '버킷 끝까지 펴서 뒤집기',
         labels: ['버킷 펴기'],
+        begin: (s, mem) => (mem.g0 = s.pose.bucket),
         done: (s) => s.pose.bucket >= s.m.limits.bucket[1] - 15 * deg,
+        meter: (s, mem) => toward(s.pose.bucket, mem, s.m.limits.bucket[1] - 15 * deg),
       },
       {
         text: '암 펴서 흙더미 너머로 뻗기',
         labels: ['암 펴기'],
+        begin: (s, mem) => (mem.g0 = s.frame.tip.r),
         done: (s) => s.frame.tip.r >= s.site.stations[1].pitOut - 0.4,
+        meter: (s, mem) => toward(s.frame.tip.r, mem, s.site.stations[1].pitOut - 0.4),
       },
       {
         text: '흙에 대고 암 당기며 붐 올려 끌어오기',
         labels: ['붐 내림', '암 당기기', '붐 올림'],
         begin: (s, mem) => ((mem.r = s.frame.tip.r), (mem.d = 0)),
         done: (s, mem) => contactTravel(s, mem, -1) >= 0.8,
+        meter: (_s, mem) => ({ v: clamp01(mem.d / 0.8) }),
       },
       {
         text: '붐 올리고 암 당겨 밀 준비',
         labels: ['붐 올림', '암 당기기'],
+        begin: (s, mem) => (mem.g0 = s.frame.tip.r),
         done: (s) => s.frame.tip.r <= s.site.stations[1].pitIn + 0.2,
+        meter: (s, mem) => toward(s.frame.tip.r, mem, s.site.stations[1].pitIn + 0.2),
       },
       {
         text: '암·붐 동시에 살살 밀어 고르기',
         labels: ['암 펴기', '붐 내림'],
         begin: (s, mem) => ((mem.r = s.frame.tip.r), (mem.d = 0)),
         done: (s, mem) => contactTravel(s, mem, 1) >= 1.0 && s.flattenVol >= s.params.flattenMinVolume,
+        meter: (s, mem) => ({ v: Math.min(clamp01(mem.d / 1.0), clamp01(s.flattenVol / s.params.flattenMinVolume)) }),
       },
       {
         text: '버킷 끝까지 편 채로 흙 위에 내려놓기',
@@ -252,6 +287,11 @@ export class Tutor {
   }
   get current(): Step | null {
     return this.lesson.steps[this.step] ?? null;
+  }
+  /** 지금 단계의 도움 게이지 (없으면 null) */
+  meter(): Meter | null {
+    if (this.cleared) return null;
+    return this.current?.meter?.(this.s, this.mem) ?? null;
   }
   /** 이번 프레임에 단계가 넘어갔으면 true */
   update(): boolean {

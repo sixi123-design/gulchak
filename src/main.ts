@@ -535,6 +535,28 @@ function startLesson(i: number) {
   tutor = new Tutor(L, session);
   renderMission(true);
 }
+/** 미션 도움 게이지: 막대(얼마나 왔나) 또는 바늘+목표 구간(각도 맞추기) */
+const meterEl = $('m-meter');
+const meterFill = meterEl.querySelector<HTMLElement>('.fill')!;
+const meterBand = meterEl.querySelector<HTMLElement>('.band')!;
+const meterNeedle = meterEl.querySelector<HTMLElement>('.needle')!;
+function updateMeter() {
+  const m = tutor?.meter() ?? null;
+  meterEl.hidden = !m;
+  if (!m) return;
+  const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
+  if (m.band) {
+    meterEl.classList.add('is-band');
+    meterBand.style.left = pct(m.band[0]);
+    meterBand.style.width = pct(m.band[1] - m.band[0]);
+    meterNeedle.style.left = pct(m.v);
+    meterEl.classList.toggle('ok', m.v >= m.band[0] && m.v <= m.band[1]);
+  } else {
+    meterEl.classList.remove('is-band');
+    meterFill.style.width = pct(m.v);
+    meterEl.classList.toggle('ok', m.v >= 1);
+  }
+}
 function renderMission(intro = false) {
   const m = $('mission');
   if (!tutor) {
@@ -987,6 +1009,7 @@ function frame(now: number) {
       renderMission();
     }
   }
+  updateMeter();
   if (examiners) {
     exc.bucketWorld(tmpV);
     examiners.update(dt, now / 1000, tmpV);
