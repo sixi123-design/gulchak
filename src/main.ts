@@ -9,7 +9,7 @@ import { FxView, SiteView, SoilView } from './render/siteView';
 import { DigSession, type DigEntry, type RulesFile } from './sim/session';
 import { LESSONS, Tutor } from './sim/tutorial';
 import { ik } from './sim/kinematics';
-import { Joystick, Keys } from './ui/joystick';
+import { Joystick, KEY_ACTIONS, keyName, Keys } from './ui/joystick';
 import { MachineSound, type SoundLevels } from './ui/audio';
 import { ICON } from './ui/icons';
 import { ExaminerView } from './render/examinerView';
@@ -85,11 +85,11 @@ try {
 } catch {
   /* 저장소 사용 불가 */
 }
-const MODE_INFO: Record<ModeKey, { label: string; tier: string; cls: string; stars: string; start: string }> = {
-  tutorial: { label: '배우기', tier: '입문', cls: 'tier-learn', stars: '🔰', start: '스테이지 고르기' },
-  free: { label: '자유 연습', tier: '연습', cls: 'tier-free', stars: '★', start: '시작' },
-  practice: { label: '시험 연습', tier: '실전 대비', cls: 'tier-mid', stars: '★★', start: '도전' },
-  exam: { label: '실제 시험', tier: '실전', cls: 'tier-boss', stars: '★★★', start: '도전!' },
+const MODE_INFO: Record<ModeKey, { label: string; cls: string; start: string }> = {
+  tutorial: { label: '배우기', cls: 'tier-learn', start: '스테이지 고르기' },
+  free: { label: '자유 연습', cls: 'tier-free', start: '시작' },
+  practice: { label: '시험 연습', cls: 'tier-mid', start: '도전' },
+  exam: { label: '실제 시험', cls: 'tier-boss', start: '도전!' },
 };
 // 테스트 결제: 구매하면 그 모드 1판만 열림 (판이 끝나면 다시 결제 유도)
 let testPass: ModeKey | null = null;
@@ -106,7 +106,7 @@ function renderModePicker() {
     const b = document.createElement('button');
     const mi = MODE_INFO[k];
     b.className = `modebtn ${mi.cls}` + (k === modeKey ? ' on' : '');
-    b.innerHTML = `<span class="tier">${mi.tier}</span><b>${mi.label}</b><span class="stars">${mi.stars}</span>`;
+    b.innerHTML = `<b>${mi.label}</b>`;
     b.onclick = () => {
       if (needPay(k)) return openPaywall(k);
       if (modeKey === k) return;
@@ -353,6 +353,7 @@ $('btn-paywall-close').onclick = () => ($('paywall').hidden = true);
 $('btn-settings').onclick = openSettings;
 $('btn-settings2').onclick = openSettings;
 $('btn-settings-ok').onclick = () => {
+  keys.cancelRebind();
   showTab('machine');
   $('settings').hidden = true;
 };
@@ -664,6 +665,38 @@ sound.setLevels(levels);
 const left = new Joystick($('stick-l'));
 const right = new Joystick($('stick-r'));
 const keys = new Keys();
+// 설정 > 조작키: 누르면 다음 키로 바꿈 (겹치면 맞바꿈, Esc 취소)
+function renderKeys(wait?: string) {
+  // 화면 조이스틱과 같은 십자 배치: [위, 왼쪽, 오른쪽, 아래]
+  const pads: (typeof KEY_ACTIONS)[number]['id'][][] = [
+    ['ly+', 'lx-', 'lx+', 'ly-'],
+    ['ry+', 'rx-', 'rx+', 'ry-'],
+  ];
+  const pos = ['up', 'lt', 'rt', 'dn'];
+  $('key-grid').innerHTML = pads
+    .map(
+      (ids) =>
+        `<div class="key-pad">${ids
+          .map((id, i) => {
+            const a = KEY_ACTIONS.find((x) => x.id === id)!;
+            return `<button class="keybtn ${pos[i]}${wait === id ? ' wait' : ''}" data-k="${id}"><b>${wait === id ? '?' : keyName(keys.map[id])}</b><small>${a.label}</small></button>`;
+          })
+          .join('')}</div>`,
+    )
+    .join('');
+  for (const b of $('key-grid').querySelectorAll<HTMLElement>('[data-k]'))
+    b.onclick = () => {
+      const id = b.dataset.k as (typeof KEY_ACTIONS)[number]['id'];
+      renderKeys(id);
+      keys.rebind(id, () => renderKeys());
+    };
+}
+renderKeys();
+$('btn-keys-reset').onclick = () => {
+  keys.cancelRebind();
+  keys.reset();
+  renderKeys();
+};
 
 async function goFullscreen() {
   try {
@@ -677,7 +710,6 @@ async function goFullscreen() {
 const isIOS = /iP(hone|od|ad)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const standalone = (navigator as Navigator & { standalone?: boolean }).standalone || matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches;
 if (isIOS && !standalone) $('fs-hint').hidden = false;
-if (matchMedia('(pointer: coarse)').matches) $('pc-hint').hidden = true;
 function beginWork() {
   setTimeout(() => sound.whistle('start'), 300);
   session.ready();
@@ -697,7 +729,7 @@ $('btn-ready').onclick = () => {
   const boss = k === 'exam';
   const bi = $('boss-intro');
   bi.className = boss ? 'boss' : 'mid';
-  $('bi-tag').textContent = MODE_INFO[k].tier;
+  $('bi-tag').hidden = true; // 작은 부제 없이 모드 이름만
   $('bi-title').textContent = MODE_INFO[k].label;
   $('bi-sub').textContent = boss ? '4:00 · 실격하면 끝' : '4:00';
   // 애니메이션을 처음부터 다시 재생
@@ -747,7 +779,6 @@ $('btn-labels').onclick = () => {
 };
 syncLabels();
 $('btn-paywall-close').innerHTML = ICON.close;
-if (matchMedia('(pointer: coarse)').matches) $('pc-hint').hidden = true;
 // 가격 (임시 값: 실제 가격이 정해지면 여기만 바꿈)
 const PRICE = 9900;
 $('btn-buy').textContent = `${PRICE.toLocaleString('ko-KR')}원 평생 이용하기`;

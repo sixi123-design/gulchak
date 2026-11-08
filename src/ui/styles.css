@@ -2557,3 +2557,59 @@ body[data-mode='tutorial'] .toasts {
   bottom: 12px;
   right: 12px;
 }
+
+/* 설정 > 조작키: 조이스틱처럼 십자 2개 */
+.settings-card .tabs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+}
+.key-grid {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin: 4px 0 6px;
+}
+.key-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 60px);
+  grid-template-rows: repeat(3, 42px);
+  gap: 3px;
+}
+.keybtn {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  padding: 0;
+  font: 900 16px/1 var(--font);
+  color: var(--ink);
+  background: #fff;
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  box-shadow: 0 3px 0 var(--ink);
+  cursor: pointer;
+}
+.keybtn small {
+  font: 800 10px/1.1 var(--font);
+  opacity: 0.7;
+  white-space: nowrap;
+}
+.keybtn.up {
+  grid-area: 1 / 2;
+}
+.keybtn.lt {
+  grid-area: 2 / 1;
+}
+.keybtn.rt {
+  grid-area: 2 / 3;
+}
+.keybtn.dn {
+  grid-area: 3 / 2;
+}
+.keybtn.wait {
+  background: var(--sun);
+  animation: pipBlink 0.8s ease-in-out infinite;
+}
+#btn-keys-reset {
+  display: block;
+  margin: 0 auto 6px;
+}

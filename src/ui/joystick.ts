@@ -57,27 +57,91 @@ export class Joystick {
   }
 }
 
-/** 키보드: 왼쪽 레버 WASD, 오른쪽 레버 IJKL (방향키는 오른쪽) */
+/** 키보드 조작: 동작마다 키 하나 (설정 > 조작키에서 바꿈). 이름은 화면 레버 라벨과 같게 */
+export const KEY_ACTIONS = [
+  { id: 'ly+', label: '암 펴기', def: 'KeyW' },
+  { id: 'ly-', label: '암 당기기', def: 'KeyS' },
+  { id: 'lx-', label: '선회 ◀', def: 'KeyA' },
+  { id: 'lx+', label: '▶ 선회', def: 'KeyD' },
+  { id: 'ry+', label: '붐 내림', def: 'KeyI' },
+  { id: 'ry-', label: '붐 올림', def: 'KeyK' },
+  { id: 'rx-', label: '버킷 오므림', def: 'KeyJ' },
+  { id: 'rx+', label: '버킷 펴기', def: 'KeyL' },
+] as const;
+export type KeyAction = (typeof KEY_ACTIONS)[number]['id'];
+const KEY_STORE = 'exc-keys';
+
+/** 키 코드 → 화면 표시 (KeyW → W, ArrowUp → ↑) */
+export function keyName(code: string) {
+  const arrows: Record<string, string> = { ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Space: 'Space' };
+  if (arrows[code]) return arrows[code];
+  return code.replace(/^Key/, '').replace(/^Digit/, '').replace(/^Numpad/, 'Num ');
+}
+
 export class Keys {
   private down = new Set<string>();
+  map: Record<KeyAction, string>;
+  /** 다음 키 하나를 받는 중이면 콜백 (조작키 바꾸기) */
+  private capture: ((code: string | null) => void) | null = null;
   constructor() {
-    addEventListener('keydown', (e) => this.down.add(e.code));
+    this.map = Object.fromEntries(KEY_ACTIONS.map((a) => [a.id, a.def])) as Record<KeyAction, string>;
+    try {
+      Object.assign(this.map, JSON.parse(localStorage.getItem(KEY_STORE) ?? '{}'));
+    } catch {
+      /* 무시 */
+    }
+    addEventListener('keydown', (e) => {
+      if (this.capture) {
+        e.preventDefault();
+        const cb = this.capture;
+        this.capture = null;
+        cb(e.code === 'Escape' ? null : e.code);
+        return;
+      }
+      this.down.add(e.code);
+    });
     addEventListener('keyup', (e) => this.down.delete(e.code));
     addEventListener('blur', () => this.down.clear());
   }
-  private ax(neg: string[], pos: string[]) {
-    return (pos.some((k) => this.down.has(k)) ? 1 : 0) - (neg.some((k) => this.down.has(k)) ? 1 : 0);
+  /** 동작 id에 다음에 누르는 키를 지정 (이미 다른 동작에 쓰던 키면 서로 맞바꿈). Esc = 취소 */
+  rebind(id: KeyAction, done: () => void) {
+    this.capture = (code) => {
+      if (code) {
+        const other = (Object.keys(this.map) as KeyAction[]).find((k) => k !== id && this.map[k] === code);
+        if (other) this.map[other] = this.map[id];
+        this.map[id] = code;
+        this.persist();
+      }
+      done();
+    };
+  }
+  cancelRebind() {
+    this.capture = null;
+  }
+  reset() {
+    for (const a of KEY_ACTIONS) this.map[a.id] = a.def;
+    this.persist();
+  }
+  private persist() {
+    try {
+      localStorage.setItem(KEY_STORE, JSON.stringify(this.map));
+    } catch {
+      /* 무시 */
+    }
+  }
+  private ax(neg: KeyAction, pos: KeyAction) {
+    return (this.down.has(this.map[pos]) ? 1 : 0) - (this.down.has(this.map[neg]) ? 1 : 0);
   }
   get lx() {
-    return this.ax(['KeyA'], ['KeyD']);
+    return this.ax('lx-', 'lx+');
   }
   get ly() {
-    return this.ax(['KeyS'], ['KeyW']);
+    return this.ax('ly-', 'ly+');
   }
   get rx() {
-    return this.ax(['KeyJ', 'ArrowLeft'], ['KeyL', 'ArrowRight']);
+    return this.ax('rx-', 'rx+');
   }
   get ry() {
-    return this.ax(['KeyK', 'ArrowDown'], ['KeyI', 'ArrowUp']);
+    return this.ax('ry-', 'ry+');
   }
 }

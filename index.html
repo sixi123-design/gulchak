@@ -68,7 +68,6 @@
         <button class="card-gear" id="btn-settings2" title="설정">⚙</button>
         <div class="mode-pick" id="mode-pick"></div>
         <button class="btn big go" id="btn-ready">시작</button>
-        <p class="hint" id="pc-hint">PC: W A S D · I J K L</p>
         <p class="fs-hint" id="fs-hint" hidden>전체화면: 공유 → <b>홈 화면에 추가</b></p>
       </div>
     </div>
@@ -79,6 +78,7 @@
           <button data-tab="sound">소리</button>
           <button data-tab="machine">굴착기</button>
           <button data-tab="seat">좌석 높이</button>
+          <button data-tab="keys">조작키</button>
         </div>
         <section data-pane="sound">
           <div class="vol-row all"><span>전체</span><button class="mute" id="mute-all"></button></div>
@@ -94,6 +94,10 @@
             <button class="btn small" id="btn-near">📍 가까운 곳</button>
           </div>
           <div class="site-list" id="site-list"></div>
+        </section>
+        <section data-pane="keys" hidden>
+          <div class="key-grid" id="key-grid"></div>
+          <button class="btn small" id="btn-keys-reset">기본값</button>
         </section>
         <section data-pane="seat" hidden>
           <div class="ruler" id="ruler">
@@ -142,8 +146,8 @@
       <div class="card pw">
         <button class="pw-x" id="btn-paywall-close" title="닫기"></button>
         <div class="pw-visual">
-          <div class="modebtn tier-mid"><span class="tier">실전 대비</span><b>시험 연습</b><span class="stars">★★</span></div>
-          <div class="modebtn tier-boss"><span class="tier">실전</span><b>실제 시험</b><span class="stars">★★★</span></div>
+          <div class="modebtn tier-mid"><b>시험 연습</b></div>
+          <div class="modebtn tier-boss"><b>실제 시험</b></div>
         </div>
         <div class="pw-info">
           <span class="pw-badge">평생 이용권</span>
