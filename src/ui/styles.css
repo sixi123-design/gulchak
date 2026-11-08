@@ -2335,3 +2335,20 @@ body:has(#dq-banner:not([hidden])) #hud {
 .m-meter.is-band.ok .needle {
   background: #fff;
 }
+
+/* 미션 카드는 위 가운데: 아래쪽 조이스틱을 가리지 않게 */
+.mission {
+  top: calc(max(8px, env(safe-area-inset-top)) + 2px);
+  bottom: auto;
+  max-width: min(440px, calc(100vw - 340px));
+  padding: 4px 12px 6px;
+}
+.m-text {
+  font-size: 17px;
+  line-height: 1.2;
+}
+@keyframes missionIn {
+  from {
+    transform: translate(-50%, -120%) scale(0.8);
+  }
+}
