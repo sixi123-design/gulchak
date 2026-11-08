@@ -28,7 +28,6 @@
           <button class="btn small" id="btn-settings" title="설정">⚙</button>
           <button class="btn small" id="btn-mute" title="소리">🔊</button>
           <button class="btn small" id="btn-fs" title="전체화면">⛶</button>
-          <button class="btn small" id="btn-cam">시점</button>
           <button class="btn small danger" id="btn-end">그만하기</button>
         </div>
       </div>
@@ -59,6 +58,7 @@
 
       <div class="console">
         <span class="load"><b>부하</b><i class="bar"><i id="loadbar2"></i></i></span>
+        <button class="cam-btn" id="btn-cam" title="시점"></button>
         <button class="btn small" id="btn-engine" hidden>시동</button>
       </div>
       <div class="endring" id="endring"></div>
@@ -126,27 +126,31 @@
       </div>
     </div>
 
-    <div class="modal" id="fail" hidden>
-      <div class="card">
-        <div class="fail-stamp">다시!</div>
-        <p class="sub" id="fail-detail"></p>
-        <div class="btn-row">
-          <button class="btn big" id="btn-fail-map">목록</button>
-          <button class="btn big go" id="btn-fail-retry">다시 하기</button>
+    <div id="fail" hidden>
+      <div class="sheet">
+        <div class="fs-ico">!</div>
+        <div class="fs-body">
+          <div class="fs-title">다시!</div>
+          <div class="fs-reason" id="fail-detail"></div>
         </div>
+        <button class="btn ghost" id="btn-fail-map">목록</button>
+        <button class="btn big go fs-go" id="btn-fail-retry"><span id="fail-retry-ico"></span>다시 하기</button>
       </div>
     </div>
 
     <div class="modal" id="paywall" hidden>
-      <div class="card paywall-card">
-        <div class="pw-cards">
+      <div class="card pw">
+        <button class="pw-x" id="btn-paywall-close" title="닫기"></button>
+        <div class="pw-visual">
           <div class="modebtn tier-mid"><span class="tier">실전 대비</span><b>시험 연습</b><span class="stars">★★</span></div>
           <div class="modebtn tier-boss"><span class="tier">실전</span><b>실제 시험</b><span class="stars">★★★</span></div>
         </div>
-        <div class="pw-life">한 번 구매 · <b>평생</b></div>
-        <div class="btn-row">
-          <button class="btn big" id="btn-paywall-close">닫기</button>
-          <button class="btn big go" id="btn-buy" disabled>준비 중</button>
+        <div class="pw-info">
+          <span class="pw-badge">평생 이용권</span>
+          <h1>시험 모드 열기</h1>
+          <ul class="pw-perks" id="pw-perks"></ul>
+          <div class="pw-price"><b id="pw-price">출시 예정</b><small>한 번 결제 · 자동 결제 없음</small></div>
+          <button class="btn big pw-buy" id="btn-buy" disabled>곧 열려요</button>
         </div>
       </div>
     </div>

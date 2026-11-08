@@ -639,6 +639,9 @@ $('btn-engine').onclick = () => session.restartEngine();
   end.onpointerup = end.onpointerleave = end.onpointercancel = cancel;
 }
 $('btn-settings').innerHTML = ICON.gear;
+$('btn-paywall-close').innerHTML = ICON.close;
+$('fail-retry-ico').innerHTML = ICON.retry;
+$('pw-perks').innerHTML = ['4분 실전 타이머', '실격 즉시 판정', '실격 사유 리포트'].map((t) => `<li>${ICON.check}${t}</li>`).join('');
 $('btn-settings2').innerHTML = ICON.gear;
 $('btn-fs').innerHTML = ICON.expand;
 $('btn-near').innerHTML = `${ICON.pin} 가까운 곳`;
@@ -647,9 +650,10 @@ $('btn-rotate-ok').onclick = () => document.body.classList.add('portrait-ok');
 $('btn-cam').onclick = () => {
   const order: CamMode[] = ['cab', 'chase', 'overview'];
   camMode = order[(order.indexOf(camMode) + 1) % order.length];
-  $('btn-cam').textContent = CAM_LABEL[camMode];
+  $('btn-cam').title = CAM_LABEL[camMode];
 };
-$('btn-cam').textContent = CAM_LABEL[camMode];
+$('btn-cam').title = CAM_LABEL[camMode];
+$('btn-cam').innerHTML = ICON.camera;
 
 const muteBtn = $('btn-mute');
 const syncMute = () => (muteBtn.innerHTML = sound.muted ? ICON.muted : ICON.sound);
