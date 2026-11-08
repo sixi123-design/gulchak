@@ -91,20 +91,24 @@ const MODE_INFO: Record<ModeKey, { label: string; tier: string; cls: string; sta
   practice: { label: '시험 연습', tier: '실전 대비', cls: 'tier-mid', stars: '★★', start: '도전' },
   exam: { label: '실제 시험', tier: '실전', cls: 'tier-boss', stars: '★★★', start: '도전!' },
 };
+// 테스트 결제: 구매하면 그 모드 1판만 열림 (판이 끝나면 다시 결제 유도)
+let testPass: ModeKey | null = null;
+let payFor: ModeKey | null = null;
+const needPay = (k: ModeKey) => isLocked(k) && testPass !== k;
+function openPaywall(k: ModeKey) {
+  payFor = k;
+  $('paywall').hidden = false;
+}
 function renderModePicker() {
   const box = $('mode-pick');
   box.innerHTML = '';
   for (const k of ['tutorial', 'free', 'practice', 'exam'] as const) {
     const b = document.createElement('button');
-    const locked = isLocked(k);
     const mi = MODE_INFO[k];
-    b.className = `modebtn ${mi.cls}` + (k === modeKey ? ' on' : '') + (locked ? ' locked' : '');
-    b.innerHTML = `${locked ? `<span class="lock">${ICON.lock}</span>` : ''}<span class="tier">${mi.tier}</span><b>${mi.label}</b><span class="stars">${mi.stars}</span>`;
+    b.className = `modebtn ${mi.cls}` + (k === modeKey ? ' on' : '');
+    b.innerHTML = `<span class="tier">${mi.tier}</span><b>${mi.label}</b><span class="stars">${mi.stars}</span>`;
     b.onclick = () => {
-      if (locked) {
-        $('paywall').hidden = false;
-        return;
-      }
+      if (needPay(k)) return openPaywall(k);
       if (modeKey === k) return;
       modeKey = k;
       try {
@@ -641,6 +645,7 @@ function beginWork() {
 }
 $('btn-ready').onclick = () => {
   if (session.flags.key === 'tutorial') return openLessonMap();
+  if (needPay(session.flags.key)) return openPaywall(session.flags.key);
   if (matchMedia('(pointer: coarse)').matches) goFullscreen();
   sound.start(); // 휴대폰은 화면을 누른 순간에만 소리를 켤 수 있음
   $('precheck').hidden = true;
@@ -702,12 +707,17 @@ $('btn-paywall-close').innerHTML = ICON.close;
 // 가격 (임시 값: 실제 가격이 정해지면 여기만 바꿈)
 const PRICE = 9900;
 $('btn-buy').textContent = `${PRICE.toLocaleString('ko-KR')}원 평생 이용하기`;
-// TODO: 결제 연동 (앱스토어 인앱결제 또는 웹 결제). 지금은 누르면 버튼만 흔들림
+// TODO: 결제 연동 (앱스토어 인앱결제 또는 웹 결제). 지금은 테스트: 누르면 결제된 것으로 1판 이용
 $('btn-buy').onclick = () => {
-  const b = $('btn-buy');
-  b.classList.remove('nudge');
-  void b.offsetWidth;
-  b.classList.add('nudge');
+  $('paywall').hidden = true;
+  if (!payFor) return;
+  testPass = payFor;
+  if (modeKey !== payFor) {
+    modeKey = payFor;
+    save('exc-mode', modeKey);
+    newSession();
+  }
+  payFor = null;
 };
 $('fail-retry-ico').innerHTML = ICON.retry;
 $('pw-perks').innerHTML = ['4분 실전 타이머', '실격 즉시 판정', '실격 사유 리포트'].map((t) => `<li>${ICON.check}${t}</li>`).join('');
@@ -861,6 +871,7 @@ function showResult() {
   }
   // 실제 시험 실격: 실격 자리 → 감독관 호각 → 결과
   if (dqPlaying) return;
+  if (testPass === s.flags.key) testPass = null; // 테스트 이용권 1판 소진
   if (s.flags.key === 'exam' && s.endedByRule && !s.abandoned && examiners && !dqShown) {
     dqShown = true;
     dqPlaying = true;
