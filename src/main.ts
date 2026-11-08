@@ -574,11 +574,19 @@ function onLessonClear() {
   $('btn-clear-next').hidden = last;
   $('btn-clear-exam').hidden = !last;
   const c = $('clear');
+  // 중간 단계는 이어서 배우는 흐름이라 조용히, 마지막만 크게 축하
+  c.classList.toggle('quiet', !last);
+  c.querySelector('.cl-word')!.textContent = last ? 'CLEAR!' : '성공';
   c.hidden = true;
   void c.offsetWidth;
   c.hidden = false;
-  sound.jingle();
-  if (navigator.vibrate) navigator.vibrate([30, 40, 30, 40, 80]);
+  if (last) {
+    sound.jingle();
+    if (navigator.vibrate) navigator.vibrate([30, 40, 30, 40, 80]);
+  } else {
+    sound.ding();
+    if (navigator.vibrate) navigator.vibrate(30);
+  }
 }
 function onLessonFail(v: Violation) {
   if (!tutor || tutor.cleared) return;

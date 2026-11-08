@@ -2242,3 +2242,43 @@ body[data-mode='exam'] #timer {
 body:has(#dq-banner:not([hidden])) #hud {
   visibility: hidden;
 }
+
+/* 배우기 중간 단계: 조용한 성공 카드 (집중선·별 없이) */
+#clear.quiet {
+  background: none;
+  place-items: end center;
+  padding-bottom: 18px;
+  pointer-events: none;
+}
+#clear.quiet .cl-rays,
+#clear.quiet .cl-stars {
+  display: none;
+}
+#clear.quiet .cl-box {
+  pointer-events: auto;
+  grid-auto-flow: column;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px 8px 16px;
+  background: #fff;
+  border: 3px solid var(--ink);
+  border-radius: 16px;
+  box-shadow: 0 4px 0 var(--ink);
+  animation: fadeUp 0.25s both;
+}
+#clear.quiet .cl-word {
+  font-size: 20px;
+  color: #2bb673;
+  -webkit-text-stroke: 0;
+  text-shadow: none;
+  animation: none;
+}
+#clear.quiet .cl-title {
+  font-size: 15px;
+  color: var(--ink);
+  animation: none;
+}
+#clear.quiet .cl-btns {
+  margin-top: 0;
+  animation: none;
+}
