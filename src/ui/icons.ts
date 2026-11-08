@@ -14,5 +14,7 @@ export const ICON = {
   camera: svg('<path d="M4 8.5h3l1.6-2.5h6.8L17 8.5h3v10H4z"/><circle cx="12" cy="13.2" r="3.2"/>'),
   check: svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>'),
   close: svg('<path d="M6 6l12 12M18 6L6 18"/>'),
+  /** 레버 이름표 */
+  tag: svg('<path d="M3.5 4.5h8.2l8.8 8.8-7.2 7.2-8.8-8.8z"/><circle cx="8.2" cy="9" r="1.7" fill="currentColor"/>'),
   retry: svg('<path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4 4.5v4.5h4.5"/>'),
 };

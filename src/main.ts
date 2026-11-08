@@ -724,7 +724,8 @@ let labelsOn = load('exc-labels') !== '0';
 const syncLabels = () => {
   document.body.classList.toggle('labels-off', !labelsOn);
   const b = $('btn-labels');
-  b.innerHTML = '<b>가</b>';
+  b.innerHTML = ICON.tag;
+  b.title = labelsOn ? '레버 이름 끄기' : '레버 이름 켜기';
   b.classList.toggle('off', !labelsOn);
 };
 $('btn-labels').onclick = () => {

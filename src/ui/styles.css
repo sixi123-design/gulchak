@@ -2352,3 +2352,79 @@ body:has(#dq-banner:not([hidden])) #hud {
     transform: translate(-50%, -120%) scale(0.8);
   }
 }
+
+/* 미션 카드는 왼쪽 위 (가운데 붐·버킷 시야를 가리지 않게) */
+.mission {
+  left: max(12px, env(safe-area-inset-left));
+  top: max(8px, env(safe-area-inset-top));
+  transform: none;
+  min-width: 0;
+  width: max-content;
+  max-width: min(300px, 36vw);
+  text-align: left;
+}
+.mission .m-pips {
+  justify-content: flex-start;
+}
+.mission .m-meter {
+  margin-left: 0;
+  width: 100%;
+}
+@keyframes missionIn {
+  from {
+    transform: translateX(-120%);
+  }
+}
+
+/* 레버 이름 토글: 이름표 아이콘, 반투명, 왼쪽 조이스틱 오른쪽 아래 (위쪽 미션 카드와 겹치지 않게) */
+.lab-toggle {
+  /* 왼쪽 조이스틱 영역의 오른쪽 위 모서리 (원 밖 빈자리) */
+  left: calc(max(18px, env(safe-area-inset-left)) + min(40vw, 240px) - 30px);
+  bottom: calc(max(18px, env(safe-area-inset-bottom)) + min(40vw, 240px) - 30px);
+  width: 36px;
+  height: 36px;
+  color: #fff;
+  background: #1d1b2e66;
+  border: 2px solid #fff8;
+  box-shadow: none;
+  backdrop-filter: blur(2px);
+}
+.lab-toggle .ico {
+  width: 20px;
+  height: 20px;
+}
+.lab-toggle.off {
+  transform: none;
+  background: #1d1b2e33;
+  color: #fff8;
+}
+.lab-toggle.off::after {
+  content: '';
+  position: absolute;
+  width: 26px;
+  height: 2.5px;
+  border-radius: 2px;
+  background: currentColor;
+  transform: rotate(-45deg);
+}
+@media (max-height: 460px) {
+  .lab-toggle {
+    left: calc(max(18px, env(safe-area-inset-left)) + min(46vh, 200px) - 30px);
+    bottom: calc(max(18px, env(safe-area-inset-bottom)) + min(46vh, 200px) - 30px);
+  }
+}
+
+/* 버킷 흙량: 아래 계기판 (부하 옆). 눈금 = 평적 */
+.load.soil .bar > i {
+  background: #9a5b2e;
+}
+.load.soil .bar::after {
+  left: 76.9%;
+}
+
+/* 배우기: 왼쪽 위는 미션 카드 → 알림은 오른쪽 위 버튼 아래 */
+body[data-mode='tutorial'] .toasts {
+  left: auto;
+  right: max(12px, env(safe-area-inset-right));
+  align-items: flex-end;
+}
