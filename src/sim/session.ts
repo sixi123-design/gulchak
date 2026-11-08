@@ -1007,6 +1007,15 @@ export class DigSession {
     Object.assign(this.pose, p);
     this.frame = fk(this.m, this.pose);
   }
+  /** 자세를 순간이동 (배우기 미션 시작용): 이동 경로를 판정하지 않고 속도도 0 */
+  teleport(p: Partial<Pose>) {
+    this.setPose(p);
+    this.vel = { swing: 0, boom: 0, arm: 0, bucket: 0 };
+    this.prevBucket = bucketCorners(this.m, this.frame, this.pose.swing);
+    this.prevUnder = this.underWorld(this.frame, this.pose.swing);
+    this.prevBucketAngle = null;
+    this.prevStation = this.stationOf(toWorld(this.pose.swing, this.frame.tip))?.name ?? null;
+  }
   swingDir() {
     return dirOf(this.pose.swing);
   }

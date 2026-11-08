@@ -33,6 +33,11 @@
         </div>
       </div>
       <div class="guide" id="guide"></div>
+      <div class="mission" id="mission" hidden>
+        <div class="m-head" id="m-head"></div>
+        <div class="m-text" id="m-text"></div>
+        <div class="m-pips" id="m-pips"></div>
+      </div>
       <div class="toasts" id="toasts"></div>
 
       <div class="stick left" id="stick-l">
@@ -98,6 +103,36 @@
           </div>
         </section>
         <button class="btn big go" id="btn-settings-ok">확인</button>
+      </div>
+    </div>
+
+    <div class="modal" id="lessons" hidden>
+      <div class="card wide lessons-card">
+        <div class="ls-head"><button class="btn small" id="btn-lessons-back">◀</button><h1>배우기</h1><span class="ls-count" id="stage-count"></span></div>
+        <div class="stage-map" id="stage-map"></div>
+      </div>
+    </div>
+
+    <div id="clear" hidden>
+      <div class="cl-rays"></div>
+      <div class="cl-box">
+        <div class="cl-stars"><i>★</i><i>★</i><i>★</i></div>
+        <div class="cl-word">CLEAR!</div>
+        <div class="cl-title" id="clear-title"></div>
+        <div class="cl-btns">
+          <button class="btn" id="btn-clear-map">목록</button>
+          <button class="btn big go" id="btn-clear-next">다음 ▶</button>
+          <button class="btn big go" id="btn-clear-exam" hidden>자유 연습으로 ▶</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal" id="fail" hidden>
+      <div class="card">
+        <h1>다시!</h1>
+        <p class="sub" id="fail-detail"></p>
+        <button class="btn big go" id="btn-fail-retry">다시 하기</button>
+        <button class="btn" id="btn-fail-map">목록</button>
       </div>
     </div>
 

@@ -275,6 +275,33 @@ export class MachineSound {
     }
   }
 
+  private blip(at: number, f: number, len: number, v: number, type: OscillatorType = 'square') {
+    const ctx = this.ctx!;
+    const t = ctx.currentTime + at;
+    const o = ctx.createOscillator();
+    o.type = type;
+    o.frequency.setValueAtTime(f, t);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(v, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+    o.connect(g).connect(this.sfx);
+    o.start(t);
+    o.stop(t + len + 0.02);
+  }
+  /** 미션 단계 통과: 짧은 딩동 */
+  ding() {
+    if (!this.ctx || this.muted) return;
+    this.blip(0, 988, 0.09, 0.08);
+    this.blip(0.08, 1319, 0.16, 0.08);
+  }
+  /** 미션 클리어: 올라가는 아르페지오 + 마지막 화음 */
+  jingle() {
+    if (!this.ctx || this.muted) return;
+    [523, 659, 784, 1047].forEach((f, i) => this.blip(i * 0.09, f, 0.12, 0.08));
+    for (const f of [784, 1047, 1319]) this.blip(0.4, f, 0.6, 0.05, 'triangle');
+  }
+
   /** 호각: 시작은 길게 한 번, 실격은 짧게 두 번 */
   whistle(kind: 'start' | 'fail') {
     const ctx = this.ctx;

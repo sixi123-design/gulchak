@@ -7,6 +7,7 @@ import { isLocked } from './core/entitlement';
 import { ExcavatorView, type MachineStyleKey } from './render/excavatorView';
 import { FxView, SiteView, SoilView } from './render/siteView';
 import { DigSession, type DigEntry, type RulesFile } from './sim/session';
+import { LESSONS, Tutor } from './sim/tutorial';
 import { ik } from './sim/kinematics';
 import { Joystick, Keys } from './ui/joystick';
 import { MachineSound } from './ui/audio';
@@ -78,11 +79,12 @@ try {
 let modeKey: ModeKey = 'free';
 try {
   const v = localStorage.getItem('exc-mode');
-  if ((v === 'free' || v === 'practice' || v === 'exam') && !isLocked(v)) modeKey = v;
+  if ((v === 'tutorial' || v === 'free' || v === 'practice' || v === 'exam') && !isLocked(v)) modeKey = v;
 } catch {
   /* 저장소 사용 불가 */
 }
 const MODE_INFO: Record<ModeKey, { label: string; tier: string; cls: string; stars: string; start: string }> = {
+  tutorial: { label: '배우기', tier: '입문', cls: 'tier-learn', stars: '🔰', start: '스테이지 고르기' },
   free: { label: '자유 연습', tier: '연습', cls: 'tier-free', stars: '★', start: '시작' },
   practice: { label: '시험 연습', tier: '실전 대비', cls: 'tier-mid', stars: '★★', start: '도전' },
   exam: { label: '실제 시험', tier: '실전', cls: 'tier-boss', stars: '★★★', start: '도전!' },
@@ -90,7 +92,7 @@ const MODE_INFO: Record<ModeKey, { label: string; tier: string; cls: string; sta
 function renderModePicker() {
   const box = $('mode-pick');
   box.innerHTML = '';
-  for (const k of ['free', 'practice', 'exam'] as const) {
+  for (const k of ['tutorial', 'free', 'practice', 'exam'] as const) {
     const b = document.createElement('button');
     const locked = isLocked(k);
     const mi = MODE_INFO[k];
@@ -348,12 +350,14 @@ function rebuildMachine() {
   (window as unknown as { __exc: { exc: ExcavatorView } }).__exc.exc = exc;
 }
 
-function newSession() {
+function newSession(autoEnd?: boolean) {
   scene.remove(world);
   disposeTree(world);
   world = new THREE.Group();
   scene.add(world);
-  session = new DigSession(MACHINE, RULES, MODES[modeKey]);
+  session = new DigSession(MACHINE, RULES, modeKey === 'tutorial' ? { ...MODES.tutorial, autoEnd: !!autoEnd } : MODES[modeKey]);
+  tutor = null;
+  renderMission();
   exc = new ExcavatorView(MACHINE, styleKey);
   soilView = new SoilView(session.soil.grids);
   fx = new FxView();
@@ -362,6 +366,7 @@ function newSession() {
   world.add(siteView.group, exc.root, ...soilView.meshes, fx.particles, fx.dust, fx.bucketShadow, fx.machineShadow);
   session.onViolation(showToast);
   session.onFinish(showResult);
+  session.onViolation((v) => v.kind === 'disqualify' && onLessonFail(v));
   session.onDigEntry(showEntry);
   // 점검 화면 초기화
   // 안전벨트·안전레버·RPM은 준비된 것으로 본다
@@ -428,6 +433,128 @@ function updateCamera(dt: number) {
   camera.lookAt(camLook);
 }
 
+
+// ---------- 배우기: 스테이지 맵 → 미션 → CLEAR ----------
+let tutor: Tutor | null = null;
+let lessonIdx = -1;
+const loadCleared = (): string[] => {
+  try {
+    return JSON.parse(load('exc-tut') ?? '[]');
+  } catch {
+    return [];
+  }
+};
+function renderLessonMap() {
+  const done = new Set(loadCleared());
+  const next = LESSONS.findIndex((l) => !done.has(l.id));
+  const box = $('stage-map');
+  box.innerHTML = '';
+  LESSONS.forEach((l, i) => {
+    const b = document.createElement('button');
+    b.className = 'stage' + (done.has(l.id) ? ' cleared' : '') + (i === next ? ' next' : '');
+    b.innerHTML = `<span class="st-num">${i + 1}</span><span class="st-icon">${l.icon}</span><b>${l.title}</b>`;
+    b.onclick = () => startLesson(i);
+    box.appendChild(b);
+  });
+  $('stage-count').textContent = `${done.size}/${LESSONS.length}`;
+}
+function openLessonMap() {
+  renderLessonMap();
+  $('precheck').hidden = true;
+  $('lessons').hidden = false;
+}
+$('btn-lessons-back').onclick = () => {
+  $('lessons').hidden = true;
+  $('precheck').hidden = false;
+};
+function startLesson(i: number) {
+  lessonIdx = i;
+  const L = LESSONS[i];
+  newSession(L.autoEnd);
+  $('precheck').hidden = true;
+  $('lessons').hidden = true;
+  $('clear').hidden = true;
+  if (matchMedia('(pointer: coarse)').matches) goFullscreen();
+  sound.start();
+  session.ready();
+  tutor = new Tutor(L, session);
+  renderMission(true);
+}
+function renderMission(intro = false) {
+  const m = $('mission');
+  if (!tutor) {
+    m.hidden = true;
+    for (const el of document.querySelectorAll('.lab')) el.classList.remove('hint');
+    return;
+  }
+  const st = tutor.current;
+  const n = tutor.lesson.steps.length;
+  m.hidden = false;
+  $('m-head').innerHTML = `<span class="m-step">STEP ${lessonIdx + 1}</span>${tutor.lesson.icon} ${tutor.lesson.title}`;
+  $('m-text').textContent = st ? st.text : '';
+  $('m-pips').innerHTML = Array.from({ length: n }, (_, k) => `<i class="${k < tutor!.step ? 'ok' : k === tutor!.step ? 'now' : ''}"></i>`).join('');
+  // 다음 단계 문구가 튀어 들어오게
+  const t = $('m-text');
+  t.classList.remove('pop');
+  void t.offsetWidth;
+  t.classList.add('pop');
+  if (intro) {
+    m.classList.remove('intro');
+    void m.offsetWidth;
+    m.classList.add('intro');
+  }
+  const want = new Set(st?.labels ?? []);
+  for (const el of document.querySelectorAll('.lab')) el.classList.toggle('hint', want.has(el.textContent ?? ''));
+}
+function onLessonClear() {
+  const L = tutor!.lesson;
+  const done = new Set(loadCleared());
+  done.add(L.id);
+  save('exc-tut', JSON.stringify([...done]));
+  renderMission();
+  $('mission').hidden = true;
+  for (const el of document.querySelectorAll('.lab')) el.classList.remove('hint');
+  $('clear-title').textContent = `${L.icon} ${L.title}`;
+  const last = lessonIdx >= LESSONS.length - 1;
+  $('btn-clear-next').hidden = last;
+  $('btn-clear-exam').hidden = !last;
+  const c = $('clear');
+  c.hidden = true;
+  void c.offsetWidth;
+  c.hidden = false;
+  sound.jingle();
+  if (navigator.vibrate) navigator.vibrate([30, 40, 30, 40, 80]);
+}
+function onLessonFail(v: Violation) {
+  if (!tutor || tutor.cleared) return;
+  $('fail-detail').textContent = v.detail;
+  $('fail').hidden = false;
+}
+$('btn-clear-next').onclick = () => startLesson(lessonIdx + 1);
+$('btn-clear-map').onclick = () => {
+  $('clear').hidden = true;
+  tutor = null;
+  newSession();
+  openLessonMap();
+};
+$('btn-clear-exam').onclick = () => {
+  $('clear').hidden = true;
+  tutor = null;
+  modeKey = 'free';
+  save('exc-mode', modeKey);
+  newSession();
+};
+$('btn-fail-retry').onclick = () => {
+  $('fail').hidden = true;
+  startLesson(lessonIdx);
+};
+$('btn-fail-map').onclick = () => {
+  $('fail').hidden = true;
+  tutor = null;
+  newSession();
+  openLessonMap();
+};
+
 // ---------- HUD ----------
 const sound = new MachineSound();
 try {
@@ -466,6 +593,7 @@ function beginWork() {
   setTimeout(() => (f.hidden = true), 1100);
 }
 $('btn-ready').onclick = () => {
+  if (session.flags.key === 'tutorial') return openLessonMap();
   if (matchMedia('(pointer: coarse)').matches) goFullscreen();
   sound.start(); // 휴대폰은 화면을 누른 순간에만 소리를 켤 수 있음
   $('precheck').hidden = true;
@@ -555,6 +683,7 @@ let lastDig = -1;
 function updateHud() {
   const s = session;
   const tm = $('timer');
+  tm.hidden = s.flags.key === 'tutorial';
   if (s.flags.timeLimit) {
     const remain = s.params.digTimeLimitSec - s.t;
     const a = Math.abs(Math.ceil(remain));
@@ -604,6 +733,14 @@ function updateHud() {
 
 function showResult() {
   const s = session;
+  if (s.flags.key === 'tutorial') {
+    // 배우기: 결과표 대신 미션 판정(마무리 미션은 종료가 곧 성공), 그만하기는 스테이지 맵으로
+    if (tutor && !s.abandoned) return;
+    tutor = null;
+    newSession();
+    openLessonMap();
+    return;
+  }
   const r = s.result();
   const sum = s.engine.summary();
   const dq = sum.filter((x) => x.kind === 'disqualify');
@@ -690,6 +827,13 @@ function frame(now: number) {
   soilView.sync();
   fx.sync(session);
   sound.update(session);
+  if (tutor && tutor.update()) {
+    if (tutor.cleared) onLessonClear();
+    else {
+      sound.ding();
+      renderMission();
+    }
+  }
   updateCamera(dt);
   updateHud();
   renderer.render(scene, camera);

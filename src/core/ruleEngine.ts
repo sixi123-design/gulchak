@@ -7,7 +7,7 @@ export interface RuleDef {
   title: string;
 }
 
-export type ModeKey = 'free' | 'practice' | 'exam';
+export type ModeKey = 'tutorial' | 'free' | 'practice' | 'exam';
 
 export interface ModeFlags {
   key: ModeKey;
@@ -29,7 +29,9 @@ export const FREE: ModeFlags = { key: 'free', failEnds: false, timeLimit: false,
 export const PRACTICE: ModeFlags = { key: 'practice', failEnds: false, timeLimit: true, autoEnd: true, guide: true, feedback: true };
 /** 실제 시험: 안내 없음, 실격이면 그 자리에서 종료 */
 export const EXAM: ModeFlags = { key: 'exam', failEnds: true, timeLimit: true, autoEnd: true, guide: false, feedback: false };
-export const MODES: Record<ModeKey, ModeFlags> = { free: FREE, practice: PRACTICE, exam: EXAM };
+/** 배우기: 자유 연습과 같되 미션이 진행을 맡음 */
+export const TUTORIAL: ModeFlags = { ...FREE, key: 'tutorial' };
+export const MODES: Record<ModeKey, ModeFlags> = { tutorial: TUTORIAL, free: FREE, practice: PRACTICE, exam: EXAM };
 
 export interface Violation {
   id: string;

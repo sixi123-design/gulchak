@@ -1290,3 +1290,301 @@ body:has(#settings.seat:not([hidden])) #precheck {
     padding: 5px 10px;
   }
 }
+
+/* ---------- 배우기 ---------- */
+.mode-pick {
+  grid-template-columns: repeat(4, 1fr);
+}
+.modebtn.tier-learn {
+  background: linear-gradient(160deg, #7fd3ff, #3aa8f0);
+  color: var(--ink);
+}
+.modebtn.tier-learn.on {
+  animation: learnGlow 1.6s ease-in-out infinite;
+}
+@keyframes learnGlow {
+  50% {
+    box-shadow: 0 2px 0 var(--ink), 0 0 14px 4px #7fd3ff;
+  }
+}
+
+/* 스테이지 맵: 번호 원을 길로 이은 아케이드 맵 */
+.lessons-card {
+  width: min(760px, 100%);
+}
+.ls-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.ls-head h1 {
+  flex: 1;
+  margin: 0;
+}
+.ls-count {
+  font: 900 16px var(--font);
+  background: var(--ink);
+  color: var(--sun);
+  border-radius: 999px;
+  padding: 3px 12px;
+}
+.stage-map {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+  padding: 8px 0 4px;
+}
+.stage-map::before {
+  content: '';
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  top: 44px;
+  border-top: 6px dotted var(--ink);
+  opacity: 0.25;
+}
+.stage {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font: 800 13px var(--font);
+  color: var(--ink);
+}
+.stage .st-icon {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  font-size: 30px;
+  background: #fff;
+  border: 4px solid var(--ink);
+  border-radius: 50%;
+  box-shadow: 0 5px 0 var(--ink);
+}
+.stage .st-num {
+  position: absolute;
+  top: 2px;
+  left: calc(50% - 40px);
+  z-index: 1;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  font: 900 13px var(--font);
+  background: var(--ink);
+  color: #fff;
+  border-radius: 50%;
+}
+.stage.cleared .st-icon {
+  background: var(--sun);
+}
+.stage.cleared::after {
+  content: '★';
+  position: absolute;
+  top: -4px;
+  right: calc(50% - 40px);
+  font-size: 22px;
+  color: var(--sun);
+  -webkit-text-stroke: 2px var(--ink);
+}
+.stage.next .st-icon {
+  background: #7fd3ff;
+  animation: stageBounce 0.9s ease-in-out infinite;
+}
+@keyframes stageBounce {
+  50% {
+    transform: translateY(-7px);
+  }
+}
+
+/* 미션 배너 (화면 아래 가운데: 버킷을 가리지 않게) */
+.mission {
+  position: absolute;
+  left: 50%;
+  bottom: calc(max(14px, env(safe-area-inset-bottom)) + 52px);
+  transform: translateX(-50%);
+  min-width: 240px;
+  max-width: min(560px, 50vw);
+  text-align: center;
+  background: var(--ink);
+  color: #fff;
+  border: 3px solid var(--sun);
+  border-radius: 16px;
+  padding: 6px 14px 8px;
+  box-shadow: 0 4px 0 #0006;
+  pointer-events: none;
+}
+.mission[hidden] {
+  display: none;
+}
+.mission.intro {
+  animation: missionIn 0.5s cubic-bezier(0.2, 1.5, 0.4, 1);
+}
+@keyframes missionIn {
+  from {
+    transform: translate(-50%, 120%) scale(0.8);
+  }
+}
+.m-head {
+  font: 800 12px var(--font);
+  opacity: 0.85;
+}
+.m-step {
+  display: inline-block;
+  background: var(--sun);
+  color: var(--ink);
+  font-weight: 900;
+  border-radius: 6px;
+  padding: 0 6px;
+  margin-right: 6px;
+}
+.m-text {
+  font: 900 20px var(--font);
+  color: var(--sun);
+  margin: 2px 0 4px;
+}
+.m-text.pop {
+  animation: pop 0.35s;
+}
+.m-pips {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+}
+.m-pips i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #fff3;
+}
+.m-pips i.ok {
+  background: var(--ok);
+}
+.m-pips i.now {
+  background: var(--sun);
+  animation: pipBlink 0.8s ease-in-out infinite;
+}
+@keyframes pipBlink {
+  50% {
+    opacity: 0.4;
+  }
+}
+/* 지금 쓸 레버 라벨을 반짝이게 */
+.stick .lab.hint {
+  background: var(--sun);
+  z-index: 2;
+  animation: labHint 0.7s ease-in-out infinite;
+}
+@keyframes labHint {
+  50% {
+    box-shadow: 0 0 0 5px #ffc23a88;
+    scale: 1.15;
+  }
+}
+
+/* CLEAR! */
+#clear {
+  position: fixed;
+  inset: 0;
+  z-index: 18;
+  display: grid;
+  place-items: center;
+  background: #1d1b2ecc;
+  overflow: hidden;
+}
+#clear[hidden] {
+  display: none;
+}
+.cl-rays {
+  position: absolute;
+  width: 220vmax;
+  height: 220vmax;
+  background: repeating-conic-gradient(#ffc23a33 0 10deg, transparent 10deg 20deg);
+  animation: rays 8s linear infinite;
+}
+@keyframes rays {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.cl-box {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+}
+.cl-stars {
+  display: flex;
+  gap: 6px;
+  font-size: 44px;
+}
+.cl-stars i {
+  font-style: normal;
+  color: var(--sun);
+  -webkit-text-stroke: 3px var(--ink);
+  animation: starIn 0.4s cubic-bezier(0.3, 1.8, 0.5, 1) both;
+}
+.cl-stars i:nth-child(1) {
+  animation-delay: 0.35s;
+}
+.cl-stars i:nth-child(2) {
+  animation-delay: 0.5s;
+  font-size: 1.3em;
+}
+.cl-stars i:nth-child(3) {
+  animation-delay: 0.65s;
+}
+@keyframes starIn {
+  from {
+    transform: scale(0) rotate(-120deg);
+    opacity: 0;
+  }
+}
+.cl-word {
+  font: 900 min(16vw, 84px) var(--font);
+  line-height: 1;
+  color: var(--sun);
+  -webkit-text-stroke: 5px var(--ink);
+  paint-order: stroke fill;
+  text-shadow: 0 6px 0 var(--ink);
+  animation: biSlam 0.45s cubic-bezier(0.3, 1.5, 0.5, 1) both;
+}
+.cl-title {
+  font: 900 18px var(--font);
+  color: #fff;
+  animation: fadeUp 0.3s 0.5s both;
+}
+.cl-btns {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+  animation: fadeUp 0.3s 0.8s both;
+}
+#fail {
+  z-index: 18;
+}
+#fail h1 {
+  color: var(--danger);
+}
+#fail .btn + .btn {
+  margin-top: 8px;
+}
+@media (max-width: 640px) {
+  .stage .st-icon {
+    width: 50px;
+    height: 50px;
+    font-size: 24px;
+  }
+  .stage-map::before {
+    top: 36px;
+  }
+}
+.timer[hidden] {
+  display: none;
+}
