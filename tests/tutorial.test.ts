@@ -62,33 +62,37 @@ describe('배우기', () => {
       t.update();
     }
   };
-  it('퍼 담기: 꽂고 → 당기며 오므리고 → 들어 올리면 완료', () => {
+  it('퍼 담기: 뻗고 → 이빨 세워 꽂고 → 당기며 오므리고 → 들어 올리면 완료', () => {
     const t = new Tutor(lesson('scoop'), mk());
     const A = t.s.site.stations[0];
-    const r0 = A.pitOut - 0.1;
+    const r0 = t.s.digTarget.rho;
     const surf = t.s.soil.surfaceAt(-r0, 0);
-    via(t, r0, surf + 0.3, -1.0, 40);
-    via(t, r0, surf - 0.3, -1.0, 40);
-    expect(t.step).toBe(1);
-    via(t, A.pitIn + 0.5, surf - 0.25, -2.6, 100);
+    via(t, r0, 1.0, -1.0, 60);
     expect(t.step).toBe(2);
+    via(t, r0, surf - 0.3, -1.0, 40);
+    expect(t.step).toBe(3);
+    via(t, A.pitIn + 0.5, surf - 0.25, -2.6, 100);
+    expect(t.step).toBeGreaterThanOrEqual(5);
     via(t, A.pitIn + 0.6, 1.4, -Math.PI - 0.6, 40);
     expect(t.cleared).toBe(true);
   });
-  it('평탄: 버킷을 펴고 이빨로 밀면 완료', () => {
-    const t = new Tutor(lesson('flatten'), mk());
+  it('평탄·마무리: 뒤집고 → 뻗고 → 끌어오고 → 밀고 → 내려놓으면 완료', () => {
+    const t = new Tutor(lesson('flatten'), mk(true));
     expect(drive(t, () => ({ rx: 1 }), 400)).toBe(true);
-    const C = t.s.site.stations[1];
-    via(t, C.pitIn + 0.1, 0.4, -Math.PI / 2, 40);
-    via(t, C.pitIn + 0.1, -0.02, -Math.PI / 2, 30);
-    via(t, C.pitOut - 0.2, -0.02, -1.0, 120);
+    expect(t.s.flags.autoEnd).toBe(false);
+    expect(drive(t, () => ({ ly: 1 }), 600)).toBe(true);
+    // 흙 표면을 따라 긁기: 뜨면 붐 내림, 너무 박히면 붐 올림
+    const skim = (dir: 1 | -1) => (s: DigSession) => {
+      const g = s.groundGap();
+      return g > 0.05 ? { ry: 0.5, ly: 0.3 * dir } : g < -0.08 ? { ly: dir, ry: -0.6 } : { ly: dir };
+    };
+    expect(drive(t, skim(-1), 900)).toBe(true);
+    expect(drive(t, skim(1), 900)).toBe(true);
+    expect(t.s.flags.autoEnd).toBe(true);
+    const open = (s: DigSession) => s.pose.bucket < s.m.limits.bucket[1] - 0.02;
+    expect(drive(t, (s) => (open(s) ? { rx: 1 } : s.groundGap() > 0.02 ? { ry: 0.5 } : {}), 900)).toBe(true);
     expect(t.cleared).toBe(true);
-  });
-  it('마무리: 버킷을 펴고 내려놓으면 완료', () => {
-    const t = new Tutor(lesson('finish'), mk(true));
-    expect(drive(t, () => ({ rx: 1 }), 400)).toBe(true);
-    expect(drive(t, (s) => (s.groundGap() > 0.02 ? { ry: 0.6 } : {}), 900)).toBe(true);
-    expect(t.cleared).toBe(true);
+    expect(t.s.engine.disqualifications()).toEqual([]);
   });
   it('B 통과 선회: 오른쪽(B쪽)으로 선회하면 C에 도착, 실격 없음', () => {
     const t = new Tutor(lesson('carry'), mk());

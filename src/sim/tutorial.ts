@@ -16,6 +16,8 @@ export interface Step {
   /** 이 단계가 시작될 때의 상태 기록 */
   begin?: (s: DigSession, mem: Record<string, number>) => void;
   done: (s: DigSession, mem: Record<string, number>) => boolean;
+  /** 이 단계부터 '버킷 내려놓기' 종료 판정을 켬 (앞 단계에서 미리 끝나지 않게) */
+  armEnd?: boolean;
 }
 
 export interface Lesson {
@@ -57,6 +59,19 @@ function pose(s: DigSession, swing: number, r: number, y: number, bucketAbs: num
   }
 }
 const tipStation = (s: DigSession) => s.stationOf(toWorld(s.pose.swing, s.frame.tip))?.name ?? null;
+/** 버킷 날(힐→이빨)이 수평 아래로 숙인 각(°). 90 = 이빨이 땅을 똑바로 봄 */
+const bladeDown = (s: DigSession) => {
+  const f = s.frame;
+  return (Math.atan2(f.heel.y - f.tip.y, f.tip.r - f.heel.r) * 180) / Math.PI;
+};
+/** 흙에 닿은 채 dir(1 = 바깥, -1 = 몸 쪽)으로 움직인 거리 누적 */
+const contactTravel = (s: DigSession, mem: Record<string, number>, dir: 1 | -1) => {
+  const r = s.frame.tip.r;
+  const dr = (r - mem.r) * dir;
+  if (dr > 0 && s.groundGap() < 0.12) mem.d += dr;
+  mem.r = r;
+  return mem.d;
+};
 const fill = (s: DigSession, ratio: number) => {
   s.load = s.m.struckCapacity * ratio;
   s.loadBack = s.load * 0.85;
@@ -84,22 +99,46 @@ export const LESSONS: Lesson[] = [
     icon: '🪣',
     title: '퍼 담기',
     setup: (s) => {
-      pose(s, SWING_A, s.digTarget.rho, 0.6, -40 * deg);
+      // 흙을 쏟고 돌아온 자세: 버킷 오므리고 몸 가까이
+      pose(s, SWING_A, s.digTarget.rho - 1.6, 1.3, -130 * deg);
     },
     steps: [
       {
-        text: 'ⓑ선 안쪽에 버킷 날을 꽂기',
+        text: '암 펴서 ⓑ선 쪽으로 뻗기',
+        labels: ['암 펴기'],
+        done: (s) => s.frame.tip.r >= s.digTarget.rho - 0.3,
+      },
+      {
+        text: '버킷 펴서 이빨이 땅을 보게',
+        labels: ['버킷 펴기'],
+        done: (s) => {
+          const a = bladeDown(s);
+          return a >= 70 && a <= 120;
+        },
+      },
+      {
+        text: '붐 내려 ⓑ선 안쪽에 이빨 꽂기',
         labels: ['붐 내림'],
         done: (s) => tipStation(s) === 'A' && s.groundGap() < -0.05,
       },
       {
-        text: '당기면서 오므려 퍼 담기',
+        text: '암 당겨 흙 긁어오기',
+        labels: ['암 당기기'],
+        done: (s) => s.load >= 0.4 * s.m.struckCapacity,
+      },
+      {
+        text: '당기면서 버킷 오므려 가득 담기',
         labels: ['암 당기기', '버킷 오므림'],
         done: (s) => s.load >= 0.8 * s.m.struckCapacity,
       },
       {
-        text: '끝까지 오므리고 들어 올리기',
-        labels: ['버킷 오므림', '붐 올림'],
+        text: '버킷 끝까지 오므리기',
+        labels: ['버킷 오므림'],
+        done: (s) => s.fullyCurled,
+      },
+      {
+        text: '붐 올려 들어 올리기',
+        labels: ['붐 올림'],
         done: (s) => s.fullyCurled && s.groundGap() > 0.8 && s.load >= 0.6 * s.m.struckCapacity,
       },
     ],
@@ -142,7 +181,8 @@ export const LESSONS: Lesson[] = [
   {
     id: 'flatten',
     icon: '🧹',
-    title: '평탄',
+    title: '평탄·마무리',
+    autoEnd: true,
     setup: (s) => {
       const C = s.site.stations[1];
       const g = s.soil.grids.find((x) => x.name === 'C')!;
@@ -150,41 +190,37 @@ export const LESSONS: Lesson[] = [
       // 덤프 4번 한 것처럼 흙을 쌓아 둠
       for (const dx of [-0.6, -0.2, 0.2, 0.6]) g.depositSpread(g.cellAt(C.axis.x * (mid + dx), 0), 0.4);
       g.relax(Math.tan((s.params.reposeDeg * Math.PI) / 180) * s.params.soilCell, 400);
+      s.digCount = Math.max(s.digCount, s.params.minDigCount);
       s.dumpCount = Math.max(s.dumpCount, 1);
-      pose(s, SWING_C, C.pitIn - 0.1, 0.9, -10 * deg, -30 * deg);
+      pose(s, SWING_C, C.pitIn - 0.1, 1.2, -10 * deg, -30 * deg);
     },
     steps: [
       {
-        text: '버킷을 끝까지 펴기',
+        text: '버킷 끝까지 펴서 뒤집기',
         labels: ['버킷 펴기'],
         done: (s) => s.pose.bucket >= s.m.limits.bucket[1] - 15 * deg,
       },
       {
-        text: '이빨로 앞으로 밀어 고르기',
+        text: '암 펴서 흙더미 너머로 뻗기',
+        labels: ['암 펴기'],
+        done: (s) => s.frame.tip.r >= s.site.stations[1].pitOut - 0.4,
+      },
+      {
+        text: '붐 내려 흙에 대고, 암 당겨 한 번 끌어오기',
         labels: ['붐 내림', '암 당기기'],
-        done: (s) => s.flattenVol >= s.params.flattenMinVolume,
-      },
-    ],
-  },
-  {
-    id: 'finish',
-    icon: '🏁',
-    title: '마무리',
-    autoEnd: true,
-    setup: (s) => {
-      s.digCount = s.params.minDigCount;
-      s.flattenVol = s.params.flattenMinVolume;
-      pose(s, SWING_C, 5.2, 1.2, 0, 0);
-    },
-    steps: [
-      {
-        text: '버킷을 끝까지 펴기',
-        labels: ['버킷 펴기'],
-        done: (s) => s.pose.bucket >= s.m.limits.bucket[1] - s.params.endOpenMarginDeg * deg,
+        begin: (s, mem) => ((mem.r = s.frame.tip.r), (mem.d = 0)),
+        done: (s, mem) => contactTravel(s, mem, -1) >= 0.8,
       },
       {
-        text: '평탄한 C 흙 위에 내려놓고 멈추기',
-        labels: ['붐 내림'],
+        text: '암 펴며 흙더미를 밀어 고르기',
+        labels: ['암 펴기', '붐 내림'],
+        begin: (s, mem) => ((mem.r = s.frame.tip.r), (mem.d = 0)),
+        done: (s, mem) => contactTravel(s, mem, 1) >= 0.8 && s.flattenVol >= s.params.flattenMinVolume,
+      },
+      {
+        text: '버킷 끝까지 편 채로 흙 위에 내려놓기',
+        labels: ['붐 내림', '버킷 펴기'],
+        armEnd: true,
         done: (s) => s.phase === 'finished',
       },
     ],
@@ -205,7 +241,9 @@ export class Tutor {
   }
   private enter() {
     this.mem = {};
-    this.lesson.steps[this.step]?.begin?.(this.s, this.mem);
+    const st = this.lesson.steps[this.step];
+    if (this.lesson.autoEnd) this.s.flags.autoEnd = !!st?.armEnd;
+    st?.begin?.(this.s, this.mem);
   }
   get current(): Step | null {
     return this.lesson.steps[this.step] ?? null;
