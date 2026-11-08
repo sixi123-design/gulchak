@@ -1,14 +1,18 @@
 import type { DigSession } from '../sim/session';
 
 /**
- * Web Audio로 합성하는 장비 소리 (오디오 파일 없음, 저가 폰에서도 가벼움)
- *  - 엔진: rpm에 따라 높낮이·크기, 부하가 걸리면 낮게 깔림
+ * 장비 소리. 엔진·흙 쏟는 소리는 실제 녹음(public/sfx, CC0)을 반복 재생, 나머지는 Web Audio 합성
+ *  - 엔진: 공회전 녹음 ↔ 작업 회전수 녹음을 rpm에 따라 섞고 재생 속도로 높낮이, 부하가 걸리면 처지고 거칠어짐
+ *    출처(freesound.org, CC0): SieuAmThanh #770430 (공회전), itinerantmonk108 #737208 (작업 회전수),
+ *    craigsmith #481824 (흙 쏟기)
  *  - 유압: 움직이는 만큼 '쉬익' 흐르는 소리
  *  - 릴리프 밸브: 실린더 끝(끝까지 오므림 등)에서 레버를 계속 밀 때 '끼이익' 고음
  *  - 흙: 버킷에서 쏟아지는 '쏴아' + 땅에 떨어지는 '우르르·투둑'
  *  - 덜컹, 호각
  */
 export interface SoundLevels {
+  engOn: boolean;
+  eng: number;
   ambOn: boolean;
   amb: number;
   sfxOn: boolean;
@@ -18,8 +22,10 @@ export interface SoundLevels {
 export class MachineSound {
   private ctx: AudioContext | null = null;
   private master!: GainNode;
-  private engA!: OscillatorNode;
-  private engB!: OscillatorNode;
+  /** 녹음 반복: [공회전, 작업 회전수]. 각 녹음의 엔진 폭발 주파수(Hz) */
+  private engSrc: (AudioBufferSourceNode | null)[] = [null, null];
+  private engMix: GainNode[] = [];
+  private static readonly ENG_HZ = [36.8, 68.8];
   private engGain!: GainNode;
   private engFilter!: BiquadFilterNode;
   private hydGain!: GainNode;
@@ -32,10 +38,11 @@ export class MachineSound {
   private landFilter!: BiquadFilterNode;
   private lastTick = 0;
   /** 환경음(엔진·유압·릴리프·흙) / 효과음(덜컹·호각·투둑) 버스 */
+  private eng!: GainNode;
   private amb!: GainNode;
   private sfx!: GainNode;
   muted = false;
-  levels: SoundLevels = { ambOn: true, amb: 0.8, sfxOn: true, sfx: 0.8 };
+  levels: SoundLevels = { engOn: true, eng: 0.8, ambOn: true, amb: 0.8, sfxOn: true, sfx: 0.8 };
 
   /** 사용자 조작(터치·클릭) 안에서 호출해야 소리가 켜진다 */
   start() {
@@ -49,27 +56,43 @@ export class MachineSound {
     this.master = ctx.createGain();
     this.master.gain.value = this.muted ? 0 : 0.8;
     this.master.connect(ctx.destination);
+    this.eng = ctx.createGain();
     this.amb = ctx.createGain();
     this.sfx = ctx.createGain();
+    this.eng.connect(this.master);
     this.amb.connect(this.master);
     this.sfx.connect(this.master);
     this.applyLevels();
 
-    // 엔진: 낮은 톱니파 2개(살짝 어긋나게) → 저역 통과
+    // 엔진: 녹음 2개를 섞음 → 저역 통과(부하에 따라 열림)
     this.engFilter = ctx.createBiquadFilter();
     this.engFilter.type = 'lowpass';
-    this.engFilter.frequency.value = 380;
+    this.engFilter.frequency.value = 2500;
     this.engGain = ctx.createGain();
     this.engGain.gain.value = 0;
-    this.engA = ctx.createOscillator();
-    this.engA.type = 'sawtooth';
-    this.engB = ctx.createOscillator();
-    this.engB.type = 'square';
-    this.engA.connect(this.engFilter);
-    this.engB.connect(this.engFilter);
-    this.engFilter.connect(this.engGain).connect(this.amb);
-    this.engA.start();
-    this.engB.start();
+    this.engFilter.connect(this.engGain).connect(this.eng);
+    this.engMix = [ctx.createGain(), ctx.createGain()];
+    for (const g of this.engMix) {
+      g.gain.value = 0;
+      g.connect(this.engFilter);
+    }
+    const base = import.meta.env.BASE_URL;
+    const loadLoop = async (file: string, out: AudioNode, keep: (n: AudioBufferSourceNode) => void) => {
+      try {
+        const ab = await (await fetch(`${base}sfx/${file}`)).arrayBuffer();
+        const buf = await ctx.decodeAudioData(ab);
+        const n = ctx.createBufferSource();
+        n.buffer = buf;
+        n.loop = true;
+        n.connect(out);
+        n.start();
+        keep(n);
+      } catch {
+        /* 못 불러오면 그 소리만 빠짐 */
+      }
+    };
+    loadLoop('eng_idle.wav', this.engMix[0], (n) => (this.engSrc[0] = n));
+    loadLoop('eng_high.wav', this.engMix[1], (n) => (this.engSrc[1] = n));
 
     // 백색 잡음 버퍼 (유압·릴리프 공용)
     const noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
@@ -106,14 +129,11 @@ export class MachineSound {
     this.relTone.connect(relToneGain).connect(this.relGain);
     this.relTone.start();
     this.relGain.connect(this.amb);
-    // 흙 쏟아짐: 모래가 미끄러지는 중고역 잡음
-    const pourF = ctx.createBiquadFilter();
-    pourF.type = 'bandpass';
-    pourF.frequency.value = 1100;
-    pourF.Q.value = 0.6;
+    // 흙 쏟아짐: 녹음 반복
     this.pourGain = ctx.createGain();
     this.pourGain.gain.value = 0;
-    mkNoise().connect(pourF).connect(this.pourGain).connect(this.amb);
+    this.pourGain.connect(this.amb);
+    loadLoop('pour.wav', this.pourGain, () => {});
     // 흙 떨어짐: 낮게 깔리는 '우르르'
     this.landFilter = ctx.createBiquadFilter();
     this.landFilter.type = 'lowpass';
@@ -134,6 +154,7 @@ export class MachineSound {
     const l = this.levels;
     // 같은 순간에 여러 번 바꿔도 마지막 값이 적용되게 예약을 지우고 다시 건다
     for (const [g, v] of [
+      [this.eng, l.engOn ? l.eng * 1.25 : 0],
       [this.amb, l.ambOn ? l.amb * 1.25 : 0],
       [this.sfx, l.sfxOn ? l.sfx * 1.25 : 0],
     ] as const) {
@@ -156,12 +177,19 @@ export class MachineSound {
     const on = s.engineOn && s.phase !== 'precheck';
     const rpm = Math.max(0, Math.min(1, s.rpm));
     const load = Math.min(2, s.engineLoad + s.reliefLevel * 0.6);
-    // 엔진: 공회전 약 25Hz → 최대 약 45Hz, 부하가 걸리면 몇 Hz 처짐
-    const f = 25 + 20 * rpm - 4 * Math.min(load, 1.5);
-    this.engA.frequency.setTargetAtTime(f, t, 0.08);
-    this.engB.frequency.setTargetAtTime(f * 2.02, t, 0.08);
-    this.engFilter.frequency.setTargetAtTime(260 + 260 * rpm + 120 * Math.min(load, 1.5), t, 0.1);
-    this.engGain.gain.setTargetAtTime(on ? 0.1 + 0.07 * rpm + 0.05 * Math.min(load, 1.5) : 0, t, 0.12);
+    // 엔진: 작업 중엔 설정 rpm, 그 밖(시작 전·종료 후)엔 공회전. 폭발 주파수 f에 맞춰 두 녹음의 재생 속도를 맞춤
+    const r0 = s.phase === 'working' ? rpm : 0.1;
+    const lf = Math.min(load, 1.5);
+    const f = 36.8 + 32 * r0 - 3 * lf;
+    const [hzIdle, hzHigh] = MachineSound.ENG_HZ;
+    this.engSrc[0]?.playbackRate.setTargetAtTime(f / hzIdle, t, 0.25);
+    this.engSrc[1]?.playbackRate.setTargetAtTime(f / hzHigh, t, 0.25);
+    // rpm이 오를수록 작업 회전수 녹음 쪽으로 (같은 크기로 들리게 sin/cos 혼합)
+    const x = Math.max(0, Math.min(1, (r0 - 0.2) / 0.55));
+    this.engMix[0].gain.setTargetAtTime(Math.cos((x * Math.PI) / 2), t, 0.3);
+    this.engMix[1].gain.setTargetAtTime(Math.sin((x * Math.PI) / 2), t, 0.3);
+    this.engFilter.frequency.setTargetAtTime(1600 + 1400 * r0 + 2500 * lf, t, 0.15);
+    this.engGain.gain.setTargetAtTime(on ? 0.5 + 0.15 * r0 + 0.25 * lf : 0, t, 0.2);
     // 유압 흐름
     const flow = Math.min(1.5, s.motionLevel);
     this.hydGain.gain.setTargetAtTime(on ? 0.05 * flow * (0.5 + rpm) : 0, t, 0.06);
@@ -173,8 +201,7 @@ export class MachineSound {
     // 흙: 덤프 한 번(약 0.8m³/s)이 1에 가깝게. 매 프레임 흔들어 '자글자글'한 결을 냄
     const pour = Math.sqrt(Math.min(1.5, s.pourRate / 0.8));
     const land = Math.sqrt(Math.min(1.5, s.landRate / 0.8));
-    const grit = 0.65 + Math.random() * 0.35;
-    this.pourGain.gain.setTargetAtTime(0.16 * pour * grit, t, 0.03);
+    this.pourGain.gain.setTargetAtTime(0.9 * pour, t, 0.05);
     this.landGain.gain.setTargetAtTime(0.42 * land * (0.55 + Math.random() * 0.45), t, 0.025);
     this.landFilter.frequency.setTargetAtTime(240 + 160 * land, t, 0.05);
     // 조금씩 떨어질 때(흘림)는 '투둑' 소리로 들리게

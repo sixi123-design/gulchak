@@ -10,7 +10,7 @@ import { DigSession, type DigEntry, type RulesFile } from './sim/session';
 import { LESSONS, Tutor } from './sim/tutorial';
 import { ik } from './sim/kinematics';
 import { Joystick, Keys } from './ui/joystick';
-import { MachineSound } from './ui/audio';
+import { MachineSound, type SoundLevels } from './ui/audio';
 
 const RULES = rulesJson as unknown as RulesFile;
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -174,37 +174,37 @@ function syncRuler() {
   ruler.onpointerup = ruler.onpointercancel = () => (drag = false);
 }
 
-// 소리: 환경음 / 효과음
-const levels = { ambOn: true, amb: 0.8, sfxOn: true, sfx: 0.8 };
+// 소리: 엔진음 / 환경음 / 효과음
+const levels: SoundLevels = { engOn: true, eng: 0.8, ambOn: true, amb: 0.8, sfxOn: true, sfx: 0.8 };
 try {
   Object.assign(levels, JSON.parse(load('exc-audio') ?? '{}'));
 } catch {
   /* 무시 */
 }
+const SOUND_KEYS = ['eng', 'amb', 'sfx'] as const;
 function syncSoundUi() {
-  for (const k of ['amb', 'sfx'] as const) {
+  for (const k of SOUND_KEYS) {
     $<HTMLInputElement>(`vol-${k}`).value = String(Math.round(levels[k] * 100));
-    const on = k === 'amb' ? levels.ambOn : levels.sfxOn;
+    const on = levels[`${k}On`];
     const b = $(`mute-${k}`);
     b.textContent = on ? '🔊' : '🔇';
     b.classList.toggle('off', !on);
   }
 }
-for (const k of ['amb', 'sfx'] as const) {
+const applySound = () => {
+  sound.setLevels(levels);
+  save('exc-audio', JSON.stringify(levels));
+  syncSoundUi();
+};
+for (const k of SOUND_KEYS) {
   $<HTMLInputElement>(`vol-${k}`).oninput = (e) => {
     levels[k] = Number((e.target as HTMLInputElement).value) / 100;
-    if (k === 'amb') levels.ambOn = true;
-    else levels.sfxOn = true;
-    sound.setLevels(levels);
-    save('exc-audio', JSON.stringify(levels));
-    syncSoundUi();
+    levels[`${k}On`] = true;
+    applySound();
   };
   $(`mute-${k}`).onclick = () => {
-    if (k === 'amb') levels.ambOn = !levels.ambOn;
-    else levels.sfxOn = !levels.sfxOn;
-    sound.setLevels(levels);
-    save('exc-audio', JSON.stringify(levels));
-    syncSoundUi();
+    levels[`${k}On`] = !levels[`${k}On`];
+    applySound();
   };
 }
 
