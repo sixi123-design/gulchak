@@ -18,6 +18,7 @@ export interface RuleParams {
   repeatCooldownSec: number;
   stallRpm: number;
   flattenMinVolume: number;
+  endSinkTol: number;
   endHoldSec: number;
   endOpenMarginDeg: number;
   endGroundTol: number;
@@ -515,7 +516,7 @@ export class DigSession {
         this.stallT += dt;
         if (this.stallT > 0) {
           this.engineOn = false;
-          this.report('D-STALL', '낮은 rpm에서 무리한 굴착으로 엔진 정지');
+          this.report('D-STALL', '낮은 RPM에서 무리하게 파서 엔진 정지');
         }
       } else this.stallT = Math.max(0, this.stallT - dt);
       // 시간
@@ -545,8 +546,8 @@ export class DigSession {
     this.lift += (want - this.lift) * Math.min(1, dt / (want > this.lift ? 0.35 : 0.2));
     this.overloadAcc = this.overloadAcc * Math.exp(-dt / 1.5) + Math.max(0, this.engineLoad - 1) * dt;
     this.maxOverloadAcc = Math.max(this.maxOverloadAcc, this.overloadAcc);
-    if (this.overloadAcc > this.params.overloadWarnSec) this.report('W-OVERLOAD', '버킷 날 방향으로 가르지 않고 밀고 있음: 각도를 바꾸거나 덜 깊게');
-    if (this.lift > (this.params.liftWarnDeg * Math.PI) / 180) this.report('W-LIFT', '버킷으로 땅을 너무 눌러 차체가 들림');
+    if (this.overloadAcc > this.params.overloadWarnSec) this.report('W-OVERLOAD', '날 방향이 아니라 밀고 있음: 각도를 바꾸거나 얕게');
+    if (this.lift > (this.params.liftWarnDeg * Math.PI) / 180) this.report('W-LIFT', '땅을 너무 눌러 차체가 들림');
   }
 
   /** 충격 → 차체 흔들림, 경고, 고봉 흙 쏟아짐 */
@@ -569,9 +570,9 @@ export class DigSession {
       this.jolts++;
       this.joltCd = 0.6;
       const msg = {
-        release: '빠르게 움직이다 레버를 갑자기 놓아 덜컹거림: 멈출 땐 레버를 서서히 놓으세요',
-        reverse: '레버를 반대로 확 꺾어 덜컹거림: 멈춘 뒤 방향을 바꾸세요',
-        stroke: '실린더 끝에 세게 부딪혀 덜컹거림',
+        release: '레버를 갑자기 놓음: 서서히 놓으세요',
+        reverse: '레버를 반대로 확 꺾음: 멈춘 뒤 바꾸세요',
+        stroke: '실린더 끝에 세게 닿음',
       }[why];
       this.report('W-JOLT', msg);
     }
@@ -835,7 +836,7 @@ export class DigSession {
     if (Math.abs(this.vel.swing) > (3 * Math.PI) / 180) {
       for (const p of curB) {
         if (p.y < this.soil.surfaceAt(p.x, p.z) - 0.05) {
-          this.report('W-DANGER', '버킷이 흙 속에 있는 상태에서 선회');
+          this.report('W-DANGER', '버킷이 흙 속에 있는데 선회');
           break;
         }
       }
@@ -906,8 +907,9 @@ export class DigSession {
     const still =
       Math.max(Math.abs(this.vel.swing), Math.abs(this.vel.boom), Math.abs(this.vel.arm), Math.abs(this.vel.bucket)) <
       (2 * Math.PI) / 180;
-    // 표면에서 ±허용오차 이내 (흙에 묻힌 상태는 불인정)
-    if (open && Math.abs(gap) <= this.params.endGroundTol && still) {
+    // 지면에 닿으면 인정. 흙 위에 내려놓으면 버킷이 조금 묻히는 게 정상이라 endSinkTol까지 인정
+    // (구덩이 속 깊이 묻힌 채로는 불인정)
+    if (open && gap <= this.params.endGroundTol && gap >= -this.params.endSinkTol && still) {
       this.endT += dt;
       if (this.endT >= this.params.endHoldSec) this.finish();
     } else this.endT = 0;
@@ -973,25 +975,25 @@ export class DigSession {
 
   /** 안내 문구 */
   guide(): string {
-    if (this.phase === 'precheck') return '시작 전 점검: 안전벨트 → 안전레버 해제 → rpm 올리기 → 준비 완료';
+    if (this.phase === 'precheck') return '점검: 벨트 → 안전레버 해제 → RPM 올리기 → 준비 완료';
     if (this.phase === 'ready') return '호각! 작업을 시작합니다';
     if (this.phase === 'finished') return '작업 종료';
-    if (!this.engineOn) return '엔진이 꺼졌습니다. 시동을 다시 거세요 (rpm을 올리고 작업)';
-    if (!this.leverUnlocked) return '안전레버가 잠겨 있어 레버가 움직이지 않습니다';
+    if (!this.engineOn) return '엔진 꺼짐: 시동 버튼을 누르세요';
+    if (!this.leverUnlocked) return '안전레버 잠김: 해제해야 움직입니다';
     const sc = this.m.struckCapacity;
     const tipSt = this.stationOf(toWorld(this.pose.swing, this.frame.tip))?.name ?? null;
     if (this.load >= 0.3 * sc) {
-      if (tipSt === 'C') return 'C지점 구덩이 위에서 버킷을 펴 흙을 쏟으세요';
-      if (!this.fullyCurled) return '흙을 담았으면 버킷을 끝까지 오므린 채 들어 올려 선회하세요 (흘리지 않게)';
-      return '흙을 담은 채 붐을 올리고 B지점 통과구역(두 폴 사이, 줄 위)으로 선회하세요';
+      if (tipSt === 'C') return 'C 구덩이 위에서 버킷을 펴 쏟으세요';
+      if (!this.fullyCurled) return '버킷을 끝까지 오므리고 들어 올리세요';
+      return '붐을 올려 B 통과구역(폴 사이·줄 위)으로 선회';
     }
     if (this.digCount < this.params.minDigCount)
-      return `A지점: ⓑ선 안쪽 30cm에 버킷을 넣고 당기며 퍼 담으세요 (${this.digCount}/${this.params.minDigCount})`;
-    if (this.flattenVol < this.params.flattenMinVolume) return 'C지점 평탄: 버킷을 끝까지 펴고 이빨로 앞으로 밀어 고르세요 (붐을 조금씩 올려 날 높이를 일정하게)';
+      return `A: ⓑ선 30cm 안쪽을 당기며 퍼 담기 (${this.digCount}/${this.params.minDigCount})`;
+    if (this.flattenVol < this.params.flattenMinVolume) return 'C 평탄: 버킷을 펴고 이빨로 앞으로 밀기';
     const open = this.pose.bucket >= this.m.limits.bucket[1] - (this.params.endOpenMarginDeg * Math.PI) / 180;
     const cm = Math.round(this.groundGap() * 100);
-    if (!open) return '마무리: 버킷을 끝까지 펴세요 (버킷 펴기)';
-    return `마무리: 편 버킷을 구역 안 지면에 내려놓고 1초 멈추세요 (지면까지 ${Math.max(0, cm)}cm)`;
+    if (!open) return '마무리: 버킷을 끝까지 펴세요';
+    return `마무리: 편 버킷을 땅에 내려놓기 (${Math.max(0, cm)}cm)`;
   }
 
   /** 디버그·테스트용 */

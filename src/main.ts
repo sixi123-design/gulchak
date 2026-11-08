@@ -277,7 +277,7 @@ function showToast(v: Violation) {
   const el = document.createElement('div');
   const dq = v.kind === 'disqualify';
   el.className = 'toast' + (dq ? '' : ' warn');
-  el.innerHTML = `<b>${dq ? `실전이었다면 실격! · ${v.basis}` : '주의'}</b>${v.detail}`;
+  el.innerHTML = `<b>${dq ? `실격 · ${v.basis}` : '주의'}</b>${v.detail}`;
   const box = $('toasts');
   box.prepend(el);
   while (box.children.length > 3) box.lastElementChild!.remove();
@@ -295,9 +295,9 @@ function showToast(v: Violation) {
 function showEntry(e: DigEntry) {
   if (!session.flags.guide) return;
   const cm = (v: number) => Math.round(Math.abs(v) * 100);
-  const fb = Math.abs(e.dr) < 0.02 ? '앞뒤 정확' : e.dr > 0 ? `${cm(e.dr)}cm 바깥(ⓑ선 쪽)` : `${cm(e.dr)}cm 안쪽(장비 쪽)`;
-  const lr = Math.abs(e.dl) < 0.02 ? '좌우 정확' : `${e.dl > 0 ? 'B 쪽' : 'B 반대쪽'}으로 ${cm(e.dl)}cm`;
-  const head = e.grade === 'good' ? '굴착 위치 좋음 👍' : e.grade === 'ok' ? '굴착 위치 조금 벗어남' : '굴착 위치 많이 벗어남';
+  const fb = Math.abs(e.dr) < 0.02 ? '앞뒤 정확' : e.dr > 0 ? `ⓑ선 쪽 ${cm(e.dr)}cm` : `장비 쪽 ${cm(e.dr)}cm`;
+  const lr = Math.abs(e.dl) < 0.02 ? '좌우 정확' : `${e.dl > 0 ? 'B 쪽' : 'B 반대쪽'} ${cm(e.dl)}cm`;
+  const head = e.grade === 'good' ? '위치 좋음 👍' : e.grade === 'ok' ? '위치 조금 벗어남' : '위치 많이 벗어남';
   const el = document.createElement('div');
   el.className = 'toast entry ' + e.grade;
   el.innerHTML = `<b>${head}</b>${fb} · ${lr}`;
@@ -361,41 +361,37 @@ function showResult() {
   const stamp = $('stamp');
   stamp.className = 'stamp ' + (dq.length || s.abandoned ? 'fail' : 'pass');
   stamp.textContent = s.abandoned ? '중도 종료' : dq.length ? `실격 사유 ${dq.length}` : '실격 없음';
-  $('res-title').textContent = s.abandoned
-    ? '중도 종료 (실전이라면 기권)'
-    : dq.length
-      ? '실전이었다면 실격이에요'
-      : '실격 없이 완주!';
+  $('res-title').textContent = s.abandoned ? '중도 종료' : dq.length ? '실전이면 실격' : '실격 없이 완주!';
   const dqList = $('res-dq');
-  dqList.innerHTML = dq.length
-    ? dq
-        .map((d) => `<li class="dq"><b>${d.basis} · ${d.title}</b><small>${d.details.slice(0, 3).join(' / ')}${d.count > 1 ? ` (${d.count}회)` : ''}</small></li>`)
-        .join('')
-    : '<li class="ok"><b>공개문제 실격 항목에 해당 없음</b><small>세부 점수는 공개되지 않아 합격 여부는 판정하지 않습니다</small></li>';
-  for (const w of warn) dqList.innerHTML += `<li><b>주의 · ${w.title}</b><small>${w.count}회</small></li>`;
+  const pre = r.precheck;
+  const missed = [!pre.belt && '벨트', !pre.lever && '안전레버', !pre.rpm && 'RPM'].filter(Boolean);
+  dqList.innerHTML =
+    (dq.length
+      ? dq.map((d) => `<li class="dq"><b>${d.basis} ${d.title}</b>${d.count > 1 ? `<small>${d.count}회</small>` : ''}</li>`).join('')
+      : '<li class="ok"><b>실격 항목 없음</b><small>점수 미공개 · 합격 여부는 판정 안 함</small></li>') +
+    (warn.length ? `<li><b>주의</b><small>${warn.map((w) => `${w.title} ${w.count}`).join(' · ')}</small></li>` : '') +
+    (missed.length ? `<li><b>점검 누락</b><small>${missed.join(' · ')}</small></li>` : '');
   const pct = (v: number) => `${Math.round(v * 100)}%`;
   const avg = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
+  const cmOf = (v: number) => `${Math.round(v * 100)}cm`;
   const fl = r.flatness;
-  const items = [
-    ['작업 시간', `${Math.floor(r.elapsed / 60)}분 ${Math.round(r.elapsed % 60)}초 (제한 4분)`],
-    ['유효 굴착 / 덤프', `${r.digCount}회 / ${r.dumpCount}회`],
-    ['흙량 (평적 = 100%)', r.loadRatios.length ? `평균 ${pct(avg(r.loadRatios))} · 최저 ${pct(Math.min(...r.loadRatios))}` : '기록 없음'],
-    [
-      '굴착 위치 (ⓑ선 안쪽 30cm 목표)',
-      r.entries.length
-        ? `앞뒤 평균 ${Math.round(avg(r.entries.map((e) => Math.abs(e.dr))) * 100)}cm · 좌우 평균 ${Math.round(avg(r.entries.map((e) => Math.abs(e.dl))) * 100)}cm · 좋음 ${r.entries.filter((e) => e.grade === 'good').length}/${r.entries.length}회`
-        : '기록 없음',
-    ],
-    ['연결동작 비율', pct(r.connectedRatio)],
-    ['평탄도 (C 구덩이)', fl ? `기준면 편차 ${Math.round(fl.meanDev * 100)}cm · 높낮이 ${Math.round(fl.range * 100)}cm` : '-'],
-    ['구덩이 밖 흙', fl ? `${(fl.outsideVol * 1000).toFixed(0)}L` : '-'],
-    ['운반 중 흘린 흙 (A→C 선회 중)', `${Math.round(r.carrySpill * 1000)}L`],
-    ['끝까지 담김 (안쪽까지 밀어 넣은 비율)', r.packRatios.length ? `평균 ${pct(avg(r.packRatios))} · 최저 ${pct(Math.min(...r.packRatios))}` : '기록 없음'],
-    ['평탄 요령 (버킷 펴고 이빨로 앞으로 민 비율)', r.flattenOpenRatio > 0 || r.flatness ? pct(r.flattenOpenRatio) : '-'],
-    ['바닥 충격 / 덜컹', `${r.impacts}회 / ${r.jolts}회`],
-    ['시작 전 점검', `벨트 ${r.precheck.belt ? '✔' : '✘'} · 안전레버 ${r.precheck.lever ? '✔' : '✘'} · RPM ${r.precheck.rpm ? '✔' : '✘'}`],
+  const load = avg(r.loadRatios);
+  const dr = avg(r.entries.map((e) => Math.abs(e.dr)));
+  const dl = avg(r.entries.map((e) => Math.abs(e.dl)));
+  const pack = avg(r.packRatios);
+  // [항목, 값, 문제 있음]
+  const items: [string, string, boolean][] = [
+    ['시간', `${Math.floor(r.elapsed / 60)}:${String(Math.round(r.elapsed % 60)).padStart(2, '0')} / 4:00`, r.elapsed > 240],
+    ['굴착 · 덤프', `${r.digCount} · ${r.dumpCount}회`, r.digCount < 4],
+    ['흙량 (평적 100%)', r.loadRatios.length ? `${pct(load)} (최저 ${pct(Math.min(...r.loadRatios))})` : '-', r.loadRatios.length > 0 && load < 0.8],
+    ['위치 오차 앞뒤 · 좌우', r.entries.length ? `${cmOf(dr)} · ${cmOf(dl)}` : '-', dr > 0.15 || dl > 0.15],
+    ['안쪽까지 담김', r.packRatios.length ? pct(pack) : '-', r.packRatios.length > 0 && pack < 0.6],
+    ['운반 중 흘림', `${Math.round(r.carrySpill * 1000)}L`, r.carrySpill > 0.02],
+    ['평탄 편차', fl ? cmOf(fl.meanDev) : '-', !!fl && fl.meanDev > 0.1],
+    ['이빨로 밀어 평탄', r.flattenOpenRatio > 0 || fl ? pct(r.flattenOpenRatio) : '-', !!fl && r.flattenOpenRatio < 0.5],
+    ['충격 · 덜컹', `${r.impacts} · ${r.jolts}회`, r.impacts + r.jolts > 0],
   ];
-  $('res-metrics').innerHTML = items.map(([k, v]) => `<li><b>${k}</b>${v}</li>`).join('');
+  $('res-metrics').innerHTML = items.map(([k, v, bad]) => `<li class="row${bad ? ' bad' : ''}"><span>${k}</span><b>${v}</b></li>`).join('');
   setTimeout(() => ($('result').hidden = false), 600);
 }
 

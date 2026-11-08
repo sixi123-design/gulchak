@@ -198,6 +198,22 @@ describe('굴착 세션', () => {
     for (let i = 0; i < 120; i++) s.step();
     expect(s.phase).toBe('working');
   });
+  it('흙 위에 편 버킷을 내려놓아 조금 묻혀도 종료 인정', () => {
+    const s = startedSession();
+    s.digCount = 4;
+    s.flattenVol = 1;
+    // 정면(C 흙 구역) 위에서 편 버킷을 붐으로 내려 흙에 닿게 한 뒤 레버를 놓음
+    s.setPose({ swing: 0, boom: 0.3, arm: -1.6, bucket: MACHINE.limits.bucket[1] });
+    const y0 = s.frame.tip.y;
+    let dir = 1;
+    for (let i = 0; i < 10; i++) { s.input = { lx: 0, ly: 0, rx: 0, ry: dir }; s.step(); }
+    if (s.frame.tip.y > y0) dir = -1;
+    for (let i = 0; i < 400 && s.groundGap() > 0.005; i++) { s.input = { lx: 0, ly: 0, rx: 0.3, ry: dir }; s.step(); }
+    s.input = { lx: 0, ly: 0, rx: 0, ry: 0 };
+    for (let i = 0; i < 120; i++) s.step();
+    expect(s.groundGap()).toBeLessThan(0);
+    expect(s.phase).toBe('finished');
+  });
   it('B 통과: 가상통과제한선에 딱 닿아도 D-PASS', () => {
     const site = buildSite(MACHINE);
     const y = site.B.ropeY + 0.5;

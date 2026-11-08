@@ -48,37 +48,37 @@
       "id": "W-DANGER",
       "basis": "자체(Q2 참고)",
       "kind": "warning",
-      "title": "버킷이 흙 속에 있는데 선회"
+      "title": "흙 속 선회"
     },
     {
       "id": "W-IMPACT",
       "basis": "자체",
       "kind": "warning",
-      "title": "버킷 바닥 충격"
+      "title": "바닥 충격"
     },
     {
       "id": "W-JOLT",
       "basis": "자체",
       "kind": "warning",
-      "title": "급조작으로 장비가 덜컹거림"
+      "title": "덜컹"
     },
     {
       "id": "W-NEAR",
       "basis": "자체",
       "kind": "warning",
-      "title": "버킷이 굴착구역 선에 가까움"
+      "title": "선 근접"
     },
     {
       "id": "W-OVERLOAD",
       "basis": "자체",
       "kind": "warning",
-      "title": "무리한 굴착으로 엔진 과부하"
+      "title": "엔진 과부하"
     },
     {
       "id": "W-LIFT",
       "basis": "자체(Q2 참고)",
       "kind": "warning",
-      "title": "버킷으로 땅을 눌러 차체가 들림"
+      "title": "차체 들림"
     }
   ],
   "params": {
@@ -95,6 +95,7 @@
     "endHoldSec": 1.0,
     "endOpenMarginDeg": 8,
     "endGroundTol": 0.06,
+    "endSinkTol": 0.25,
     "soilCell": 0.1,
     "reposeDeg": 35,
     "hydTauUp": 0.25,

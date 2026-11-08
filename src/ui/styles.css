@@ -617,6 +617,34 @@ input[type='range'] {
 .cols li small {
   opacity: 0.7;
 }
+.cols li.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 10px;
+  border-width: 0 0 1px;
+  border-radius: 0;
+  background: transparent;
+}
+.cols li.row b {
+  display: inline;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.cols li.row.bad b {
+  color: var(--danger);
+}
+.cols ul:has(li.row) {
+  gap: 0;
+  background: #fff;
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  padding: 2px 0;
+}
+.cols ul:has(li.row) li.row:last-child {
+  border-bottom: 0;
+}
 #ready-flash {
   position: fixed;
   inset: 0;
