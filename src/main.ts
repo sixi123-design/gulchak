@@ -12,6 +12,7 @@ import { ik } from './sim/kinematics';
 import { Joystick, Keys } from './ui/joystick';
 import { MachineSound, type SoundLevels } from './ui/audio';
 import { ICON } from './ui/icons';
+import { ExaminerView } from './render/examinerView';
 
 const RULES = rulesJson as unknown as RulesFile;
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -361,6 +362,11 @@ function rebuildMachine() {
   (window as unknown as { __exc: { exc: ExcavatorView } }).__exc.exc = exc;
 }
 
+let examiners: ExaminerView | null = null;
+/** 실격 연출 중 카메라 (null이면 평소 카메라) */
+let cine: { pos: THREE.Vector3; look: THREE.Vector3 } | null = null;
+let dqShown = false;
+let dqPlaying = false;
 const END_LABEL: Record<ModeKey, string> = { tutorial: '목록', free: '그만하기', practice: '그만하기', exam: '기권' };
 function newSession(autoEnd?: boolean) {
   scene.remove(world);
@@ -376,6 +382,21 @@ function newSession(autoEnd?: boolean) {
   siteView = new SiteView(session.site, session.soil.grids);
   if (session.flags.feedback) siteView.addDigGuide(session.site, session.digTarget.rho, MACHINE.bucketWidth, session.params.digPosTolGood);
   world.add(siteView.group, exc.root, ...soilView.meshes, fx.particles, fx.dust, fx.bucketShadow, fx.machineShadow);
+  // 실제 시험: 감독관 3명 (A쪽 · B 통과구역 뒤 · C쪽 = 시간 담당)
+  examiners = null;
+  cine = null;
+  dqShown = false;
+  dqPlaying = false;
+  $('dq-banner').hidden = true;
+  if (modeKey === 'exam') {
+    const [A, Cst] = session.site.stations;
+    examiners = new ExaminerView([
+      [-(A.zoneOut + 2.6), -4.6],
+      [-2.4, session.site.B.rF + 2.6],
+      [Cst.zoneOut + 2.6, -4.6],
+    ]);
+    world.add(examiners.group);
+  }
   session.onViolation(showToast);
   session.onFinish(showResult);
   session.onViolation((v) => v.kind === 'disqualify' && onLessonFail(v));
@@ -405,6 +426,20 @@ const tmpV = new THREE.Vector3();
 const camPos = new THREE.Vector3(0, 12, 14);
 const camLook = new THREE.Vector3();
 function updateCamera(dt: number) {
+  if (cine) {
+    exc.setCabView(false);
+    for (const l of siteView.labels) l.visible = false;
+    if (Math.abs(camera.fov - 50) > 0.1) {
+      camera.fov = 50;
+      camera.updateProjectionMatrix();
+    }
+    const k = 1 - Math.exp(-dt * 4);
+    camPos.lerp(cine.pos, k);
+    camLook.lerp(cine.look, k);
+    camera.position.copy(camPos);
+    camera.lookAt(camLook);
+    return;
+  }
   exc.setCabView(camMode === 'cab');
   if (camMode === 'free') return; // 디버그: 외부에서 카메라 직접 지정
   const s = session;
@@ -689,6 +724,7 @@ $('btn-cam').title = CAM_LABEL[camMode];
 $('btn-cam').innerHTML = ICON.camera;
 
 function showToast(v: Violation) {
+  if (v.kind === 'disqualify' && session.flags.key === 'exam') return; // 실제 시험: 감독관 연출이 알림
   if (v.kind === 'disqualify') sound.whistle('fail');
   if (v.id === 'W-JOLT' || v.id === 'W-IMPACT') sound.thump(0.8);
   if (v.kind === 'warning' && !session.flags.feedback) return; // 실제 시험: 경고 알림 없음
@@ -776,6 +812,43 @@ function updateHud() {
   ring.style.transform = `scale(${1 + p * 0.3})`;
 }
 
+function playDq(v: Violation, done: () => void) {
+  const ex = examiners!;
+  const timeUp = v.id === 'D-TIME';
+  $('dq-why').textContent = timeUp ? '시간 초과' : v.title;
+  const banner = $('dq-banner');
+  banner.hidden = true;
+  void banner.offsetWidth;
+  banner.hidden = false;
+  // 1) 실격 자리를 비스듬히 위에서
+  const look = new THREE.Vector3();
+  const pos = new THREE.Vector3();
+  let wait = 0;
+  if (v.at && !timeUp) {
+    look.set(v.at.x, Math.max(0.3, v.at.y), v.at.z);
+    const out = new THREE.Vector3(v.at.x, 0, v.at.z).normalize();
+    const side = new THREE.Vector3(-out.z, 0, out.x);
+    pos.copy(look).addScaledVector(out, 3.2).addScaledVector(side, 2.6).setY(look.y + 2.4);
+    cine = { pos, look };
+    wait = 1700;
+  }
+  // 2) 가장 가까운 감독관이 팔을 들고 호각 (시간 초과는 시간 감독관이 초시계를 들고)
+  setTimeout(() => {
+    const i = timeUp ? ex.timer : ex.nearest(v.at ?? { x: 0, z: 0 });
+    ex.signal(i, timeUp);
+    const head = ex.headOf(i, new THREE.Vector3());
+    const toMachine = new THREE.Vector3(-head.x, 0, -head.z).normalize();
+    const side = new THREE.Vector3(-toMachine.z, 0, toMachine.x);
+    cine = { pos: head.clone().addScaledVector(toMachine, 3.2).addScaledVector(side, 1.2).setY(1.9), look: head.clone().setY(1.55) };
+    sound.whistle(timeUp ? 'time' : 'fail');
+    if (navigator.vibrate) navigator.vibrate(timeUp ? [400] : [120, 80, 120]);
+    setTimeout(() => {
+      banner.hidden = true;
+      done();
+    }, 2200);
+  }, wait);
+}
+
 function showResult() {
   const s = session;
   if (s.flags.key === 'tutorial') {
@@ -784,6 +857,17 @@ function showResult() {
     tutor = null;
     newSession();
     openLessonMap();
+    return;
+  }
+  // 실제 시험 실격: 실격 자리 → 감독관 호각 → 결과
+  if (dqPlaying) return;
+  if (s.flags.key === 'exam' && s.endedByRule && !s.abandoned && examiners && !dqShown) {
+    dqShown = true;
+    dqPlaying = true;
+    playDq(s.endedByRule, () => {
+      dqPlaying = false;
+      showResult();
+    });
     return;
   }
   const r = s.result();
@@ -883,6 +967,10 @@ function frame(now: number) {
       sound.ding();
       renderMission();
     }
+  }
+  if (examiners) {
+    exc.bucketWorld(tmpV);
+    examiners.update(dt, now / 1000, tmpV);
   }
   updateCamera(dt);
   updateHud();

@@ -329,11 +329,11 @@ export class MachineSound {
     for (const f of [784, 1047, 1319]) this.blip(0.4, f, 0.6, 0.05, 'triangle');
   }
 
-  /** 호각: 시작은 길게 한 번, 실격은 짧게 두 번 */
-  whistle(kind: 'start' | 'fail') {
+  /** 호각: 시작은 길게 한 번, 실격은 짧게 두 번, 시간 초과는 아주 길게 */
+  whistle(kind: 'start' | 'fail' | 'time') {
     const ctx = this.ctx;
     if (!ctx || this.muted) return;
-    const blasts = kind === 'start' ? [[0, 0.7]] : [[0, 0.18], [0.26, 0.18]];
+    const blasts = kind === 'start' ? [[0, 0.7]] : kind === 'time' ? [[0, 1.3]] : [[0, 0.18], [0.26, 0.18]];
     for (const [s0, len] of blasts) {
       const t = ctx.currentTime + s0;
       const o = ctx.createOscillator();

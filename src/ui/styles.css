@@ -2202,3 +2202,43 @@ body[data-mode='exam'] #timer {
 .cols.dq-only > section:last-child {
   display: none;
 }
+
+/* ---------- 실제 시험 실격 배너 ---------- */
+#dq-banner {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: max(14px, env(safe-area-inset-top));
+  z-index: 16;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 16px;
+  background: linear-gradient(90deg, transparent, #ff3b2fee 20%, #ff3b2fee 80%, transparent);
+  color: #fff;
+  pointer-events: none;
+  animation: dqIn 0.35s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+#dq-banner[hidden] {
+  display: none;
+}
+#dq-banner b {
+  font: 900 40px/1 var(--font);
+  -webkit-text-stroke: 3px var(--ink);
+  paint-order: stroke fill;
+  text-shadow: 0 4px 0 var(--ink);
+}
+#dq-banner span {
+  font: 900 20px var(--font);
+  text-shadow: 0 2px 0 #0006;
+}
+@keyframes dqIn {
+  from {
+    transform: scaleY(0);
+  }
+}
+/* 실격 연출 중에는 레버·위쪽 버튼 숨김 */
+body:has(#dq-banner:not([hidden])) #hud {
+  visibility: hidden;
+}

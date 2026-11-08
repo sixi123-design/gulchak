@@ -40,6 +40,8 @@ export interface Violation {
   title: string;
   detail: string;
   t: number;
+  /** 일어난 자리 (버킷 끝, 월드 좌표). 시간 초과처럼 자리가 없으면 비움 */
+  at?: { x: number; y: number; z: number };
 }
 
 export interface ReportResult {

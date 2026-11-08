@@ -302,6 +302,7 @@ export class DigSession {
 
   private report(id: string, detail: string) {
     const r = this.engine.report(id, this.t, detail);
+    if (r.violation && id !== 'D-TIME') r.violation.at ??= toWorld(this.pose.swing, this.frame.tip);
     if (r.recorded && r.violation) for (const fn of this.listeners) fn(r.violation);
     if (r.endsTask && r.violation && this.phase === 'working') {
       this.endedByRule = r.violation;
