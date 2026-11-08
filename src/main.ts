@@ -640,6 +640,17 @@ $('btn-engine').onclick = () => session.restartEngine();
 }
 $('btn-settings').innerHTML = ICON.gear;
 $('btn-paywall-close').innerHTML = ICON.close;
+// 가격 (임시 값: 실제 가격이 정해지면 여기만 바꿈)
+const PRICE = 9900;
+$('pw-price').innerHTML = `${PRICE.toLocaleString('ko-KR')}<small>원</small>`;
+$('btn-buy').innerHTML = `${PRICE.toLocaleString('ko-KR')}원 · 평생 이용하기`;
+// TODO: 결제 연동 (앱스토어 인앱결제 또는 웹 결제). 지금은 누르면 버튼만 흔들림
+$('btn-buy').onclick = () => {
+  const b = $('btn-buy');
+  b.classList.remove('nudge');
+  void b.offsetWidth;
+  b.classList.add('nudge');
+};
 $('fail-retry-ico').innerHTML = ICON.retry;
 $('pw-perks').innerHTML = ['4분 실전 타이머', '실격 즉시 판정', '실격 사유 리포트'].map((t) => `<li>${ICON.check}${t}</li>`).join('');
 $('btn-settings2').innerHTML = ICON.gear;

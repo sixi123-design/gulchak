@@ -2116,3 +2116,10 @@ body:has(#fail:not([hidden])) .stick {
   width: 20px;
   height: 20px;
 }
+.pw-price b small {
+  font: 900 18px var(--font);
+  margin-left: 2px;
+}
+.btn.pw-buy.nudge {
+  animation: shake 0.4s;
+}
