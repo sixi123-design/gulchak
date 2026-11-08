@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#7fd3ff" />
+    <title>굴착 연습장</title>
+    <link rel="stylesheet" href="./src/ui/styles.css" />
+  </head>
+  <body>
+    <canvas id="view"></canvas>
+
+    <div id="hud">
+      <div class="top">
+        <div class="chips">
+          <div class="chip" id="chip-dig"><b>굴착</b><span id="dig">0/4</span></div>
+          <div class="chip" id="chip-dump"><b>덤프</b><span id="dump">0</span></div>
+          <div class="chip load"><b>버킷</b><i class="bar"><i id="loadbar"></i></i></div>
+        </div>
+        <div class="timer" id="timer">4:00</div>
+        <div class="actions">
+          <button class="btn small" id="btn-cam">시점</button>
+          <button class="btn small danger" id="btn-end">그만하기</button>
+        </div>
+      </div>
+      <div class="guide" id="guide"></div>
+      <div class="toasts" id="toasts"></div>
+
+      <div class="stick left" id="stick-l">
+        <div class="ring"></div>
+        <div class="knob"></div>
+        <span class="lab up">암 펴기</span>
+        <span class="lab down">암 당기기</span>
+        <span class="lab lt">선회 ◀</span>
+        <span class="lab rt">▶ 선회</span>
+      </div>
+      <div class="stick right" id="stick-r">
+        <div class="ring"></div>
+        <div class="knob"></div>
+        <span class="lab up">붐 내림</span>
+        <span class="lab down">붐 올림</span>
+        <span class="lab lt">버킷 오므림</span>
+        <span class="lab rt">버킷 펴기</span>
+      </div>
+
+      <div class="console">
+        <button class="btn toggle" id="btn-lever">안전레버 잠김</button>
+        <label class="rpm"><b>RPM</b><input type="range" id="rpm" min="0" max="100" value="30" /></label>
+        <button class="btn small" id="btn-engine" hidden>시동</button>
+      </div>
+      <div class="endring" id="endring"></div>
+    </div>
+
+    <div class="modal" id="precheck">
+      <div class="card">
+        <div class="badge">굴착 연습</div>
+        <h1>시작 전 점검</h1>
+        <p class="sub">실기시험에서는 이 조작 상태도 채점됩니다.</p>
+        <div class="checks">
+          <button class="check" id="ck-belt"><i></i>안전벨트 체결</button>
+          <button class="check" id="ck-lever"><i></i>안전레버 해제</button>
+          <label class="check rpmcheck"><i id="ck-rpm-dot"></i>RPM 올리기 <input type="range" id="rpm2" min="0" max="100" value="30" /></label>
+        </div>
+        <button class="btn big go" id="btn-ready">준비 완료</button>
+        <p class="hint">PC: 왼쪽 레버 W A S D · 오른쪽 레버 I J K L</p>
+      </div>
+    </div>
+
+    <div class="modal" id="result" hidden>
+      <div class="card wide">
+        <div class="stamp" id="stamp"></div>
+        <h1 id="res-title"></h1>
+        <div class="cols">
+          <section>
+            <h2>실격 판정 <small>공개문제 기준</small></h2>
+            <ul id="res-dq"></ul>
+          </section>
+          <section>
+            <h2>연습 지표 <small>추정·공식 아님</small></h2>
+            <ul id="res-metrics"></ul>
+          </section>
+        </div>
+        <button class="btn big go" id="btn-retry">다시 하기</button>
+      </div>
+    </div>
+
+    <div class="modal" id="rotate">
+      <div class="card">
+        <h1>가로로 돌려 주세요</h1>
+        <p class="sub">양손으로 레버 두 개를 잡기 좋게 가로 화면을 권장합니다.</p>
+        <button class="btn" id="btn-rotate-ok">세로로 계속하기</button>
+      </div>
+    </div>
+
+    <div id="ready-flash" hidden>호각!</div>
+    <div id="perf" hidden></div>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

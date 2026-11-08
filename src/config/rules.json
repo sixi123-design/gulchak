@@ -1,0 +1,34 @@
+{
+  "version": "2026.11-qnet2022-r1",
+  "source": "큐넷 공개문제 굴착기운전기능사(2022년도), 판정명세_굴착.md",
+  "rules": [
+    { "id": "D-POLE", "basis": "Q11", "kind": "disqualify", "title": "폴·줄 접촉 / 오버스윙" },
+    { "id": "D-DIGLINE", "basis": "Q12", "kind": "disqualify", "title": "굴착구역선·가상굴착제한선 초과" },
+    { "id": "D-PASS", "basis": "Q13", "kind": "disqualify", "title": "B지점 버킷 통과구역 미통과" },
+    { "id": "D-COUNT", "basis": "Q14", "kind": "disqualify", "title": "굴착 횟수 4회 미만" },
+    { "id": "D-NOFLAT", "basis": "Q15", "kind": "disqualify", "title": "평탄작업 없이 종료" },
+    { "id": "D-TIME", "basis": "Q1", "kind": "disqualify", "title": "작업 시간(4분) 초과" },
+    { "id": "D-STALL", "basis": "Q10", "kind": "disqualify", "title": "조작 미숙으로 엔진 정지" },
+    { "id": "W-DANGER", "basis": "자체(Q2 참고)", "kind": "warning", "title": "버킷이 흙 속에 있는데 선회" },
+    { "id": "W-IMPACT", "basis": "자체", "kind": "warning", "title": "버킷 바닥 충격" }
+  ],
+  "params": {
+    "digTimeLimitSec": 240,
+    "minDigCount": 4,
+    "workHeight": 0.5,
+    "digSoilSurface": -0.5,
+    "digHardFloor": -1.6,
+    "dumpPitFloor": -0.5,
+    "passTopLimit": null,
+    "repeatCooldownSec": 1.5,
+    "stallRpm": 0.35,
+    "stallLoadRate": 0.03,
+    "stallHoldSec": 0.8,
+    "flattenMinVolume": 0.03,
+    "endHoldSec": 1.0,
+    "endOpenMarginDeg": 8,
+    "endGroundTol": 0.06,
+    "soilCell": 0.1,
+    "reposeDeg": 35
+  }
+}

@@ -1,0 +1,613 @@
+import type { MachineSpec } from '../config/machine';
+import { RuleEngine, type ModeFlags, type RuleDef, type Violation } from '../core/ruleEngine';
+import { bucketCorners, bucketUnderside, dirOf, fk, latOf, toWorld, type Frame, type Pose } from './kinematics';
+import { passHits, shapeOf, staticHits } from './judge';
+import { buildSite, type Site, type Station, type StationName } from './site';
+import { makeStationGrid, SoilWorld, type SoilGrid } from './soil';
+import { clamp, dot, len, sub, v3, type V3 } from './vec';
+
+export interface RuleParams {
+  digTimeLimitSec: number;
+  minDigCount: number;
+  workHeight: number;
+  digSoilSurface: number;
+  digHardFloor: number;
+  dumpPitFloor: number;
+  passTopLimit: number | null;
+  repeatCooldownSec: number;
+  stallRpm: number;
+  stallLoadRate: number;
+  stallHoldSec: number;
+  flattenMinVolume: number;
+  endHoldSec: number;
+  endOpenMarginDeg: number;
+  endGroundTol: number;
+  soilCell: number;
+  reposeDeg: number;
+}
+
+export interface RulesFile {
+  version: string;
+  source: string;
+  rules: RuleDef[];
+  params: RuleParams;
+}
+
+/** 레버 입력: 화면 위쪽이 +y */
+export interface Sticks {
+  lx: number;
+  ly: number;
+  rx: number;
+  ry: number;
+}
+
+export type Phase = 'precheck' | 'ready' | 'working' | 'finished';
+
+export interface Particle {
+  p: V3;
+  v: V3;
+  vol: number;
+}
+
+export interface DigResult {
+  digCount: number;
+  dumpCount: number;
+  loadRatios: number[];
+  positionErrors: number[];
+  connectedRatio: number;
+  flatness: { meanDev: number; std: number; range: number; outsideVol: number } | null;
+  impacts: number;
+  precheck: { belt: boolean; lever: boolean; rpm: boolean };
+  elapsed: number;
+  flattenVol: number;
+}
+
+const STEP = 1 / 60;
+
+export class DigSession {
+  readonly site: Site;
+  readonly soil: SoilWorld;
+  readonly engine: RuleEngine;
+  readonly params: RuleParams;
+  phase: Phase = 'precheck';
+  t = 0; // 작업 경과 시간
+  readyT = 0;
+  pose: Pose;
+  vel = { swing: 0, boom: 0, arm: 0, bucket: 0 };
+  input: Sticks = { lx: 0, ly: 0, rx: 0, ry: 0 };
+  frame: Frame;
+  load = 0;
+  particles: Particle[] = [];
+  spilled = 0;
+  belt = false;
+  leverUnlocked = false;
+  rpm = 0.3;
+  engineOn = true;
+  // 카운터·지표
+  digCount = 0;
+  dumpCount = 0;
+  loadRatios: number[] = [];
+  positionErrors: number[] = [];
+  impacts = 0;
+  flattenVol = 0;
+  precheck = { belt: false, lever: false, rpm: false };
+  private tActive = 0;
+  private tMulti = 0;
+  private cycle = { cutInA: 0, firstCutRecorded: false, pouredInC: 0, dumpCounted: false };
+  private prevTipStation: StationName | null = null;
+  private prevStation: StationName | null = null;
+  private prevBucket: V3[];
+  private prevUnder: V3[][] = [];
+  private stallT = 0;
+  private endT = 0;
+  pourAcc = 0;
+  private impactCd = 0;
+  private timeReported = false;
+  private talus: number;
+  private listeners: ((v: Violation) => void)[] = [];
+  private finishListeners: (() => void)[] = [];
+  /** 시험모드에서 실격으로 끝난 경우 */
+  endedByRule: Violation | null = null;
+  /** 디버그용: 마지막 스텝 계산 시간(ms) */
+  simMs = 0;
+
+  constructor(
+    readonly m: MachineSpec,
+    rules: RulesFile,
+    flags: ModeFlags,
+    private rand: () => number = Math.random,
+  ) {
+    this.params = rules.params;
+    this.site = buildSite(m);
+    const init = {
+      cell: this.params.soilCell,
+      digSurface: this.params.digSoilSurface,
+      digFloor: this.params.digHardFloor,
+      dumpFloor: this.params.dumpPitFloor,
+    };
+    this.soil = new SoilWorld(this.site.stations.map((s) => makeStationGrid(s, init)));
+    this.engine = new RuleEngine(rules.rules, flags, this.params.repeatCooldownSec);
+    this.talus = Math.tan((this.params.reposeDeg * Math.PI) / 180) * this.params.soilCell;
+    // 시작 자세: A를 향해 붐을 들고 버킷을 오므림
+    this.pose = { swing: Math.PI, boom: 0.55, arm: -1.75, bucket: -0.9 };
+    this.frame = fk(m, this.pose);
+    this.prevBucket = bucketCorners(m, this.frame, this.pose.swing);
+    this.prevUnder = this.underWorld(this.frame, this.pose.swing);
+  }
+
+  get flags() {
+    return this.engine.flags;
+  }
+  get heapedCap() {
+    return this.m.struckCapacity * this.m.heapedFactor;
+  }
+  onViolation(fn: (v: Violation) => void) {
+    this.listeners.push(fn);
+  }
+  onFinish(fn: () => void) {
+    this.finishListeners.push(fn);
+  }
+  inFlight(): number {
+    return this.particles.reduce((s, p) => s + p.vol, 0);
+  }
+  /** 흙 장부 오차 (0이어야 함) */
+  ledgerError(): number {
+    return this.soil.volumeDelta() + this.load + this.inFlight() + this.pourAcc + this.spilled;
+  }
+
+  /** 준비 완료 → 호각 대기 */
+  ready() {
+    if (this.phase !== 'precheck') return;
+    this.precheck = { belt: this.belt, lever: this.leverUnlocked, rpm: this.rpm >= 0.6 };
+    this.phase = 'ready';
+    this.readyT = 0;
+  }
+  restartEngine() {
+    this.engineOn = true;
+    this.stallT = 0;
+  }
+  /** 기권(중도 종료). 정상 종료는 버킷을 펴서 지면에 내려놓았을 때만 (명세 4장) */
+  abandoned = false;
+  abandon() {
+    if (this.phase !== 'working' && this.phase !== 'ready') return;
+    this.abandoned = true;
+    this.phase = 'finished';
+    for (const fn of this.finishListeners) fn();
+  }
+
+  private report(id: string, detail: string) {
+    const r = this.engine.report(id, this.t, detail);
+    if (r.recorded && r.violation) for (const fn of this.listeners) fn(r.violation);
+    if (r.endsTask && r.violation && this.phase === 'working') {
+      this.endedByRule = r.violation;
+      this.phase = 'finished';
+      for (const fn of this.finishListeners) fn();
+    }
+  }
+
+  private underWorld(f: Frame, swing: number): V3[][] {
+    const W = this.m.bucketWidth;
+    const n = Math.max(2, Math.round(W / this.params.soilCell) + 1);
+    return bucketUnderside(f).map((q) => {
+      const row: V3[] = [];
+      for (let i = 0; i < n; i++) row.push(toWorld(swing, q, -W / 2 + (W * i) / (n - 1)));
+      return row;
+    });
+  }
+
+  stationOf(p: V3): Station | null {
+    for (const s of this.site.stations) {
+      const rho = dot(p, s.axis);
+      const lat = p.z;
+      if (rho > s.zoneIn - 0.5 && rho < s.zoneOut + 0.5 && Math.abs(lat) < s.zoneHalfW + 0.8) return s;
+    }
+    return null;
+  }
+
+  /** 한 고정 스텝 진행 */
+  step(dt = STEP) {
+    const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
+    if (this.phase === 'ready') {
+      this.readyT += dt;
+      if (this.readyT >= 1.5) this.phase = 'working';
+    }
+    const working = this.phase === 'working';
+    if (working) this.t += dt;
+
+    // 1) 관절 구동
+    const active = working && this.engineOn && this.leverUnlocked;
+    const rf = 0.35 + 0.65 * clamp(this.rpm, 0, 1);
+    const sp = this.m.speeds;
+    const tgt = active
+      ? {
+          swing: this.input.lx * sp.swing * rf,
+          arm: this.input.ly * sp.arm * rf,
+          boom: -this.input.ry * sp.boom * rf,
+          bucket: this.input.rx * sp.bucket * rf,
+        }
+      : { swing: 0, arm: 0, boom: 0, bucket: 0 };
+    const k = Math.min(1, dt * 8);
+    let blocked = false;
+    let impactSpeed = 0;
+    const prevFrame = this.frame;
+    const prevSwing = this.pose.swing;
+    for (const j of ['swing', 'boom', 'arm', 'bucket'] as const) {
+      this.vel[j] += (tgt[j] - this.vel[j]) * k;
+      if (Math.abs(this.vel[j]) < 1e-5) continue;
+      const old = this.pose[j];
+      let nv = old + this.vel[j] * dt;
+      if (j !== 'swing') {
+        const lim = this.m.limits[j];
+        nv = clamp(nv, lim[0], lim[1]);
+        if (nv === lim[0] || nv === lim[1]) this.vel[j] *= 0.5;
+      }
+      this.pose[j] = nv;
+      const f = fk(this.m, this.pose);
+      const pen = this.penetration(f, this.pose.swing);
+      if (pen.depth > 0.01) {
+        this.pose[j] = old;
+        blocked = true;
+        impactSpeed = Math.max(impactSpeed, Math.abs(this.vel[j]) * 3);
+        this.vel[j] = 0;
+      }
+    }
+    this.frame = fk(this.m, this.pose);
+
+    // 2) 흙 상호작용
+    let cutTotal = 0;
+    if (working || this.phase === 'ready') cutTotal = this.interactSoil();
+
+    // 3) 쏟기, 입자
+    this.pour(dt);
+    this.updateParticles(dt);
+    for (const g of this.soil.grids) {
+      if (g.activeT > 0) {
+        g.activeT -= dt;
+        g.relax(this.talus, 2);
+      }
+    }
+
+    // 4) 판정
+    if (working) {
+      this.judge(prevFrame, prevSwing);
+      // 지표: 연결동작
+      const maxes = [sp.swing, sp.boom, sp.arm, sp.bucket];
+      const vs = [this.vel.swing, this.vel.boom, this.vel.arm, this.vel.bucket];
+      const nAct = vs.filter((v, i) => Math.abs(v) > 0.1 * maxes[i] * 0.35).length;
+      if (nAct >= 1) this.tActive += dt;
+      if (nAct >= 2) this.tMulti += dt;
+      // 충격
+      this.impactCd -= dt;
+      if (blocked && impactSpeed > 0.4 && this.impactCd <= 0) {
+        this.impacts++;
+        this.impactCd = 0.4;
+        this.report('W-IMPACT', '버킷이 바닥·지면에 부딪힘');
+      }
+      // 엔진 정지
+      if (this.engineOn && this.rpm < this.params.stallRpm && (cutTotal / dt > this.params.stallLoadRate || blocked)) {
+        this.stallT += dt;
+        if (this.stallT > this.params.stallHoldSec) {
+          this.engineOn = false;
+          this.report('D-STALL', '낮은 rpm에서 무리한 굴착으로 엔진 정지');
+        }
+      } else this.stallT = Math.max(0, this.stallT - dt);
+      // 시간
+      if (!this.timeReported && this.t > this.params.digTimeLimitSec) {
+        this.timeReported = true;
+        this.report('D-TIME', '4분 초과');
+      }
+      this.trackCycles();
+      this.checkEnd(dt);
+    }
+    this.simMs = typeof performance !== 'undefined' ? performance.now() - t0 : 0;
+  }
+
+  /** 버킷 하부가 단단한 바닥 아래로 들어간 깊이 */
+  private penetration(f: Frame, swing: number) {
+    let depth = 0;
+    for (const row of this.underWorld(f, swing)) {
+      for (const p of row) {
+        const fl = this.soil.floorAt(p.x, p.z);
+        depth = Math.max(depth, fl - p.y);
+      }
+    }
+    return { depth };
+  }
+
+  private interactSoil(): number {
+    const f = this.frame;
+    const swing = this.pose.swing;
+    const under = this.underWorld(f, swing);
+    const nOpen = toWorld(swing, f.nOpen);
+    const nOpenW = v3(nOpen.x, nOpen.y, nOpen.z);
+    const center = toWorld(swing, { r: (f.tip.r + f.P2.r) / 2, y: (f.tip.y + f.P2.y) / 2 });
+    const cell = this.params.soilCell;
+    let total = 0;
+    for (let s = 0; s < under.length; s++) {
+      const row = under[s];
+      const prow = this.prevUnder[s] ?? row;
+      for (let i = 0; i < row.length; i++) {
+        const p = row[i];
+        const g = this.soil.gridAt(p.x, p.z);
+        if (!g) continue;
+        const kk = g.cellAt(p.x, p.z);
+        if (g.h[kk] <= p.y) continue;
+        const vol = g.cut(kk, p.y);
+        if (vol <= 0) continue;
+        total += vol;
+        const mv = sub(p, prow[i]);
+        const into = dot(mv, nOpenW) > 1e-4;
+        const front = s <= 1;
+        if (front && into && this.load < this.heapedCap) {
+          const take = Math.min(vol, this.heapedCap - this.load);
+          this.load += take;
+          if (g.name === 'A') this.cycle.cutInA += take;
+          if (g.name === 'A' && !this.cycle.firstCutRecorded) {
+            this.cycle.firstCutRecorded = true;
+            const st = this.site.stations[0];
+            const tipC = toWorld(swing, f.tip);
+            const rho = dot(tipC, st.axis);
+            this.positionErrors.push(Math.hypot(rho - (st.bLine - 0.3), tipC.z));
+          }
+          if (vol > take) this.push(g, p, mv, center, vol - take, cell);
+        } else {
+          this.push(g, p, mv, center, vol, cell);
+          if (g.name === 'C' && this.dumpCount >= 1) this.flattenVol += vol;
+        }
+      }
+    }
+    this.prevUnder = under;
+    return total;
+  }
+
+  private push(g: SoilGrid, p: V3, mv: V3, center: V3, vol: number, cell: number) {
+    let dx = mv.x;
+    let dz = mv.z;
+    let l = Math.hypot(dx, dz);
+    if (l < 1e-4) {
+      dx = p.x - center.x;
+      dz = p.z - center.z;
+      l = Math.hypot(dx, dz) || 1;
+    }
+    const tx = p.x + (dx / l) * cell * 1.2;
+    const tz = p.z + (dz / l) * cell * 1.2;
+    const kk = g.cellAt(tx, tz);
+    if (kk >= 0) g.depositSpread(kk, vol);
+    else {
+      const g2 = this.soil.gridAt(tx, tz);
+      if (g2) g2.depositSpread(g2.cellAt(tx, tz), vol);
+      else this.spilled += vol;
+    }
+  }
+
+  private pour(dt: number) {
+    const f = this.frame;
+    const ny = f.nOpen.y;
+    const retain = clamp((ny + 0.35) / 0.9, 0, 1) * this.heapedCap;
+    if (this.load <= retain + 1e-6) return;
+    const v = Math.min(this.load - retain, 0.8 * dt);
+    this.load -= v;
+    this.pourAcc += v;
+    const st = this.stationOf(toWorld(this.pose.swing, f.tip));
+    if (st?.name === 'C') this.cycle.pouredInC += v;
+    if (this.pourAcc > 0.004 || this.load < 1e-4) {
+      const W = this.m.bucketWidth;
+      const tip = toWorld(this.pose.swing, f.tip, (this.rand() - 0.5) * W * 0.8);
+      const vel = v3((this.rand() - 0.5) * 0.4, -0.5, (this.rand() - 0.5) * 0.4);
+      if (this.particles.length < 140) this.particles.push({ p: tip, v: vel, vol: this.pourAcc });
+      else this.land(tip, this.pourAcc);
+      this.pourAcc = 0;
+    }
+  }
+
+  private land(p: V3, vol: number) {
+    const g = this.soil.gridAt(p.x, p.z);
+    if (g) g.depositSpread(g.cellAt(p.x, p.z), vol);
+    else this.spilled += vol;
+  }
+
+  private updateParticles(dt: number) {
+    const keep: Particle[] = [];
+    for (const q of this.particles) {
+      q.v.y -= 9.8 * dt;
+      q.p.x += q.v.x * dt;
+      q.p.y += q.v.y * dt;
+      q.p.z += q.v.z * dt;
+      if (q.p.y <= this.soil.surfaceAt(q.p.x, q.p.z)) this.land(q.p, q.vol);
+      else keep.push(q);
+    }
+    this.particles = keep;
+  }
+
+  private judge(prevFrame: Frame, prevSwing: number) {
+    const m = this.m;
+    // 연속 경로: 이동량에 따라 보간 분할
+    const curB = bucketCorners(m, this.frame, this.pose.swing);
+    let maxMove = 0;
+    for (let i = 0; i < curB.length; i++) maxMove = Math.max(maxMove, len(sub(curB[i], this.prevBucket[i])));
+    const n = Math.max(1, Math.ceil(maxMove / 0.03));
+    let prev = this.prevBucket;
+    const ids = new Set<string>();
+    for (let s = 1; s <= n; s++) {
+      const t = s / n;
+      const swing = prevSwing + (this.pose.swing - prevSwing) * t;
+      const pf: Pose = { swing, ...lerpAngle(prevFrame, this.frame, t) };
+      const f = fk(m, pf);
+      const shape = shapeOf(m, f, swing);
+      for (const h of staticHits(this.site, shape, this.params.workHeight)) {
+        const key = h.id + h.detail;
+        if (!ids.has(key)) {
+          ids.add(key);
+          this.report(h.id, h.detail);
+        }
+      }
+      for (const h of passHits(this.site, prev, shape.bucket)) {
+        const key = h.id + h.detail;
+        if (!ids.has(key)) {
+          ids.add(key);
+          this.report(h.id, h.detail);
+        }
+      }
+      prev = shape.bucket;
+    }
+    this.prevBucket = curB;
+    // 위험: 버킷이 흙 속에 있는데 선회
+    if (Math.abs(this.vel.swing) > (3 * Math.PI) / 180) {
+      for (const p of curB) {
+        if (p.y < this.soil.surfaceAt(p.x, p.z) - 0.05) {
+          this.report('W-DANGER', '버킷이 흙 속에 있는 상태에서 선회');
+          break;
+        }
+      }
+    }
+  }
+
+  private trackCycles() {
+    const center = toWorld(this.pose.swing, {
+      r: (this.frame.tip.r + this.frame.P2.r) / 2,
+      y: (this.frame.tip.y + this.frame.P2.y) / 2,
+    });
+    const st = this.stationOf(center)?.name ?? null;
+    const sc = this.m.struckCapacity;
+    if (this.prevStation === 'A' && st !== 'A') {
+      if (this.cycle.cutInA >= 0.2 * sc && this.load >= 0.3 * sc) {
+        this.digCount++;
+        this.loadRatios.push(this.load / sc);
+      }
+      this.cycle.cutInA = 0;
+      this.cycle.firstCutRecorded = false;
+    }
+    // 덤프: 한 번 퍼 담은 흙(굴착 1회)당 한 번만 센다.
+    // C에 평적 20% 이상 쏟은 뒤 버킷이 거의 비거나, 다음 굴착을 시작하면 1회.
+    // 쏟은 양은 버킷 끝 위치로 집계하므로 C 이탈도 버킷 끝 기준으로 판단한다
+    const tipSt = this.stationOf(toWorld(this.pose.swing, this.frame.tip))?.name ?? null;
+    const leftC = this.prevTipStation === 'C' && tipSt !== 'C';
+    this.prevTipStation = tipSt;
+    const startedNextDig = this.cycle.cutInA > 0;
+    if (!this.cycle.dumpCounted && this.cycle.pouredInC >= 0.2 * sc && (this.load < 0.1 * sc || leftC || startedNextDig)) {
+      this.dumpCount++;
+      this.cycle.dumpCounted = true;
+    }
+    if (startedNextDig && this.cycle.dumpCounted) {
+      this.cycle.pouredInC = 0;
+      this.cycle.dumpCounted = false;
+    }
+    this.prevStation = st;
+  }
+
+  private checkEnd(dt: number) {
+    const lim = this.m.limits.bucket[1];
+    const open = this.pose.bucket >= lim - (this.params.endOpenMarginDeg * Math.PI) / 180;
+    const gap = this.groundGap();
+    const still =
+      Math.max(Math.abs(this.vel.swing), Math.abs(this.vel.boom), Math.abs(this.vel.arm), Math.abs(this.vel.bucket)) <
+      (2 * Math.PI) / 180;
+    // 표면에서 ±허용오차 이내 (흙에 묻힌 상태는 불인정)
+    if (open && Math.abs(gap) <= this.params.endGroundTol && still) {
+      this.endT += dt;
+      if (this.endT >= this.params.endHoldSec) this.finish();
+    } else this.endT = 0;
+  }
+
+  /** 버킷 하부의 가장 낮은 점과 흙 표면(또는 지면) 사이 거리. 음수면 묻힘 */
+  groundGap(): number {
+    let gap = Infinity;
+    for (const row of this.underWorld(this.frame, this.pose.swing)) {
+      for (const p of row) gap = Math.min(gap, p.y - this.soil.surfaceAt(p.x, p.z));
+    }
+    return gap;
+  }
+
+  /** 종료 조건 만족 정도 (0~1, 안내 표시용) */
+  get endProgress() {
+    return clamp(this.endT / this.params.endHoldSec, 0, 1);
+  }
+
+  private finish() {
+    if (this.phase !== 'working') return;
+    if (this.digCount < this.params.minDigCount) this.report('D-COUNT', `유효 굴착 ${this.digCount}회`);
+    if (this.flattenVol < this.params.flattenMinVolume) this.report('D-NOFLAT', '평탄작업 수행 기록 없음');
+    this.phase = 'finished';
+    for (const fn of this.finishListeners) fn();
+  }
+
+  flatness(): DigResult['flatness'] {
+    const g = this.soil.grids.find((x) => x.name === 'C');
+    if (!g) return null;
+    const vals: number[] = [];
+    let outside = 0;
+    for (let k = 0; k < g.h.length; k++) {
+      if (g.pit[k]) vals.push(g.h[k]);
+      else outside += Math.max(0, g.h[k] - g.h0[k]) * g.area;
+    }
+    const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+    const meanDev = vals.reduce((a, b) => a + Math.abs(b - 0), 0) / vals.length;
+    const std = Math.sqrt(vals.reduce((a, b) => a + (b - mean) ** 2, 0) / vals.length);
+    const range = Math.max(...vals) - Math.min(...vals);
+    return { meanDev, std, range, outsideVol: outside };
+  }
+
+  result(): DigResult {
+    return {
+      digCount: this.digCount,
+      dumpCount: this.dumpCount,
+      loadRatios: this.loadRatios,
+      positionErrors: this.positionErrors,
+      connectedRatio: this.tActive > 0 ? this.tMulti / this.tActive : 0,
+      flatness: this.flatness(),
+      impacts: this.impacts,
+      precheck: this.precheck,
+      elapsed: this.t,
+      flattenVol: this.flattenVol,
+    };
+  }
+
+  /** 안내 문구 */
+  guide(): string {
+    if (this.phase === 'precheck') return '시작 전 점검: 안전벨트 → 안전레버 해제 → rpm 올리기 → 준비 완료';
+    if (this.phase === 'ready') return '호각! 작업을 시작합니다';
+    if (this.phase === 'finished') return '작업 종료';
+    if (!this.engineOn) return '엔진이 꺼졌습니다. 시동을 다시 거세요 (rpm을 올리고 작업)';
+    if (!this.leverUnlocked) return '안전레버가 잠겨 있어 레버가 움직이지 않습니다';
+    const sc = this.m.struckCapacity;
+    const tipSt = this.stationOf(toWorld(this.pose.swing, this.frame.tip))?.name ?? null;
+    if (this.load >= 0.3 * sc) {
+      if (tipSt === 'C') return 'C지점 구덩이 위에서 버킷을 펴 흙을 쏟으세요';
+      return '흙을 담은 채 붐을 올리고 B지점 통과구역(두 폴 사이, 줄 위)으로 선회하세요';
+    }
+    if (this.digCount < this.params.minDigCount)
+      return `A지점: ⓑ선 안쪽 30cm에 버킷을 넣고 당기며 퍼 담으세요 (${this.digCount}/${this.params.minDigCount})`;
+    if (this.flattenVol < this.params.flattenMinVolume) return 'C지점: 버킷 바닥으로 흙을 고르게 밀어 평탄작업을 하세요';
+    const open = this.pose.bucket >= this.m.limits.bucket[1] - (this.params.endOpenMarginDeg * Math.PI) / 180;
+    const cm = Math.round(this.groundGap() * 100);
+    if (!open) return '마무리: 버킷을 끝까지 펴세요 (버킷 펴기)';
+    return `마무리: 편 버킷을 구역 안 지면에 내려놓고 1초 멈추세요 (지면까지 ${Math.max(0, cm)}cm)`;
+  }
+
+  /** 디버그·테스트용 */
+  setPose(p: Partial<Pose>) {
+    Object.assign(this.pose, p);
+    this.frame = fk(this.m, this.pose);
+  }
+  swingDir() {
+    return dirOf(this.pose.swing);
+  }
+  lateralDir() {
+    return latOf(this.pose.swing);
+  }
+}
+
+function lerpAngle(a: Frame, b: Frame, t: number) {
+  // Frame에서 관절각 복원: thA = boom + arm, thK = thA + bucket
+  const boomA = Math.atan2(a.P1.y - a.P0.y, a.P1.r - a.P0.r);
+  const boomB = Math.atan2(b.P1.y - b.P0.y, b.P1.r - b.P0.r);
+  const armA = a.thA - boomA;
+  const armB = b.thA - boomB;
+  const bkA = a.thK - a.thA;
+  const bkB = b.thK - b.thA;
+  return {
+    boom: boomA + (boomB - boomA) * t,
+    arm: armA + (armB - armA) * t,
+    bucket: bkA + (bkB - bkA) * t,
+  };
+}
