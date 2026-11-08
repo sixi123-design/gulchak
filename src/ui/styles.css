@@ -477,6 +477,53 @@ input[type='range'] {
   font-weight: 600;
   opacity: 0.6;
 }
+.pick-label #site-cur {
+  font-weight: 600;
+  font-size: 13px;
+  margin-left: 6px;
+}
+.site-q {
+  width: 100%;
+  box-sizing: border-box;
+  font: 700 16px var(--font);
+  padding: 8px 12px;
+  border: 3px solid var(--ink);
+  border-radius: 12px;
+  background: #fff;
+}
+.site-list {
+  max-height: 150px;
+  overflow-y: auto;
+  margin: 6px 0 10px;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  background: #fff;
+  text-align: left;
+}
+.site-row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: 600 14px var(--font);
+  color: var(--ink);
+  background: none;
+  border: 0;
+  border-bottom: 1px solid #0002;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+.site-row small {
+  display: block;
+  font-size: 12px;
+  opacity: 0.6;
+}
+.site-row.on {
+  background: #eafff2;
+}
+.site-none {
+  margin: 8px 10px;
+  opacity: 0.6;
+}
 .card-gear {
   position: absolute;
   top: 8px;

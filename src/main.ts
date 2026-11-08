@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { MACHINE } from './config/machine';
 import rulesJson from './config/rules.json';
+import sitesJson from './config/sites.json';
 import { MODES, type ModeKey, type Violation } from './core/ruleEngine';
-import { ExcavatorView, MACHINE_STYLES, type MachineStyleKey } from './render/excavatorView';
+import { ExcavatorView, type MachineStyleKey } from './render/excavatorView';
 import { FxView, SiteView, SoilView } from './render/siteView';
 import { DigSession, type DigEntry, type RulesFile } from './sim/session';
 import { ik } from './sim/kinematics';
@@ -116,6 +117,8 @@ try {
 }
 const eyeOffset = () => (heightCm - 172) * 0.0045;
 function syncSettingsUi() {
+  const cs = curSite();
+  $('site-cur').innerHTML = cs ? `<b>${cs.name}</b> ${cs.machine}` : '선택 안 함';
   const h = $<HTMLInputElement>('height');
   h.value = String(heightCm);
   $('height-val').textContent = `${heightCm}cm`;
@@ -134,32 +137,67 @@ const openSettings = () => {
   syncSettingsUi();
   $('settings').hidden = false;
 };
+$<HTMLInputElement>('site-q').oninput = () => renderStylePicker();
 $('btn-settings').onclick = openSettings;
 $('btn-settings2').onclick = openSettings;
 $('btn-settings-ok').onclick = () => ($('settings').hidden = true);
 
+// 시험장 선택 → 그 시험장 작업용 장비 계열로 (출처: 큐넷 시험장별 기종 현황)
+interface TestSite {
+  region: string;
+  name: string;
+  machine: string;
+  style: MachineStyleKey;
+}
+const SITES = sitesJson as TestSite[];
+let siteName = '';
+try {
+  siteName = localStorage.getItem('exc-site') ?? '';
+} catch {
+  /* 무시 */
+}
+const curSite = () => SITES.find((x) => x.name === siteName) ?? null;
+if (curSite()) styleKey = curSite()!.style;
+// 초성 검색: '경기 광주' ← 'ㄱㄱ ㄱㅈ'
+const CHO = 'ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ';
+const cho = (t: string) =>
+  [...t].map((c) => {
+    const k = c.charCodeAt(0) - 0xac00;
+    return k >= 0 && k < 11172 ? CHO[Math.floor(k / 588)] : c;
+  }).join('');
+const norm = (t: string) => t.toLowerCase().replace(/[\s\-·()]/g, '');
+const SITE_KEYS = SITES.map((x) => {
+  const t = norm(`${x.region}${x.name}${x.machine}`);
+  return { t, c: cho(t) };
+});
 function renderStylePicker() {
-  const box = $('style-pick');
-  box.innerHTML = '';
-  for (const st of Object.values(MACHINE_STYLES)) {
+  const q = norm($<HTMLInputElement>('site-q').value);
+  const list = $('site-list');
+  const hits = SITES.map((x, i) => ({ x, k: SITE_KEYS[i] })).filter(({ k }) => !q || k.t.includes(q) || k.c.includes(q));
+  if (!q) hits.sort((p, r) => Number(r.x.name === siteName) - Number(p.x.name === siteName)); // 고른 시험장을 맨 위로
+  list.innerHTML = '';
+  for (const { x } of hits) {
     const b = document.createElement('button');
-    b.className = 'stylebtn' + (st.key === styleKey ? ' on' : '');
-    const hex = (c: number) => '#' + c.toString(16).padStart(6, '0');
-    b.innerHTML = `<i style="background:${hex(st.body)}"></i><i style="background:${hex(st.boom)}"></i><i style="background:${hex(st.lower)}"></i><b>${st.label}</b>`;
+    b.className = 'site-row' + (x.name === siteName ? ' on' : '');
+    b.innerHTML = `<b>${x.region}</b> ${x.name}<small>${x.machine}</small>`;
     b.onclick = () => {
-      if (styleKey === st.key) return;
-      styleKey = st.key;
+      siteName = x.name;
       try {
-        localStorage.setItem('exc-style', styleKey);
+        localStorage.setItem('exc-site', siteName);
       } catch {
         /* 무시 */
       }
-      rebuildMachine();
-      renderStylePicker();
+      if (styleKey !== x.style) {
+        styleKey = x.style;
+        rebuildMachine();
+      }
+      $<HTMLInputElement>('site-q').value = '';
       syncSettingsUi();
+      renderStylePicker();
     };
-    box.appendChild(b);
+    list.appendChild(b);
   }
+  if (!hits.length) list.innerHTML = '<p class="site-none">없음</p>';
 }
 function rebuildMachine() {
   if (!exc) return;
