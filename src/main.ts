@@ -7,6 +7,7 @@ import { FxView, SiteView, SoilView } from './render/siteView';
 import { DigSession, type DigEntry, type RulesFile } from './sim/session';
 import { ik } from './sim/kinematics';
 import { Joystick, Keys } from './ui/joystick';
+import { MachineSound } from './ui/audio';
 
 const RULES = rulesJson as unknown as RulesFile;
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -127,7 +128,7 @@ function newSession() {
   renderStylePicker();
   $('result').hidden = true;
   $('toasts').innerHTML = '';
-  (window as unknown as { __exc: unknown }).__exc = { session, camera, exc, ik: (r: number, y: number, k: number) => ik(MACHINE, r, y, k), setCam: (m: CamMode) => (camMode = m) };
+  (window as unknown as { __exc: unknown }).__exc = { session, camera, exc, sound, ik: (r: number, y: number, k: number) => ik(MACHINE, r, y, k), setCam: (m: CamMode) => (camMode = m) };
 }
 
 // ---------- 카메라 ----------
@@ -184,6 +185,12 @@ function updateCamera(dt: number) {
 }
 
 // ---------- HUD ----------
+const sound = new MachineSound();
+try {
+  sound.muted = localStorage.getItem('exc-mute') === '1';
+} catch {
+  /* 무시 */
+}
 const left = new Joystick($('stick-l'));
 const right = new Joystick($('stick-r'));
 const keys = new Keys();
@@ -228,6 +235,8 @@ if (isIOS && !standalone) $('fs-hint').hidden = false;
 if (!document.documentElement.requestFullscreen) $('btn-fs').hidden = true;
 $('btn-ready').onclick = () => {
   if (matchMedia('(pointer: coarse)').matches) goFullscreen();
+  sound.start(); // 휴대폰은 화면을 누른 순간에만 소리를 켤 수 있음
+  setTimeout(() => sound.whistle('start'), 300);
   session.ready();
   $('precheck').hidden = true;
   const f = $('ready-flash');
@@ -248,7 +257,23 @@ $('btn-cam').onclick = () => {
 };
 $('btn-cam').textContent = CAM_LABEL[camMode];
 
+const muteBtn = $('btn-mute');
+const syncMute = () => (muteBtn.textContent = sound.muted ? '🔇' : '🔊');
+syncMute();
+muteBtn.onclick = () => {
+  sound.start();
+  sound.setMuted(!sound.muted);
+  try {
+    localStorage.setItem('exc-mute', sound.muted ? '1' : '0');
+  } catch {
+    /* 무시 */
+  }
+  syncMute();
+};
+
 function showToast(v: Violation) {
+  if (v.kind === 'disqualify') sound.whistle('fail');
+  if (v.id === 'W-JOLT' || v.id === 'W-IMPACT') sound.thump(0.8);
   const el = document.createElement('div');
   const dq = v.kind === 'disqualify';
   el.className = 'toast' + (dq ? '' : ' warn');
@@ -411,6 +436,7 @@ function frame(now: number) {
   exc.sync(session);
   soilView.sync();
   fx.sync(session);
+  sound.update(session);
   updateCamera(dt);
   updateHud();
   renderer.render(scene, camera);

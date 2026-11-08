@@ -211,3 +211,14 @@ describe('끝까지 오므리기 (시험 기본 동작)', () => {
     expect(s.carrySpill).toBeLessThan(before * 0.05);
   });
 });
+
+describe('소리 상태', () => {
+  it('버킷을 끝까지 오므린 채 레버를 계속 당기면 릴리프 상태가 된다', () => {
+    const s = sess();
+    s.setPose({ boom: 0.8, arm: -1.5, bucket: -1.0 });
+    run(s, [[400, { rx: -1 }]]);
+    expect(s.reliefLevel).toBeGreaterThan(0.8);
+    run(s, [[40, {}]]);
+    expect(s.reliefLevel).toBeLessThan(0.1); // 레버를 놓으면 멈춤
+  });
+});

@@ -139,6 +139,10 @@ export class DigSession {
   loadBack = 0;
   /** 운반 중(A를 떠나 C에 닿기 전) 흘린 흙 */
   carrySpill = 0;
+  /** 실린더 끝에 닿은 채 레버를 미는 정도 (0~1): 릴리프 밸브 소리 */
+  reliefLevel = 0;
+  /** 유압으로 움직이는 정도 (0~): 유압 흐르는 소리 */
+  motionLevel = 0;
   /** 굴착마다 안쪽까지 담긴 비율 */
   packRatios: number[] = [];
   /** 평탄작업 중 '버킷을 펴고 이빨로 앞으로 민' 부피 */
@@ -349,6 +353,8 @@ export class DigSession {
     // 과부하면 유압이 더 밀지 못한다 (릴리프)
     const relief = this.engineLoad > 1 ? 1 / this.engineLoad : 1;
     let joltCause: { imp: number; why: 'release' | 'reverse' | 'stroke' } = { imp: 0, why: 'release' };
+    let reliefPush = 0;
+    let motion = 0;
     let pitchImp = 0;
     let rollImp = 0;
     let shock = 0;
@@ -386,6 +392,14 @@ export class DigSession {
         const cap = sp[j] * rf * clamp(dist / ((6 * Math.PI) / 180), 0.25, 1);
         if (Math.abs(this.vel[j]) > cap) this.vel[j] = Math.sign(this.vel[j]) * cap;
       }
+      // 릴리프: 실린더 끝(0.5° 이내)에서 그쪽으로 레버를 계속 밀면 밸브가 열린다
+      if (j !== 'swing' && active) {
+        const lim = this.m.limits[j];
+        const atMin = this.pose[j] <= lim[0] + 0.009 && tgt[j] < 0;
+        const atMax = this.pose[j] >= lim[1] - 0.009 && tgt[j] > 0;
+        if (atMin || atMax) reliefPush = Math.max(reliefPush, Math.abs(tgt[j]) / Math.max(sp[j] * rf, 1e-6));
+      }
+      motion += Math.abs(this.vel[j]) / Math.max(sp[j], 1e-6);
       if (Math.abs(this.vel[j]) < 1e-5) continue;
       const old = this.pose[j];
       let nv = old + this.vel[j] * dt * resist * relief;
@@ -437,6 +451,8 @@ export class DigSession {
       this.effort += hold;
       this.effortDown += hold * 0.5;
     }
+    this.reliefLevel += (clamp(reliefPush, 0, 1) - this.reliefLevel) * Math.min(1, dt * 12);
+    this.motionLevel += (motion - this.motionLevel) * Math.min(1, dt * 10);
     this.applyJolt(dt, shock, pitchImp, rollImp, working, joltCause.why);
 
     // 2) 흙 상호작용
