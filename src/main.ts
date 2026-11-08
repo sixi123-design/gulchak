@@ -189,11 +189,10 @@ function newSession() {
   session.onFinish(showResult);
   session.onDigEntry(showEntry);
   // 점검 화면 초기화
-  setCheck('ck-belt', false);
-  setCheck('ck-lever', false);
-  $<HTMLInputElement>('rpm2').value = '30';
-  $<HTMLInputElement>('rpm').value = '30';
-  syncPrecheck();
+  // 안전벨트·안전레버·RPM은 준비된 것으로 본다
+  session.belt = true;
+  session.leverUnlocked = true;
+  session.rpm = 0.8;
   $('precheck').hidden = false;
   syncSettingsUi();
   renderModePicker();
@@ -266,27 +265,6 @@ const left = new Joystick($('stick-l'));
 const right = new Joystick($('stick-r'));
 const keys = new Keys();
 
-function setCheck(id: string, on: boolean) {
-  $(id).classList.toggle('on', on);
-}
-function syncPrecheck() {
-  const rpm = Number($<HTMLInputElement>('rpm2').value) / 100;
-  session.rpm = rpm;
-  $<HTMLInputElement>('rpm').value = String(Math.round(rpm * 100));
-  $('ck-rpm-dot').parentElement!.classList.toggle('on', rpm >= 0.6);
-}
-$('ck-belt').onclick = () => {
-  session.belt = !session.belt;
-  setCheck('ck-belt', session.belt);
-};
-$('ck-lever').onclick = () => {
-  session.leverUnlocked = !session.leverUnlocked;
-  setCheck('ck-lever', session.leverUnlocked);
-};
-$('rpm2').oninput = syncPrecheck;
-$('rpm').oninput = () => {
-  session.rpm = Number($<HTMLInputElement>('rpm').value) / 100;
-};
 async function goFullscreen() {
   try {
     if (!document.fullscreenElement && document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
@@ -313,9 +291,6 @@ $('btn-ready').onclick = () => {
   const f = $('ready-flash');
   f.hidden = false;
   setTimeout(() => (f.hidden = true), 1100);
-};
-$('btn-lever').onclick = () => {
-  session.leverUnlocked = !session.leverUnlocked;
 };
 $('btn-engine').onclick = () => session.restartEngine();
 $('btn-end').onclick = () => session.abandon();
@@ -418,9 +393,6 @@ function updateHud() {
   const gd = $('guide');
   gd.textContent = s.flags.guide ? s.guide() : '';
   gd.hidden = !s.flags.guide;
-  const lv = $('btn-lever');
-  lv.textContent = s.leverUnlocked ? '안전레버 해제됨' : '안전레버 잠김';
-  lv.classList.toggle('on', s.leverUnlocked);
   $('btn-engine').hidden = s.engineOn;
   // 엔진 부하: 눈금(2/3) = 엔진 힘의 100%
   const lb = $('loadbar2');
@@ -453,14 +425,11 @@ function showResult() {
           ? mode === 'exam' ? '실격' : '실전이면 실격'
           : '실격 없이 완주!';
   const dqList = $('res-dq');
-  const pre = r.precheck;
-  const missed = [!pre.belt && '벨트', !pre.lever && '안전레버', !pre.rpm && 'RPM'].filter(Boolean);
   dqList.innerHTML =
     (dq.length
       ? dq.map((d) => `<li class="dq"><b>${d.basis} ${d.title}</b>${d.count > 1 ? `<small>${d.count}회</small>` : ''}</li>`).join('')
       : '<li class="ok"><b>실격 항목 없음</b><small>점수 미공개 · 합격 여부는 판정 안 함</small></li>') +
-    (warn.length ? `<li><b>주의</b><small>${warn.map((w) => `${w.title} ${w.count}`).join(' · ')}</small></li>` : '') +
-    (missed.length ? `<li><b>점검 누락</b><small>${missed.join(' · ')}</small></li>` : '');
+    (warn.length ? `<li><b>주의</b><small>${warn.map((w) => `${w.title} ${w.count}`).join(' · ')}</small></li>` : '') ;
   const pct = (v: number) => `${Math.round(v * 100)}%`;
   const avg = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
   const cmOf = (v: number) => `${Math.round(v * 100)}cm`;
