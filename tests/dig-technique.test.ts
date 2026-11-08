@@ -40,10 +40,12 @@ describe('퍼 담기 요령', () => {
   it('비스듬히 꽂으면 조금만 들어가고, 당기며 오므려야 가득 찬다 (경고 없음)', () => {
     const s = sess();
     s.setPose(ik(MACHINE, s.digTarget.rho, 0.2, -0.9)!);
-    run(s, [[40, { ry: 1 }]]);
+    run(s, [[26, { ry: 1 }]]); // 흙 표면에서 20~30cm만 물기
     expect(s.load).toBeLessThan(0.25 * SC);
-    const r = run(s, [[130, { ly: -0.7, rx: -0.6 }]]);
+    // 암을 당기며 오므리고, 붐을 살짝 올려 깊이를 유지 (바른 요령)
+    const r = run(s, [[130, { ly: -0.7, rx: -0.6, ry: -0.1 }]]);
     expect(s.load).toBeGreaterThan(SC);
+    expect(s.loadBack / s.load).toBeGreaterThan(0.5); // 안쪽까지 밀려 들어감
     expect(r.ids.has('W-OVERLOAD')).toBe(false);
     expect(r.ids.has('W-LIFT')).toBe(false);
   });
@@ -128,5 +130,49 @@ describe('퍼 담기 요령 (아스트라 검토 반영)', () => {
     run(s, [[40, { ry: 1 }]]);
     expect(got.length).toBe(1);
     expect(Math.abs(got[0])).toBeLessThan(0.2);
+  });
+});
+
+describe('버킷 속 흙 분포·이빨', () => {
+  it('오므리지 않고 끌기만 하면 흙이 앞쪽에 몰리고, 들어 올리면 앞쪽 흙이 쏟아진다', () => {
+    const s = sess();
+    s.setPose(ik(MACHINE, s.digTarget.rho, 0.2, -0.9)!);
+    run(s, [[26, { ry: 1 }], [130, { ly: -0.7, rx: 0, ry: -0.1 }]]);
+    const before = s.load;
+    expect(s.loadBack / Math.max(before, 1e-9)).toBeLessThan(0.5); // 앞쪽에만 수북
+    run(s, [[90, { ry: -1 }]]); // 오므리지 않고 붐만 올림
+    expect(s.load).toBeLessThan(before * 0.8);
+  });
+  it('오므려 안쪽까지 밀어 넣으면 들어 올려도 버틴다', () => {
+    const s = sess();
+    s.setPose(ik(MACHINE, s.digTarget.rho, 0.2, -0.9)!);
+    // 당기며 오므린 뒤, 오므리면서 들어 올림 (흙 속에서는 오므림이 무거워 느림)
+    run(s, [[26, { ry: 1 }], [130, { ly: -0.7, rx: -0.6, ry: -0.1 }], [120, { rx: -0.8, ry: -0.3 }]]);
+    expect(s.pose.bucket).toBeLessThan(-1.3); // 오므리며 들어 올리면 75° 이상 오므려짐
+    const before = s.load;
+    expect(s.loadBack / before).toBeGreaterThan(0.6);
+    run(s, [[90, { ry: -1 }]]);
+    expect(s.load).toBeGreaterThan(before * 0.85); // 고봉 일부만 흘러내림 (앞쪽에만 담은 경우는 20% 넘게 쏟아짐)
+  });
+  it('버킷을 펴고 이빨로 밀면 이빨 자국(골)이 남는다', () => {
+    const s = sess();
+    const C = s.site.stations[1];
+    s.setPose({ swing: 0 });
+    // 구덩이 밖 굴착장 흙바닥(높이 0)을 버킷을 펴서 날 끝이 살짝 숙인 채 앞으로 밂
+    const lat = 0;
+    const path = (r: number) => ik(MACHINE, r, -0.03, -0.35);
+    s.setPose(path(C.zoneIn - 0.9)!);
+    for (let i = 0; i <= 60; i++) {
+      const q = path(C.zoneIn - 0.9 + (0.7 * i) / 60);
+      if (q) s.setPose(q);
+      s.step();
+    }
+    const g = s.soil.grids[1];
+    const r = C.zoneIn - 0.5;
+    const W = MACHINE.bucketWidth;
+    const teeth = [0, 1, 2, 3, 4].map((i) => g.heightAt(r, lat - W / 2 + 0.08 + ((W - 0.16) * i) / 4));
+    const gaps = [0, 1, 2, 3].map((i) => g.heightAt(r, lat - W / 2 + 0.08 + ((W - 0.16) * (i + 0.5)) / 4));
+    const avg = (a: number[]) => a.reduce((x, y) => x + y, 0) / a.length;
+    expect(avg(gaps) - avg(teeth)).toBeGreaterThan(0.01);
   });
 });

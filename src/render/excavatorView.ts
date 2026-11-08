@@ -167,25 +167,31 @@ function clipAbove(poly: [number, number][], c: number): [number, number][] {
   return out;
 }
 
-/** 버킷 속 흙: 안쪽을 바닥(버킷 등)부터 채우고, 평적을 넘으면 입구 위로 울퉁불퉁한 고봉 */
-function soilFillGeometry(cavity: [number, number][], L3: number, W: number, fill: number) {
+/**
+ * 버킷 속 흙
+ *  - back: 안쪽(바닥)까지 밀려 들어간 흙 (0~1, 안쪽 칸 대비) → 버킷 등부터 채움
+ *  - front: 입구 쪽에 몰린 흙 (0~1, 앞쪽 칸 대비) → 날 근처에 울퉁불퉁하게 수북
+ */
+function soilFillGeometry(cavity: [number, number][], L3: number, W: number, back: number, front: number) {
   const ymax = Math.max(...cavity.map((p) => p[1]));
   const parts: THREE.BufferGeometry[] = [];
-  const f = Math.min(1, fill);
-  const poly = clipAbove(cavity, (1 - f) * ymax);
+  const f = Math.min(1, back);
+  const poly = f > 0.01 ? clipAbove(cavity, (1 - f) * ymax * 0.85) : [];
   if (poly.length >= 3) parts.push(extrude(poly, W * 0.94));
-  if (fill > 1.001) {
-    // 고봉: 입구 위(-y 쪽)로 솟은 흙더미. 꼭짓점을 흔들어 흙덩이 느낌
-    const h = Math.min(0.32, ((fill - 1) / 0.3) * 0.3);
+  if (front > 0.02) {
+    // 안쪽이 덜 찼으면 날 쪽에 몰려 있고, 안쪽이 다 차면 입구 전체에 고봉으로 솟는다
+    const h = Math.min(0.32, front * 0.3);
+    const cx = L3 * (0.75 - 0.25 * f);
+    const len = L3 * (0.25 + 0.2 * f);
     const cap = new THREE.SphereGeometry(1, 14, 6, 0, Math.PI * 2, 0, Math.PI / 2);
     const pos = cap.getAttribute('position') as THREE.BufferAttribute;
     for (let i = 0; i < pos.count; i++) {
       const n = 1 + 0.12 * Math.sin(i * 12.9898) * Math.sin(i * 78.233);
       pos.setXYZ(i, pos.getX(i) * n, pos.getY(i) * n, pos.getZ(i) * n);
     }
-    cap.scale(L3 * 0.4, h, W * 0.45);
+    cap.scale(len, h, W * 0.45);
     cap.rotateX(Math.PI); // 입구 바깥(-y)으로
-    cap.translate(L3 * 0.5, 0.0, 0);
+    cap.translate(cx, 0.0, 0);
     parts.push(cap.toNonIndexed());
   }
   if (!parts.length) return null;
@@ -528,12 +534,15 @@ export class ExcavatorView {
     for (const lk of this.links.idler) placeLink(lk, this.K, J);
     for (const lk of this.links.push) placeLink(lk, J, E);
 
-    // 버킷 속 흙: 채움 비율을 5% 단위로 나눠 모양을 캐시
-    const fill = Math.min(1.3, s.load / s.m.struckCapacity);
-    const key = Math.round(fill * 20);
+    // 버킷 속 흙: 안쪽·앞쪽 채움을 10% 단위로 나눠 모양을 캐시
+    const back = Math.min(1, s.loadBack / s.backCap);
+    const front = Math.min(1.2, Math.max(0, s.load - s.loadBack) / (s.heapedCap - s.backCap));
+    const kb = Math.round(back * 10);
+    const kf = Math.round(front * 10);
+    const key = kb * 100 + kf;
     if (key !== this.fillKey) {
       this.fillKey = key;
-      if (!this.fillCache.has(key)) this.fillCache.set(key, key > 0 ? soilFillGeometry(this.cavity, m.L3, m.bucketWidth, key / 20) : null);
+      if (!this.fillCache.has(key)) this.fillCache.set(key, key > 0 ? soilFillGeometry(this.cavity, m.L3, m.bucketWidth, kb / 10, kf / 10) : null);
       const g = this.fillCache.get(key);
       this.loadMesh.visible = !!g;
       if (g) this.loadMesh.geometry = g;

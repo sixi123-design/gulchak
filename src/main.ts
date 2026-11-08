@@ -293,6 +293,15 @@ function updateHud() {
   $('dig').textContent = `${s.digCount}/${s.params.minDigCount}`;
   $('chip-dig').classList.toggle('done', s.digCount >= s.params.minDigCount);
   if (s.digCount !== lastDig) {
+    if (lastDig >= 0 && s.flags.guide && s.packRatios.length) {
+      // 끝까지 담겼는지 알려줌
+      const pr = s.packRatios[s.packRatios.length - 1];
+      const el = document.createElement('div');
+      el.className = 'toast entry ' + (pr >= 0.6 ? 'good' : pr >= 0.4 ? 'ok' : 'bad');
+      el.innerHTML = pr >= 0.6 ? `<b>끝까지 담김 ${Math.round(pr * 100)}% 👍</b>오므려 안쪽까지 밀어 넣었어요` : `<b>앞쪽에만 담김 (안쪽 ${Math.round(pr * 100)}%)</b>당기면서 버킷을 오므려 끝까지 밀어 넣으세요`;
+      $('toasts').prepend(el);
+      setTimeout(() => el.remove(), 3500);
+    }
     if (lastDig >= 0) {
       $('chip-dig').classList.remove('pop');
       void $('chip-dig').offsetWidth;
@@ -355,6 +364,8 @@ function showResult() {
     ['연결동작 비율', pct(r.connectedRatio)],
     ['평탄도 (C 구덩이)', fl ? `기준면 편차 ${Math.round(fl.meanDev * 100)}cm · 높낮이 ${Math.round(fl.range * 100)}cm` : '-'],
     ['구덩이 밖 흙', fl ? `${(fl.outsideVol * 1000).toFixed(0)}L` : '-'],
+    ['끝까지 담김 (안쪽까지 밀어 넣은 비율)', r.packRatios.length ? `평균 ${pct(avg(r.packRatios))} · 최저 ${pct(Math.min(...r.packRatios))}` : '기록 없음'],
+    ['평탄 요령 (버킷 펴고 이빨로 앞으로 민 비율)', r.flattenOpenRatio > 0 || r.flatness ? pct(r.flattenOpenRatio) : '-'],
     ['바닥 충격 / 덜컹', `${r.impacts}회 / ${r.jolts}회`],
     ['시작 전 점검', `벨트 ${r.precheck.belt ? '✔' : '✘'} · 안전레버 ${r.precheck.lever ? '✔' : '✘'} · RPM ${r.precheck.rpm ? '✔' : '✘'}`],
   ];
