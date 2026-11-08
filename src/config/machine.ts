@@ -26,10 +26,10 @@ const d = (deg: number) => (deg * Math.PI) / 180;
 
 export const MACHINE: MachineSpec = {
   boomFoot: { r: 0.6, y: 1.9 },
-  L1: 4.2,
-  L2: 2.3,
-  L3: 1.3,
-  heelLen: 0.95,
+  L1: 4.3,
+  L2: 2.4,
+  L3: 1.15, // 버킷 회전 반경 (14t급 실측 약 1.15~1.2m)
+  heelLen: 0.85,
   heelAngle: d(55),
   bucketWidth: 1.05,
   bucketLength: 1.0,

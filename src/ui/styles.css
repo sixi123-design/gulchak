@@ -172,8 +172,14 @@ body {
   gap: 6px;
 }
 .guide {
-  margin: 8px auto 0;
-  max-width: min(620px, 80vw);
+  /* 운전석 시점에서 버킷이 화면 위쪽 가운데에 오므로, 안내는 아래쪽(핸들·계기판 자리)에 둔다 */
+  position: absolute;
+  left: 50%;
+  bottom: calc(max(14px, env(safe-area-inset-bottom)) + 52px);
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: min(560px, 46vw);
+  opacity: 0.88;
   text-align: center;
   font-weight: 800;
   font-size: 15px;
@@ -187,16 +193,16 @@ body {
   display: none;
 }
 .toasts {
+  /* 알림은 왼쪽 위 (버킷을 가리지 않게) */
   position: absolute;
-  top: 110px;
-  left: 50%;
-  transform: translateX(-50%);
+  top: 58px;
+  left: max(12px, env(safe-area-inset-left));
   display: flex;
   flex-direction: column;
   gap: 6px;
-  align-items: center;
+  align-items: flex-start;
   pointer-events: none;
-  width: min(560px, 86vw);
+  width: min(340px, 38vw);
 }
 .toast {
   background: var(--danger);
@@ -205,10 +211,10 @@ body {
   border-radius: 14px;
   padding: 7px 14px;
   font-weight: 800;
-  font-size: 14px;
+  font-size: 13px;
   box-shadow: var(--press);
   animation: shake 0.4s, fade 3.4s forwards;
-  text-align: center;
+  text-align: left;
 }
 .toast b {
   display: block;
@@ -668,6 +674,14 @@ input[type='range'] {
     width: min(46vh, 200px);
   }
   .toasts {
-    top: 86px;
+    top: 52px;
+  }
+  .toast:nth-child(n + 3) {
+    display: none;
+  }
+  .guide {
+    bottom: calc(max(10px, env(safe-area-inset-bottom)) + 48px);
+    font-size: 12px;
+    padding: 5px 10px;
   }
 }

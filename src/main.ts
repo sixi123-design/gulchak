@@ -87,7 +87,7 @@ function newSession() {
   $('precheck').hidden = false;
   $('result').hidden = true;
   $('toasts').innerHTML = '';
-  (window as unknown as { __exc: unknown }).__exc = { session, camera, ik: (r: number, y: number, k: number) => ik(MACHINE, r, y, k), setCam: (m: CamMode) => (camMode = m) };
+  (window as unknown as { __exc: unknown }).__exc = { session, camera, exc, ik: (r: number, y: number, k: number) => ik(MACHINE, r, y, k), setCam: (m: CamMode) => (camMode = m) };
 }
 
 // ---------- 카메라 ----------

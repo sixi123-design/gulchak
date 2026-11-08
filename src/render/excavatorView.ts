@@ -37,7 +37,7 @@ export class ExcavatorView {
   private cabParts: THREE.Object3D[] = [];
   private cabInterior!: THREE.Group;
   /** 운전석 눈 위치 (상부 선회체 로컬) */
-  static readonly EYE = new THREE.Vector3(0.32, 2.62, -0.7);
+  static readonly EYE = new THREE.Vector3(0.32, 2.62, -0.85);
   private cylinders: { mesh: THREE.Mesh; a: THREE.Object3D; b: THREE.Object3D }[] = [];
   private tmpA = new THREE.Vector3();
   private tmpB = new THREE.Vector3();
@@ -73,41 +73,43 @@ export class ExcavatorView {
     house.position.set(-0.75, 1.95, 0.52);
     this.upper.add(house);
     const hood = box(1.75, 0.95, 0.95, C.sun);
-    hood.position.set(-1.18, 1.9, -0.7);
+    hood.position.set(-1.18, 1.9, -0.85);
     this.upper.add(hood);
     const deck = box(1.35, 0.12, 1.0, C.steel, 0.03); // 운전석 바닥 받침
-    deck.position.set(0.35, 1.39, -0.7);
+    deck.position.set(0.35, 1.39, -0.85);
     this.upper.add(deck);
     const counter = box(0.7, 0.9, 2.3, C.sunDeep);
     counter.position.set(-2.25, 1.85, 0.15);
     this.upper.add(counter);
     // 운전석: 붐 왼쪽 앞 (바닥 약 1.45m, 지붕 약 3.15m)
+    // 운전석 중심은 붐 중심에서 왼쪽으로 약 0.85m (실제 14t급 배치)
     const cab = box(1.3, 1.7, 0.95, C.sun);
-    cab.position.set(0.35, 2.3, -0.7);
+    cab.position.set(0.35, 2.3, -0.85);
     this.upper.add(cab);
     const glass = box(0.05, 1.35, 0.8, C.glass, 0);
-    glass.position.set(1.01, 2.35, -0.7);
+    glass.position.set(1.01, 2.35, -0.85);
     this.upper.add(glass);
     const glassSide = box(0.9, 1.0, 0.05, C.glass, 0);
-    glassSide.position.set(0.35, 2.5, -1.18);
+    glassSide.position.set(0.35, 2.5, -1.33);
     this.upper.add(glassSide);
     this.cabParts.push(cab, glass, glassSide);
     this.cabInterior = this.buildCabInterior();
+    this.cabInterior.position.z = -0.15; // 내부 프레임도 운전석과 함께 이동
     this.upper.add(this.cabInterior);
     const pipe = box(0.16, 0.6, 0.16, C.ink, 0);
     pipe.position.set(-1.5, 2.75, 0.8);
     this.upper.add(pipe);
 
     // 붐
-    this.boom.position.set(m.boomFoot.r, m.boomFoot.y, 0.1);
+    this.boom.position.set(m.boomFoot.r, m.boomFoot.y, 0); // 판정 좌표와 같은 선(측면 0)
     this.upper.add(this.boom);
-    const boomMesh = box(m.L1, 0.42, 0.36, C.sun);
+    const boomMesh = box(m.L1, 0.58, 0.4, C.sun); // 14t급 붐 단면 비율
     boomMesh.position.x = m.L1 / 2;
     this.boom.add(boomMesh);
     // 암
     this.arm.position.x = m.L1;
     this.boom.add(this.arm);
-    const armMesh = box(m.L2 + 0.25, 0.32, 0.28, C.sun);
+    const armMesh = box(m.L2 + 0.25, 0.44, 0.34, C.sun);
     armMesh.position.x = m.L2 / 2 - 0.1;
     this.arm.add(armMesh);
     // 버킷
@@ -132,11 +134,11 @@ export class ExcavatorView {
     const edge = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.04, W + 0.1), toon(C.metal));
     edge.position.set(m.L3 - 0.04, 0.01, 0);
     this.bucket.add(edge);
-    const toothG = new THREE.ConeGeometry(0.045, 0.2, 4);
+    const toothG = new THREE.ConeGeometry(0.04, 0.15, 4);
     toothG.rotateZ(-Math.PI / 2);
     for (let i = 0; i < 5; i++) {
       const t = new THREE.Mesh(toothG, toon(C.metal));
-      t.position.set(m.L3 + 0.08, 0.0, -W / 2 + 0.08 + ((W - 0.16) * i) / 4);
+      t.position.set(m.L3 + 0.05, 0.0, -W / 2 + 0.08 + ((W - 0.16) * i) / 4);
       this.bucket.add(t);
     }
     // 위쪽 링크 브래킷
