@@ -60,6 +60,11 @@ function pose(s: DigSession, swing: number, r: number, y: number, bucketAbs: num
 }
 const tipStation = (s: DigSession) => s.stationOf(toWorld(s.pose.swing, s.frame.tip))?.name ?? null;
 /** 흙에 닿은 채 dir(1 = 바깥, -1 = 몸 쪽)으로 움직인 거리 누적 */
+/** 버킷 바닥(힐→이빨)이 수평(이빨이 몸 쪽)에서 기운 각(°) */
+const bottomTilt = (s: DigSession) => {
+  const f = s.frame;
+  return (Math.abs(Math.atan2(f.tip.y - f.heel.y, f.heel.r - f.tip.r)) * 180) / Math.PI;
+};
 const contactTravel = (s: DigSession, mem: Record<string, number>, dir: 1 | -1) => {
   const r = s.frame.tip.r;
   const dr = (r - mem.r) * dir;
@@ -99,40 +104,41 @@ export const LESSONS: Lesson[] = [
     },
     steps: [
       {
-        text: '버킷을 암 각도에 맞춰 펴기',
-        labels: ['버킷 펴기'],
+        text: '붐 올리며 버킷을 암 각도로 펴기',
+        labels: ['붐 올림', '버킷 펴기'],
         // 버킷 관절 0° = 핀→이빨 선이 암과 일직선
         done: (s) => Math.abs(s.pose.bucket) <= 12 * deg,
       },
       {
-        text: '붐 내려 ⓑ선 안쪽에 이빨 꽂기',
+        text: '암 펴서 ⓑ선 안쪽까지 뻗기',
+        labels: ['암 펴기'],
+        done: (s) => s.frame.tip.r >= s.digTarget.rho - 0.5,
+      },
+      {
+        text: '붐 내려 이빨 꽂기',
         labels: ['붐 내림'],
         done: (s) => tipStation(s) === 'A' && s.groundGap() < -0.05,
       },
       {
-        text: '버킷 오므려 윗면을 바닥과 평행하게',
+        text: '버킷 오므려 바닥면을 수평으로',
         labels: ['버킷 오므림'],
-        // 버킷 개구부가 몸 쪽을 봄 (핀→이빨 선이 수직 ±15°) = 윗면이 수평
-        done: (s) => Math.abs(s.frame.thK + 90 * deg) <= 15 * deg && s.groundGap() < 0,
+        // 버킷 바닥(힐→이빨)이 수평 ±20°, 이빨이 몸 쪽
+        done: (s) => bottomTilt(s) <= 20 && s.groundGap() < 0,
       },
       {
         text: '암 당겨 흙 긁어오기',
         labels: ['암 당기기'],
-        done: (s) => s.load >= 0.2 * s.m.struckCapacity,
+        begin: (s, mem) => ((mem.r = s.frame.tip.r), (mem.d = 0)),
+        done: (s, mem) => contactTravel(s, mem, -1) >= 0.6,
       },
       {
-        text: '버킷 오므려 흙 담기',
-        labels: ['버킷 오므림'],
-        done: (s) => s.load >= 0.7 * s.m.struckCapacity,
+        text: '버킷 오므리며 암 한 번 더 당겨 가득 담기',
+        labels: ['버킷 오므림', '암 당기기'],
+        done: (s) => s.load >= 0.8 * s.m.struckCapacity,
       },
       {
-        text: '버킷 끝까지 오므리기',
-        labels: ['버킷 오므림'],
-        done: (s) => s.fullyCurled,
-      },
-      {
-        text: '붐 올리기',
-        labels: ['붐 올림'],
+        text: '붐 올리며 버킷 끝까지 오므리기',
+        labels: ['붐 올림', '버킷 오므림'],
         done: (s) => s.fullyCurled && s.groundGap() > 0.8 && s.load >= 0.6 * s.m.struckCapacity,
       },
     ],
@@ -200,8 +206,8 @@ export const LESSONS: Lesson[] = [
         done: (s) => s.frame.tip.r >= s.site.stations[1].pitOut - 0.4,
       },
       {
-        text: '붐 내려 흙에 대고, 암 당겨 한 번 끌어오기',
-        labels: ['붐 내림', '암 당기기'],
+        text: '흙에 대고 암 당기며 붐 올려 끌어오기',
+        labels: ['붐 내림', '암 당기기', '붐 올림'],
         begin: (s, mem) => ((mem.r = s.frame.tip.r), (mem.d = 0)),
         done: (s, mem) => contactTravel(s, mem, -1) >= 0.8,
       },

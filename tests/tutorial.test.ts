@@ -49,22 +49,25 @@ describe('배우기', () => {
     expect(t.cleared).toBe(true);
     expect(vol() - v0).toBeGreaterThan(0.35);
   });
-  it('퍼 담기: 암 각도로 버킷 펴고 → 꽂고 → 윗면 수평 → 당겨 긁고 → 오므려 담고 → 들면 완료 (레버 조작)', () => {
+  it('퍼 담기: 버킷 펴고 → 뻗고 → 꽂고 → 바닥면 수평 → 당겨 긁고 → 오므리며 담고 → 들면 완료 (레버 조작)', () => {
     const t = new Tutor(lesson('scoop'), mk());
     const deg = Math.PI / 180;
+    const C = (s: DigSession) => {
+      const f = s.frame;
+      return Math.atan2(f.tip.y - f.heel.y, f.heel.r - f.tip.r) / deg; // 바닥면 기울기
+    };
     const steps: ((s: DigSession) => Partial<Sticks>)[] = [
-      (s) => ({ rx: s.pose.bucket < -5 * deg ? 1 : s.pose.bucket > 5 * deg ? -1 : 0 }),
-      // 붐을 내리면 날이 바깥으로 나가므로 ⓑ선을 넘지 않게 암을 조금 당겨 줌
+      (s) => ({ ry: -0.3, rx: s.pose.bucket < -5 * deg ? 1 : s.pose.bucket > 5 * deg ? -1 : 0 }),
+      () => ({ ly: 0.8 }),
       (s) => {
         const r = s.frame.tip.r;
-        const want = s.digTarget.rho - 0.5;
-        return { ry: 0.6, ly: r < want - 0.15 ? 0.7 : r > want + 0.15 ? -0.6 : 0 };
+        const want = s.digTarget.rho - 0.4;
+        return { ry: 0.6, ly: r < want - 0.15 ? 0.6 : r > want + 0.15 ? -0.6 : 0 };
       },
       () => ({ rx: -0.6 }),
-      (s) => ({ ly: -1, ry: s.groundGap() > -0.1 ? 0.3 : -0.2 }),
-      (s) => ({ rx: -1, ly: s.frame.tip.r > s.site.stations[0].pitIn + 0.8 ? -0.4 : 0, ry: s.groundGap() > -0.1 ? 0.2 : 0 }),
-      () => ({ rx: -1 }),
-      () => ({ ry: -1 }),
+      (s) => ({ ly: -0.8, ry: s.groundGap() > -0.1 ? 0.3 : -0.2, rx: Math.abs(C(s)) > 10 ? -0.3 : 0 }),
+      (s) => ({ rx: -0.8, ly: -0.5, ry: s.groundGap() > -0.1 ? 0.2 : 0 }),
+      () => ({ rx: -1, ry: -1 }),
     ];
     for (const [i, f] of steps.entries()) expect(drive(t, f, 900), `단계 ${i + 1}`).toBe(true);
     expect(t.cleared).toBe(true);
