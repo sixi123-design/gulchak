@@ -184,6 +184,10 @@ try {
 }
 const SOUND_KEYS = ['eng', 'amb', 'sfx'] as const;
 function syncSoundUi() {
+  const all = $('mute-all');
+  all.innerHTML = sound.muted ? ICON.muted : ICON.sound;
+  all.classList.toggle('off', sound.muted);
+  $('settings').classList.toggle('all-off', sound.muted);
   for (const k of SOUND_KEYS) {
     $<HTMLInputElement>(`vol-${k}`).value = String(Math.round(levels[k] * 100));
     const on = levels[`${k}On`];
@@ -195,6 +199,12 @@ function syncSoundUi() {
 const applySound = () => {
   sound.setLevels(levels);
   save('exc-audio', JSON.stringify(levels));
+  syncSoundUi();
+};
+$('mute-all').onclick = () => {
+  sound.start();
+  sound.setMuted(!sound.muted);
+  save('exc-mute', sound.muted ? '1' : '0');
   syncSoundUi();
 };
 for (const k of SOUND_KEYS) {
@@ -351,6 +361,7 @@ function rebuildMachine() {
   (window as unknown as { __exc: { exc: ExcavatorView } }).__exc.exc = exc;
 }
 
+const END_LABEL: Record<ModeKey, string> = { tutorial: '목록', free: '그만하기', practice: '그만하기', exam: '기권' };
 function newSession(autoEnd?: boolean) {
   scene.remove(world);
   disposeTree(world);
@@ -374,6 +385,10 @@ function newSession(autoEnd?: boolean) {
   session.belt = true;
   session.leverUnlocked = true;
   session.rpm = 0.8;
+  // 모드별로 보일 것·숨길 것은 CSS(body[data-mode])에서. 실제 시험은 운전석 시점 고정
+  document.body.dataset.mode = modeKey;
+  if (modeKey === 'exam') camMode = 'cab';
+  $('btn-end').textContent = END_LABEL[modeKey];
   $('precheck').hidden = false;
   renderModePicker();
   $('result').hidden = true;
@@ -559,6 +574,11 @@ $('btn-fail-map').onclick = () => {
 
 // ---------- HUD ----------
 const sound = new MachineSound();
+try {
+  sound.muted = localStorage.getItem('exc-mute') === '1';
+} catch {
+  /* 무시 */
+}
 sound.setLevels(levels);
 const left = new Joystick($('stick-l'));
 const right = new Joystick($('stick-r'));
@@ -629,6 +649,20 @@ $('btn-engine').onclick = () => session.restartEngine();
   end.onpointerup = end.onpointerleave = end.onpointercancel = cancel;
 }
 $('btn-settings').innerHTML = ICON.gear;
+// 레버 글자 켜고 끄기 (배우기에서 반짝이는 글자는 꺼도 보임)
+let labelsOn = load('exc-labels') !== '0';
+const syncLabels = () => {
+  document.body.classList.toggle('labels-off', !labelsOn);
+  const b = $('btn-labels');
+  b.innerHTML = '<b>가</b>';
+  b.classList.toggle('off', !labelsOn);
+};
+$('btn-labels').onclick = () => {
+  labelsOn = !labelsOn;
+  save('exc-labels', labelsOn ? '1' : '0');
+  syncLabels();
+};
+syncLabels();
 $('btn-paywall-close').innerHTML = ICON.close;
 // 가격 (임시 값: 실제 가격이 정해지면 여기만 바꿈)
 const PRICE = 9900;

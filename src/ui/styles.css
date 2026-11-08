@@ -2131,3 +2131,64 @@ body:has(#fail:not([hidden])) .stick {
   font: 700 12px var(--font);
   opacity: 0.65;
 }
+
+/* ---------- 전체 소리 ---------- */
+.vol-row.all {
+  padding-bottom: 10px;
+  border-bottom: 2px dashed #1d1b2e33;
+}
+#settings.all-off .vol-row:not(.all) {
+  opacity: 0.35;
+  pointer-events: none;
+}
+/* ---------- 레버 글자 켜고 끄기 (왼쪽 레버 위) ---------- */
+.lab-toggle {
+  position: absolute;
+  left: max(18px, env(safe-area-inset-left));
+  bottom: calc(max(18px, env(safe-area-inset-bottom)) + min(40vw, 240px) + 6px);
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  font: 900 18px var(--font);
+  color: var(--ink);
+  background: var(--paper);
+  border: 3px solid var(--ink);
+  border-radius: 50%;
+  box-shadow: 0 3px 0 var(--ink);
+  cursor: pointer;
+}
+.lab-toggle.off {
+  background: #ddd;
+  box-shadow: none;
+  transform: translateY(3px);
+}
+.lab-toggle.off b {
+  text-decoration: line-through 3px;
+  opacity: 0.55;
+}
+body.labels-off .stick .lab:not(.hint) {
+  visibility: hidden;
+}
+@media (max-height: 460px) {
+  .lab-toggle {
+    bottom: calc(max(18px, env(safe-area-inset-bottom)) + min(46vh, 200px) + 4px);
+  }
+}
+/* ---------- 모드별 화면 ----------
+ 배우기: 미션이 진행을 대신 → 굴착·덤프 수 숨김
+ 실제 시험: 실제 장비처럼 → 굴착·덤프 수, 흙량, 부하, 시점 숨김 (운전석 고정) */
+body[data-mode='tutorial'] #chip-dig,
+body[data-mode='tutorial'] #chip-dump,
+body[data-mode='exam'] .chips,
+body[data-mode='exam'] .console .load,
+body[data-mode='exam'] #btn-cam {
+  display: none;
+}
+body[data-mode='exam'] .console:not(:has(#btn-engine:not([hidden]))) {
+  display: none;
+}
+.actions {
+  margin-left: auto;
+}
