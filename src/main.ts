@@ -736,9 +736,8 @@ function updateHud() {
     tm.textContent = `${remain < 0 ? '+' : ''}${Math.floor(a / 60)}:${String(a % 60).padStart(2, '0')}`;
     tm.className = 'timer' + (remain < 0 ? ' over' : remain < 30 ? ' warn' : '');
   } else {
-    // 자유 연습: 경과 시간
-    const a = Math.floor(s.t);
-    tm.textContent = `${Math.floor(a / 60)}:${String(a % 60).padStart(2, '0')}`;
+    // 자유 연습: 시간 제한 없음
+    tm.textContent = '∞';
     tm.className = 'timer';
   }
   $('dig').textContent = `${s.digCount}/${s.params.minDigCount}`;
