@@ -2428,3 +2428,126 @@ body[data-mode='tutorial'] .toasts {
   right: max(12px, env(safe-area-inset-right));
   align-items: flex-end;
 }
+
+/* ===== 디자인 검토 반영 (가오레 AD · 아스트라) ===== */
+/* 1. 배우기 강조 레버 라벨: 일반 .hint(흐림)와 이름이 겹쳐 흐려지던 것 */
+.stick .lab.hint {
+  opacity: 1;
+}
+/* 2. 작은 화면: 좌우 라벨을 두 줄로 (가운데서 서로 붙지 않게) */
+@media (max-width: 700px) {
+  .stick .lab.lt,
+  .stick .lab.rt {
+    white-space: normal;
+    word-break: keep-all;
+    width: min-content;
+    text-align: center;
+    line-height: 1.15;
+    font-size: 12px;
+    padding: 2px 4px;
+  }
+}
+/* 3. 손가락 터치 영역 44px */
+.cam-btn {
+  width: 44px;
+  height: 40px;
+}
+.pw-x {
+  width: 44px;
+  height: 44px;
+}
+.pickbtn {
+  min-height: 44px;
+}
+.site-row {
+  min-height: 44px;
+}
+/* 5. 결과판: 큰 숫자 3개 + 자세히(접힘) */
+.hero {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.hero-tile {
+  display: grid;
+  justify-items: center;
+  padding: 8px 4px 10px;
+  background: #fff;
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+  box-shadow: 0 4px 0 var(--ink);
+}
+.hero-tile span {
+  font: 800 13px var(--font);
+  opacity: 0.7;
+}
+.hero-tile b {
+  font: 900 34px/1.1 var(--font);
+  color: var(--ink);
+}
+.hero-tile.bad {
+  background: #ffe3e0;
+}
+.hero-tile.bad b {
+  color: var(--danger);
+}
+.more {
+  margin-top: 10px;
+}
+.more summary {
+  cursor: pointer;
+  font: 800 14px var(--font);
+  padding: 8px 2px;
+  min-height: 44px;
+  box-sizing: border-box;
+  list-style: none;
+}
+.more summary::-webkit-details-marker {
+  display: none;
+}
+.more summary::before {
+  content: '▸ ';
+}
+.more[open] summary::before {
+  content: '▾ ';
+}
+.cols.single ul:has(li.row) {
+  grid-template-columns: 1fr 1fr;
+}
+@media (max-height: 460px) {
+  .hero-tile b {
+    font-size: 28px;
+  }
+  .hero-tile {
+    padding: 4px 4px 6px;
+  }
+}
+/* 7. 성공 카드: 아래 계기판 위로 */
+#clear.quiet {
+  padding-bottom: calc(max(14px, env(safe-area-inset-bottom)) + 62px);
+}
+/* 8. 스테이지 맵: 5칸, 점선은 1번~5번 사이만 */
+.stage-map {
+  grid-template-columns: repeat(5, 1fr);
+}
+.stage-map::before {
+  left: 10%;
+  right: 10%;
+}
+/* 9. 스테이지 아이콘 (SVG) */
+.stage .st-icon .ico {
+  width: 34px;
+  height: 34px;
+}
+.m-head .ico,
+.cl-title .ico {
+  display: inline-block;
+  width: 1.15em;
+  height: 1.15em;
+  vertical-align: -0.2em;
+  margin-right: 4px;
+}
+/* 10. 미션 카드 머리: STEP 대신 스테이지 아이콘 + 이름 */
+.m-head {
+  font-size: 13px;
+}

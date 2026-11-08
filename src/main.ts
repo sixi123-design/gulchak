@@ -473,7 +473,9 @@ function updateCamera(dt: number) {
   exc.setCabView(camMode === 'cab');
   for (const l of siteView.labels) l.visible = camMode !== 'cab';
   // 화각: 운전석은 넓게(가로 약 95°), 세로 화면이면 더 넓힘
-  const wantFov = camMode === 'cab' ? (camera.aspect >= 1 ? 62 : 85) : 55;
+  // 운전석: 가로 시야 약 90° (사람이 앞유리로 보는 범위). 화면 비율마다 세로 화각을 맞춤
+  const cabFov = camera.aspect >= 1 ? THREE.MathUtils.clamp((2 * Math.atan(Math.tan((46 * Math.PI) / 180) / camera.aspect) * 180) / Math.PI, 48, 62) : 85;
+  const wantFov = camMode === 'cab' ? cabFov : 55;
   if (Math.abs(camera.fov - wantFov) > 0.1) {
     camera.fov = wantFov;
     camera.updateProjectionMatrix();
@@ -517,7 +519,7 @@ function renderLessonMap() {
   LESSONS.forEach((l, i) => {
     const b = document.createElement('button');
     b.className = 'stage' + (done.has(l.id) ? ' cleared' : '') + (i === next ? ' next' : '');
-    b.innerHTML = `<span class="st-num">${i + 1}</span><span class="st-icon">${l.icon}</span><b>${l.title}</b>`;
+    b.innerHTML = `<span class="st-num">${i + 1}</span><span class="st-icon">${ICON[l.icon]}</span><b>${l.title}</b>`;
     b.onclick = () => startLesson(i);
     box.appendChild(b);
   });
@@ -577,7 +579,7 @@ function renderMission(intro = false) {
   const st = tutor.current;
   const n = tutor.lesson.steps.length;
   m.hidden = false;
-  $('m-head').innerHTML = `<span class="m-step">STEP ${lessonIdx + 1}</span>${tutor.lesson.icon} ${tutor.lesson.title}`;
+  $('m-head').innerHTML = `${ICON[tutor.lesson.icon]}${tutor.lesson.title}`;
   $('m-text').textContent = st ? st.text : '';
   $('m-pips').innerHTML = Array.from({ length: n }, (_, k) => `<i class="${k < tutor!.step ? 'ok' : k === tutor!.step ? 'now' : ''}"></i>`).join('');
   // 다음 단계 문구가 튀어 들어오게
@@ -591,7 +593,7 @@ function renderMission(intro = false) {
     m.classList.add('intro');
   }
   const want = new Set(st?.labels ?? []);
-  for (const el of document.querySelectorAll('.lab')) el.classList.toggle('hint', want.has(el.textContent ?? ''));
+  for (const el of document.querySelectorAll('.lab')) el.classList.toggle('hint', want.has((el.textContent ?? '').replace(/ /g, ' ')));
 }
 function onLessonClear() {
   const L = tutor!.lesson;
@@ -601,7 +603,7 @@ function onLessonClear() {
   renderMission();
   $('mission').hidden = true;
   for (const el of document.querySelectorAll('.lab')) el.classList.remove('hint');
-  $('clear-title').textContent = `${L.icon} ${L.title}`;
+  $('clear-title').innerHTML = `${ICON[L.icon]}${L.title}`;
   const last = lessonIdx >= LESSONS.length - 1;
   $('btn-clear-next').hidden = last;
   $('btn-clear-exam').hidden = !last;
@@ -745,6 +747,7 @@ $('btn-labels').onclick = () => {
 };
 syncLabels();
 $('btn-paywall-close').innerHTML = ICON.close;
+if (matchMedia('(pointer: coarse)').matches) $('pc-hint').hidden = true;
 // 가격 (임시 값: 실제 가격이 정해지면 여기만 바꿈)
 const PRICE = 9900;
 $('btn-buy').textContent = `${PRICE.toLocaleString('ko-KR')}원 평생 이용하기`;
@@ -951,11 +954,18 @@ function showResult() {
   const dr = avg(r.entries.map((e) => Math.abs(e.dr)));
   const dl = avg(r.entries.map((e) => Math.abs(e.dl)));
   const pack = avg(r.packRatios);
-  // [항목, 값, 문제 있음]
+  const mmss = (t: number) => `${Math.floor(t / 60)}:${String(Math.round(t % 60)).padStart(2, '0')}`;
+  // 큰 숫자 3개 (아케이드 결과판): [이름, 값, 문제 있음]
+  const hero: [string, string, boolean][] = [
+    ['굴착', mode === 'free' ? `${r.digCount}회` : `${r.digCount}/4`, mode !== 'free' && r.digCount < 4],
+    ['흙량', r.loadRatios.length ? pct(load) : '-', r.loadRatios.length > 0 && load < 0.8],
+    ['시간', mmss(r.elapsed), mode !== 'free' && r.elapsed > 240],
+  ];
+  $('res-hero').innerHTML = hero.map(([k, v, bad]) => `<div class="hero-tile${bad ? ' bad' : ''}"><span>${k}</span><b>${v}</b></div>`).join('');
+  // 자세히 (접힘): [항목, 값, 문제 있음]
   const items: [string, string, boolean][] = [
-    ['시간', `${Math.floor(r.elapsed / 60)}:${String(Math.round(r.elapsed % 60)).padStart(2, '0')} / 4:00`, r.elapsed > 240],
-    ['굴착 · 덤프', `${r.digCount} · ${r.dumpCount}회`, mode !== 'free' && r.digCount < 4],
-    ['흙량 (평적 100%)', r.loadRatios.length ? `${pct(load)} (최저 ${pct(Math.min(...r.loadRatios))})` : '-', r.loadRatios.length > 0 && load < 0.8],
+    ['덤프', `${r.dumpCount}회`, false],
+    ['최저 흙량', r.loadRatios.length ? pct(Math.min(...r.loadRatios)) : '-', r.loadRatios.length > 0 && Math.min(...r.loadRatios) < 0.8],
     ['위치 오차 앞뒤 · 좌우', r.entries.length ? `${cmOf(dr)} · ${cmOf(dl)}` : '-', dr > 0.15 || dl > 0.15],
     ['안쪽까지 담김', r.packRatios.length ? pct(pack) : '-', r.packRatios.length > 0 && pack < 0.6],
     ['운반 중 흘림', `${Math.round(r.carrySpill * 1000)}L`, r.carrySpill > 0.02],
@@ -966,6 +976,9 @@ function showResult() {
   // 실제 시험: 실제처럼 시간·흙량 같은 기록은 알려주지 않음 (실격 판정만)
   $('res-cols').classList.toggle('dq-only', mode === 'exam');
   $('res-metrics').innerHTML = items.map(([k, v, bad]) => `<li class="row${bad ? ' bad' : ''}"><span>${k}</span><b>${v}</b></li>`).join('');
+  const more = $<HTMLDetailsElement>('res-more');
+  more.open = false;
+  more.querySelector('summary')!.textContent = items.some((x) => x[2]) ? `자세히 · 확인할 것 ${items.filter((x) => x[2]).length}` : '자세히';
   $('res-cols').classList.toggle('single', mode !== 'exam' && !dq.length && !warn.length);
   setTimeout(() => ($('result').hidden = false), 600);
 }

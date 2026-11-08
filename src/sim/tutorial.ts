@@ -39,7 +39,8 @@ const needle = (x: number, lo: number, hi: number, a: number, b: number): Meter 
 
 export interface Lesson {
   id: string;
-  icon: string;
+  /** 아이콘 이름 (src/ui/icons.ts) */
+  icon: 'stLevers' | 'stScoop' | 'stCarry' | 'stDump' | 'stFlat';
   title: string;
   /** 마지막 단계에서 '버킷 내려놓기' 종료 판정을 켬 */
   autoEnd?: boolean;
@@ -99,7 +100,7 @@ const fill = (s: DigSession, ratio: number) => {
 export const LESSONS: Lesson[] = [
   {
     id: 'levers',
-    icon: '🕹️',
+    icon: 'stLevers',
     title: '레버 익히기',
     setup: () => {},
     steps: [
@@ -115,7 +116,7 @@ export const LESSONS: Lesson[] = [
   },
   {
     id: 'scoop',
-    icon: '🪣',
+    icon: 'stScoop',
     title: '퍼 담기',
     setup: (s) => {
       // 흙을 쏟고 돌아온 자세: 버킷 오므리고 몸 가까이
@@ -172,7 +173,7 @@ export const LESSONS: Lesson[] = [
   },
   {
     id: 'carry',
-    icon: '↪️',
+    icon: 'stCarry',
     title: 'B 통과 선회',
     setup: (s) => {
       const B = s.site.B;
@@ -190,7 +191,7 @@ export const LESSONS: Lesson[] = [
   },
   {
     id: 'dump',
-    icon: '⛰️',
+    icon: 'stDump',
     title: '흙 쏟기',
     setup: (s) => {
       const C = s.site.stations[1];
@@ -207,7 +208,7 @@ export const LESSONS: Lesson[] = [
   },
   {
     id: 'flatten',
-    icon: '🧹',
+    icon: 'stFlat',
     title: '평탄·마무리',
     autoEnd: true,
     setup: (s) => {
