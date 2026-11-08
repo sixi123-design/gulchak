@@ -2123,3 +2123,11 @@ body:has(#fail:not([hidden])) .stick {
 .btn.pw-buy.nudge {
   animation: shake 0.4s;
 }
+.pw-info .pw-buy {
+  margin-top: auto;
+}
+.pw-note {
+  align-self: center;
+  font: 700 12px var(--font);
+  opacity: 0.65;
+}

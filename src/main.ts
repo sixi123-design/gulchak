@@ -642,8 +642,7 @@ $('btn-settings').innerHTML = ICON.gear;
 $('btn-paywall-close').innerHTML = ICON.close;
 // 가격 (임시 값: 실제 가격이 정해지면 여기만 바꿈)
 const PRICE = 9900;
-$('pw-price').innerHTML = `${PRICE.toLocaleString('ko-KR')}<small>원</small>`;
-$('btn-buy').textContent = '구매하기';
+$('btn-buy').textContent = `${PRICE.toLocaleString('ko-KR')}원 평생 이용하기`;
 // TODO: 결제 연동 (앱스토어 인앱결제 또는 웹 결제). 지금은 누르면 버튼만 흔들림
 $('btn-buy').onclick = () => {
   const b = $('btn-buy');
