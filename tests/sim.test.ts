@@ -169,9 +169,9 @@ describe('굴착 세션', () => {
   });
   it('굴착 없이 버킷을 내려놓아 종료하면 D-COUNT와 D-NOFLAT', () => {
     const s = startedSession();
-    const A = s.site.stations[0];
-    const q = ik(MACHINE, (A.pitIn + A.pitOut) / 2 + 0.3, 0.3, 0)!;
-    s.setPose({ ...q, bucket: MACHINE.limits.bucket[1] });
+    const C = s.site.stations[1];
+    const q = ik(MACHINE, (C.pitIn + C.pitOut) / 2 + 0.3, 0.3, 0)!;
+    s.setPose({ ...q, swing: 0, bucket: MACHINE.limits.bucket[1] });
     // 지면에 닿을 때까지 붐을 내리고, 닿으면 멈춰 기다림
     for (let i = 0; i < 800 && s.phase === 'working'; i++) {
       if (s.groundGap() > 0.02) s.setPose({ boom: s.pose.boom - 0.001 });
@@ -189,6 +189,20 @@ describe('굴착 세션', () => {
     expect(s.phase).toBe('finished');
     expect(s.abandoned).toBe(true);
     expect(s.engine.violations.filter((v) => v.id === 'D-COUNT')).toEqual([]);
+  });
+  it('C가 아닌 곳(A)에 내려놓으면 종료되지 않음', () => {
+    const s = startedSession();
+    s.digCount = 4;
+    s.flattenVol = 1;
+    const A = s.site.stations[0];
+    const q = ik(MACHINE, (A.pitIn + A.pitOut) / 2 + 0.3, 0.3, 0)!;
+    s.setPose({ ...q, swing: Math.PI, bucket: MACHINE.limits.bucket[1] });
+    for (let i = 0; i < 800; i++) {
+      if (s.groundGap() > 0.02) s.setPose({ boom: s.pose.boom - 0.001 });
+      s.step();
+    }
+    expect(s.groundGap()).toBeLessThan(0.06);
+    expect(s.phase).toBe('working');
   });
   it('버킷이 흙에 묻힌 상태에서는 종료되지 않음', () => {
     const s = startedSession();

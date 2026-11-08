@@ -915,10 +915,22 @@ export class DigSession {
       (2 * Math.PI) / 180;
     // 지면에 닿으면 인정. 흙 위에 내려놓으면 버킷이 조금 묻히는 게 정상이라 endSinkTol까지 인정
     // (구덩이 속 깊이 묻힌 채로는 불인정)
-    if (open && gap <= this.params.endGroundTol && gap >= -this.params.endSinkTol && still) {
+    if (open && this.onFlatC() && gap <= this.params.endGroundTol && gap >= -this.params.endSinkTol && still) {
       this.endT += dt;
       if (this.endT >= this.params.endHoldSec) this.finish();
     } else this.endT = 0;
+  }
+
+  /** 버킷 바닥 가운데가 C(흙을 메우고 평탄한 곳) 구덩이 위에 있는가 — 마지막 평탄 동작에 이어 그 자리에 내려놓는다 */
+  onFlatC(): boolean {
+    const g = this.soil.grids.find((x) => x.name === 'C');
+    if (!g) return false;
+    let x = 0;
+    let z = 0;
+    let n = 0;
+    for (const row of this.underWorld(this.frame, this.pose.swing)) for (const p of row) (x += p.x), (z += p.z), n++;
+    const k = g.cellAt(x / n, z / n);
+    return k >= 0 && g.pit[k] === 1;
   }
 
   /** 버킷 하부의 가장 낮은 점과 흙 표면(또는 지면) 사이 거리. 음수면 묻힘 */
@@ -999,6 +1011,7 @@ export class DigSession {
     const open = this.pose.bucket >= this.m.limits.bucket[1] - (this.params.endOpenMarginDeg * Math.PI) / 180;
     const cm = Math.round(this.groundGap() * 100);
     if (!open) return '마무리: 버킷을 끝까지 펴세요';
+    if (!this.onFlatC()) return '마무리: 평탄한 C 흙 위에 내려놓기';
     return `마무리: 편 버킷을 땅에 내려놓기 (${Math.max(0, cm)}cm)`;
   }
 

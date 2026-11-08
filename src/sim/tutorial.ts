@@ -180,10 +180,10 @@ export const LESSONS: Lesson[] = [
       {
         text: '버킷을 끝까지 펴기',
         labels: ['버킷 펴기'],
-        done: (s) => s.pose.bucket >= s.m.limits.bucket[1] - 8 * deg,
+        done: (s) => s.pose.bucket >= s.m.limits.bucket[1] - s.params.endOpenMarginDeg * deg,
       },
       {
-        text: '편 버킷을 땅에 내려놓고 멈추기',
+        text: '평탄한 C 흙 위에 내려놓고 멈추기',
         labels: ['붐 내림'],
         done: (s) => s.phase === 'finished',
       },

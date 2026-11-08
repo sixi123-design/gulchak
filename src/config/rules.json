@@ -93,7 +93,7 @@
     "stallRpm": 0.35,
     "flattenMinVolume": 0.03,
     "endHoldSec": 1.0,
-    "endOpenMarginDeg": 8,
+    "endOpenMarginDeg": 5,
     "endGroundTol": 0.06,
     "endSinkTol": 0.25,
     "soilCell": 0.1,
