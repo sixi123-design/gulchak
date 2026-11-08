@@ -65,19 +65,18 @@
         <div class="mode-pick" id="mode-pick"></div>
         <h1>굴착 작업</h1>
         <button class="btn big go" id="btn-ready">시작</button>
-        <p class="hint">PC: 왼쪽 레버 W A S D · 오른쪽 레버 I J K L</p>
-        <p class="fs-hint" id="fs-hint" hidden>아이폰: 공유 버튼 → <b>홈 화면에 추가</b>로 열면 주소창 없이 전체화면으로 연습할 수 있어요.</p>
+        <p class="hint" id="pc-hint">PC: W A S D · I J K L</p>
+        <p class="fs-hint" id="fs-hint" hidden>전체화면: 공유 → <b>홈 화면에 추가</b></p>
       </div>
     </div>
 
     <div class="modal" id="settings" hidden>
       <div class="card">
         <h1>설정</h1>
-        <div class="pick-label">시험장 장비 <small>(큐넷 시험장별 기종 현황 참고)</small></div>
+        <div class="pick-label">장비</div>
         <div class="style-pick" id="style-pick"></div>
-        <div class="pick-label">내 키 <small>(운전석 눈높이가 달라집니다)</small></div>
+        <div class="pick-label">키</div>
         <label class="height-row"><input type="range" id="height" min="150" max="195" step="1" value="172" /><b id="height-val">172cm</b></label>
-        <p class="sub" id="height-note"></p>
         <button class="btn big go" id="btn-settings-ok">확인</button>
       </div>
     </div>
@@ -88,11 +87,11 @@
         <h1 id="res-title"></h1>
         <div class="cols">
           <section>
-            <h2>실격 판정 <small>공개문제 기준</small></h2>
+            <h2>실격 판정</h2>
             <ul id="res-dq"></ul>
           </section>
           <section>
-            <h2>연습 지표 <small>참고용</small></h2>
+            <h2>연습 지표</h2>
             <ul id="res-metrics"></ul>
           </section>
         </div>

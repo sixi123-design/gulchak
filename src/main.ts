@@ -80,10 +80,10 @@ try {
 } catch {
   /* 저장소 사용 불가 */
 }
-const MODE_INFO: Record<ModeKey, { label: string; desc: string }> = {
-  free: { label: '자유 연습', desc: '시간·순서 없이' },
-  practice: { label: '시험 연습', desc: '안내 받으며 실전 순서' },
-  exam: { label: '실제 시험', desc: '안내 없음 · 실격 즉시 종료' },
+const MODE_INFO: Record<ModeKey, { label: string }> = {
+  free: { label: '자유 연습' },
+  practice: { label: '시험 연습' },
+  exam: { label: '실제 시험' },
 };
 function renderModePicker() {
   const box = $('mode-pick');
@@ -91,7 +91,7 @@ function renderModePicker() {
   for (const k of ['free', 'practice', 'exam'] as const) {
     const b = document.createElement('button');
     b.className = 'modebtn' + (k === modeKey ? ' on' : '');
-    b.innerHTML = `<b>${MODE_INFO[k].label}</b><small>${MODE_INFO[k].desc}</small>`;
+    b.innerHTML = `<b>${MODE_INFO[k].label}</b>`;
     b.onclick = () => {
       if (modeKey === k) return;
       modeKey = k;
@@ -119,8 +119,6 @@ function syncSettingsUi() {
   const h = $<HTMLInputElement>('height');
   h.value = String(heightCm);
   $('height-val').textContent = `${heightCm}cm`;
-  const d = Math.round(eyeOffset() * 100);
-  $('height-note').textContent = d === 0 ? '눈높이: 기준' : `눈높이: 기준보다 ${Math.abs(d)}cm ${d > 0 ? '높음' : '낮음'}`;
 }
 $<HTMLInputElement>('height').oninput = (e) => {
   heightCm = Number((e.target as HTMLInputElement).value);
@@ -147,7 +145,7 @@ function renderStylePicker() {
     const b = document.createElement('button');
     b.className = 'stylebtn' + (st.key === styleKey ? ' on' : '');
     const hex = (c: number) => '#' + c.toString(16).padStart(6, '0');
-    b.innerHTML = `<i style="background:${hex(st.body)}"></i><i style="background:${hex(st.boom)}"></i><i style="background:${hex(st.lower)}"></i><b>${st.label}</b><small>${st.desc}</small>`;
+    b.innerHTML = `<i style="background:${hex(st.body)}"></i><i style="background:${hex(st.boom)}"></i><i style="background:${hex(st.lower)}"></i><b>${st.label}</b>`;
     b.onclick = () => {
       if (styleKey === st.key) return;
       styleKey = st.key;
@@ -280,6 +278,7 @@ $('btn-fs').onclick = () => {
 const isIOS = /iP(hone|od|ad)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const standalone = (navigator as Navigator & { standalone?: boolean }).standalone || matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches;
 if (isIOS && !standalone) $('fs-hint').hidden = false;
+if (matchMedia('(pointer: coarse)').matches) $('pc-hint').hidden = true;
 if (!document.documentElement.requestFullscreen) $('btn-fs').hidden = true;
 $('btn-ready').onclick = () => {
   if (matchMedia('(pointer: coarse)').matches) goFullscreen();
@@ -427,7 +426,7 @@ function showResult() {
   dqList.innerHTML =
     (dq.length
       ? dq.map((d) => `<li class="dq"><b>${d.basis} ${d.title}</b>${d.count > 1 ? `<small>${d.count}회</small>` : ''}</li>`).join('')
-      : '<li class="ok"><b>실격 항목 없음</b><small>점수 미공개 · 합격 여부는 판정 안 함</small></li>') +
+      : '<li class="ok"><b>실격 항목 없음</b></li>') +
     (warn.length ? `<li><b>주의</b><small>${warn.map((w) => `${w.title} ${w.count}`).join(' · ')}</small></li>` : '') ;
   const pct = (v: number) => `${Math.round(v * 100)}%`;
   const avg = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
