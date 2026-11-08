@@ -453,10 +453,6 @@ export class ExcavatorView {
     out.y += dy;
     return this.upper.localToWorld(out);
   }
-  /** 배기구 끝 (월드) */
-  exhaustWorld(out: THREE.Vector3) {
-    return this.upper.localToWorld(out.set(-1.6, 2.95, 0.6));
-  }
   bucketWorld(out: THREE.Vector3) {
     return this.bucket.localToWorld(out.set(0.55, -0.1, 0));
   }

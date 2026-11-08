@@ -5,7 +5,6 @@ import sitesJson from './config/sites.json';
 import { MODES, type ModeKey, type Violation } from './core/ruleEngine';
 import { isLocked } from './core/entitlement';
 import { ExcavatorView, type MachineStyleKey } from './render/excavatorView';
-import { SmokeView } from './render/smokeView';
 import { FxView, SiteView, SoilView } from './render/siteView';
 import { DigSession, type DigEntry, type RulesFile } from './sim/session';
 import { LESSONS, Tutor } from './sim/tutorial';
@@ -43,9 +42,6 @@ let exc: ExcavatorView;
 let soilView: SoilView;
 let siteView: SiteView;
 let fx: FxView;
-let smoke: SmokeView;
-const smokeTip = new THREE.Vector3();
-const WIND = new THREE.Vector3(0.35, 0, 0.15);
 let world = new THREE.Group();
 scene.add(world);
 
@@ -389,8 +385,7 @@ function newSession(autoEnd?: boolean) {
   fx = new FxView();
   siteView = new SiteView(session.site, session.soil.grids);
   if (session.flags.feedback) siteView.addDigGuide(session.site, session.digTarget.rho, MACHINE.bucketWidth, session.params.digPosTolGood);
-  smoke = new SmokeView(); // world를 버릴 때 함께 정리되므로 판마다 새로
-  world.add(siteView.group, exc.root, ...soilView.meshes, fx.particles, fx.dust, fx.bucketShadow, fx.machineShadow, smoke.mesh);
+  world.add(siteView.group, exc.root, ...soilView.meshes, fx.particles, fx.dust, fx.bucketShadow, fx.machineShadow);
   // 실제 시험: 감독관 3명 (A쪽 · B 통과구역 뒤 · C쪽 = 시간 담당)
   examiners = null;
   cine = null;
@@ -1013,8 +1008,6 @@ function frame(now: number) {
   exc.sync(session);
   soilView.sync();
   fx.sync(session);
-  exc.root.updateMatrixWorld(true);
-  smoke.update(dt, exc.exhaustWorld(smokeTip), session.engineLoad, session.engineOn && session.phase !== 'precheck', WIND);
   sound.update(session);
   if (tutor && tutor.update()) {
     if (tutor.cleared) onLessonClear();
