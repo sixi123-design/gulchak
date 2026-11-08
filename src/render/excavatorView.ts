@@ -144,8 +144,19 @@ export class ExcavatorView {
     for (const o of this.cabParts) o.visible = !on;
   }
 
+  private qa = new THREE.Quaternion();
+  private qb = new THREE.Quaternion();
+  private axA = new THREE.Vector3();
+  private axB = new THREE.Vector3();
+
   sync(s: DigSession) {
     const p = s.pose;
+    // 차체 흔들림: 버킷 방향으로 숙임(pitch), 좌우 기울기(roll)
+    this.axA.set(-Math.sin(p.swing), 0, Math.cos(p.swing)); // 측면 축
+    this.axB.set(Math.cos(p.swing), 0, Math.sin(p.swing)); // 전방 축
+    this.qa.setFromAxisAngle(this.axA, -s.rock.pitch);
+    this.qb.setFromAxisAngle(this.axB, s.rock.roll);
+    this.root.quaternion.copy(this.qa).multiply(this.qb);
     this.upper.rotation.y = -p.swing;
     this.boom.rotation.z = p.boom;
     this.arm.rotation.z = p.arm;

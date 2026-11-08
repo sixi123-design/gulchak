@@ -24,6 +24,23 @@ export interface RuleParams {
   endGroundTol: number;
   soilCell: number;
   reposeDeg: number;
+  /** 유압 응답: 가속 시간상수(s), 정지 시간상수(s) */
+  hydTauUp: number;
+  hydTauDown: number;
+  /** 이 감속도(최대속도의 배수/s)를 넘으면 충격 */
+  joltSafeDecel: number;
+  /** 경고를 띄우는 충격량 */
+  joltWarn: number;
+  /** 고봉 흙이 쏟아지는 충격량 */
+  joltSpill: number;
+}
+
+/** 차체 흔들림 (감쇠 진동). pitch: 버킷 방향으로 숙임(+), roll: 오른쪽으로 기움(+) */
+export interface Rock {
+  pitch: number;
+  pitchV: number;
+  roll: number;
+  rollV: number;
 }
 
 export interface RulesFile {
@@ -60,6 +77,7 @@ export interface DigResult {
   precheck: { belt: boolean; lever: boolean; rpm: boolean };
   elapsed: number;
   flattenVol: number;
+  jolts: number;
 }
 
 const STEP = 1 / 60;
@@ -89,6 +107,11 @@ export class DigSession {
   loadRatios: number[] = [];
   positionErrors: number[] = [];
   impacts = 0;
+  jolts = 0;
+  rock: Rock = { pitch: 0, pitchV: 0, roll: 0, rollV: 0 };
+  /** 마지막 충격 세기 (화면 흔들림·진동용, 렌더에서 읽고 감쇠) */
+  lastJolt = 0;
+  private joltCd = 0;
   flattenVol = 0;
   precheck = { belt: false, lever: false, rpm: false };
   private tActive = 0;
@@ -226,20 +249,51 @@ export class DigSession {
           bucket: this.input.rx * sp.bucket * rf,
         }
       : { swing: 0, arm: 0, boom: 0, bucket: 0 };
-    const k = Math.min(1, dt * 8);
     let blocked = false;
     let impactSpeed = 0;
     const prevFrame = this.frame;
     const prevSwing = this.pose.swing;
+    // 관성 가중치: 붐이 길게 뻗고 흙을 많이 실을수록 충격이 크다
+    const reachF = clamp(this.frame.P2.r / 6, 0.4, 1.3);
+    const loadF = 1 + this.load / this.m.struckCapacity;
+    const inertia = { swing: 1.2 * reachF * loadF, boom: 1.0 * reachF * loadF, arm: 0.7 * loadF, bucket: 0.35 * loadF };
+    let pitchImp = 0;
+    let rollImp = 0;
+    let shock = 0;
     for (const j of ['swing', 'boom', 'arm', 'bucket'] as const) {
-      this.vel[j] += (tgt[j] - this.vel[j]) * k;
+      // 유압 응답: 레버를 밀면 천천히 붙고, 놓으면 밸브가 빨리 닫혀 급정지
+      const v0 = this.vel[j];
+      const speeding = Math.abs(tgt[j]) > Math.abs(v0) && (v0 === 0 || Math.sign(tgt[j]) === Math.sign(v0));
+      const tau = speeding ? this.params.hydTauUp : this.params.hydTauDown;
+      this.vel[j] += (tgt[j] - v0) * Math.min(1, dt / tau);
+      // 급감속 충격
+      const vmax = sp[j] * rf;
+      // 원래 방향 기준 속도 감소량 (반대로 꺾으면 더 큰 충격)
+      const along = Math.sign(this.vel[j]) === Math.sign(v0) ? Math.abs(this.vel[j]) : -Math.abs(this.vel[j]);
+      const decel = (Math.abs(v0) - along) / dt;
+      const safe = this.params.joltSafeDecel * vmax;
+      if (v0 !== 0 && decel > safe) {
+        const imp = ((decel - safe) * dt * inertia[j]) / Math.max(sp[j], 1e-6);
+        shock += imp;
+        if (j === 'swing') rollImp += imp * Math.sign(v0);
+        else pitchImp += imp * (j === 'boom' ? -Math.sign(v0) : Math.sign(v0)); // 붐 내리다 멈춤 → 앞으로 숙임
+      }
       if (Math.abs(this.vel[j]) < 1e-5) continue;
       const old = this.pose[j];
       let nv = old + this.vel[j] * dt;
       if (j !== 'swing') {
         const lim = this.m.limits[j];
         nv = clamp(nv, lim[0], lim[1]);
-        if (nv === lim[0] || nv === lim[1]) this.vel[j] *= 0.5;
+        if (nv === lim[0] || nv === lim[1]) {
+          // 실린더 끝(스트로크 엔드)에 부딪힘
+          const frac = Math.abs(this.vel[j]) / Math.max(sp[j], 1e-6);
+          if (frac > 0.3) {
+            const imp = (frac - 0.3) * 0.6 * inertia[j];
+            shock += imp;
+            pitchImp += imp * (j === 'boom' ? -Math.sign(this.vel[j]) : Math.sign(this.vel[j]));
+          }
+          this.vel[j] = 0;
+        }
       }
       this.pose[j] = nv;
       const f = fk(this.m, this.pose);
@@ -252,6 +306,7 @@ export class DigSession {
       }
     }
     this.frame = fk(this.m, this.pose);
+    this.applyJolt(dt, shock, pitchImp, rollImp, working);
 
     // 2) 흙 상호작용
     let cutTotal = 0;
@@ -300,6 +355,43 @@ export class DigSession {
       this.checkEnd(dt);
     }
     this.simMs = typeof performance !== 'undefined' ? performance.now() - t0 : 0;
+  }
+
+  /** 충격 → 차체 흔들림, 경고, 고봉 흙 쏟아짐 */
+  private applyJolt(dt: number, shock: number, pitchImp: number, rollImp: number, working: boolean) {
+    const r = this.rock;
+    const GAIN = 1.8; // 아케이드 연출: 실제보다 크게 보이게
+    r.pitchV += pitchImp * GAIN;
+    r.rollV += rollImp * GAIN * 0.7;
+    // 감쇠 진동 (약 1.6Hz, 감쇠비 0.2)
+    const K = (2 * Math.PI * 1.6) ** 2;
+    const C = 2 * 0.2 * 2 * Math.PI * 1.6;
+    r.pitchV += (-K * r.pitch - C * r.pitchV) * dt;
+    r.rollV += (-K * r.roll - C * r.rollV) * dt;
+    r.pitch += r.pitchV * dt;
+    r.roll += r.rollV * dt;
+    this.lastJolt = Math.max(this.lastJolt * Math.exp(-dt * 6), shock);
+    this.joltCd -= dt;
+    if (!working || shock < this.params.joltWarn) return;
+    if (this.joltCd <= 0) {
+      this.jolts++;
+      this.joltCd = 0.6;
+      this.report('W-JOLT', '레버를 급하게 놓거나 끝까지 밀어 장비가 덜컹거림');
+    }
+    // 고봉으로 담긴 흙은 충격에 쏟아진다
+    const sc = this.m.struckCapacity;
+    if (shock >= this.params.joltSpill && this.load > sc) {
+      const v = Math.min(this.load - sc, (this.load - sc) * clamp(shock, 0, 1) + 0.01);
+      this.load -= v;
+      const W = this.m.bucketWidth;
+      const n = Math.max(1, Math.min(6, Math.round(v / 0.004)));
+      for (let i = 0; i < n; i++) {
+        const tip = toWorld(this.pose.swing, this.frame.tip, (this.rand() - 0.5) * W * 0.8);
+        const p = { p: tip, v: v3((this.rand() - 0.5) * 0.8, 0.3, (this.rand() - 0.5) * 0.8), vol: v / n };
+        if (this.particles.length < 140) this.particles.push(p);
+        else this.land(tip, v / n);
+      }
+    }
   }
 
   /** 버킷 하부가 단단한 바닥 아래로 들어간 깊이 */
@@ -559,6 +651,7 @@ export class DigSession {
       precheck: this.precheck,
       elapsed: this.t,
       flattenVol: this.flattenVol,
+      jolts: this.jolts,
     };
   }
 

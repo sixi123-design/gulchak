@@ -117,6 +117,9 @@ function updateCamera(dt: number) {
   camPos.lerp(pos, k);
   camLook.lerp(look, k);
   camera.position.copy(camPos);
+  // 충격 시 카메라 떨림 (운전석 시점은 더 크게)
+  const j = Math.min(0.6, s.lastJolt) * (camMode === 'cab' ? 0.25 : 0.4);
+  if (j > 0.005) camera.position.add(new THREE.Vector3((Math.random() - 0.5) * j, (Math.random() - 0.5) * j, (Math.random() - 0.5) * j));
   camera.lookAt(camLook);
 }
 
@@ -176,7 +179,13 @@ function showToast(v: Violation) {
   box.prepend(el);
   while (box.children.length > 3) box.lastElementChild!.remove();
   setTimeout(() => el.remove(), 3500);
-  if (dq && navigator.vibrate) navigator.vibrate(120);
+  if (navigator.vibrate) {
+    if (dq) navigator.vibrate(120);
+    else if (v.id === 'W-JOLT' && performance.now() - lastBuzz > 400) {
+      lastBuzz = performance.now();
+      navigator.vibrate([40, 30, 25]); // 덜컹
+    }
+  }
 }
 
 let lastDig = -1;
@@ -243,7 +252,7 @@ function showResult() {
     ['연결동작 비율', pct(r.connectedRatio)],
     ['평탄도 (C 구덩이)', fl ? `기준면 편차 ${Math.round(fl.meanDev * 100)}cm · 높낮이 ${Math.round(fl.range * 100)}cm` : '-'],
     ['구덩이 밖 흙', fl ? `${(fl.outsideVol * 1000).toFixed(0)}L` : '-'],
-    ['바닥 충격', `${r.impacts}회`],
+    ['바닥 충격 / 덜컹', `${r.impacts}회 / ${r.jolts}회`],
     ['시작 전 점검', `벨트 ${r.precheck.belt ? '✔' : '✘'} · 안전레버 ${r.precheck.lever ? '✔' : '✘'} · RPM ${r.precheck.rpm ? '✔' : '✘'}`],
   ];
   $('res-metrics').innerHTML = items.map(([k, v]) => `<li><b>${k}</b>${v}</li>`).join('');
@@ -263,11 +272,17 @@ function frame(now: number) {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
   frameAvg = frameAvg * 0.95 + dt * 1000 * 0.05;
+  // 키보드는 켜짐/꺼짐뿐이라 서서히 오르내리게 (초당 4: 갑자기 떼면 약하게 덜컹)
+  const ramp = (cur: number, target: number) => cur + Math.max(-dt * 4, Math.min(dt * 4, target - cur));
+  kb.lx = ramp(kb.lx, keys.lx);
+  kb.ly = ramp(kb.ly, keys.ly);
+  kb.rx = ramp(kb.rx, keys.rx);
+  kb.ry = ramp(kb.ry, keys.ry);
   session.input = {
-    lx: clamp1(left.x + keys.lx),
-    ly: clamp1(left.y + keys.ly),
-    rx: clamp1(right.x + keys.rx),
-    ry: clamp1(right.y + keys.ry),
+    lx: curve(clamp1(left.x + kb.lx)),
+    ly: curve(clamp1(left.y + kb.ly)),
+    rx: curve(clamp1(right.x + kb.rx)),
+    ry: curve(clamp1(right.y + kb.ry)),
   };
   acc += dt;
   let n = 0;
@@ -299,6 +314,10 @@ function frame(now: number) {
   requestAnimationFrame(frame);
 }
 const clamp1 = (v: number) => Math.max(-1, Math.min(1, v));
+/** 레버 감도 곡선: 조금 기울이면 아주 천천히 (미세 조작) */
+const curve = (v: number) => Math.sign(v) * Math.abs(v) ** 1.6;
+const kb = { lx: 0, ly: 0, rx: 0, ry: 0 };
+let lastBuzz = 0;
 
 newSession();
 applySize();

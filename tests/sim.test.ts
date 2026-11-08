@@ -206,6 +206,44 @@ describe('굴착 세션', () => {
     const ok = passHits(site, [v3(-0.1, y, (site.B.rE + site.B.rF) / 2)], [v3(0.1, y, (site.B.rE + site.B.rF) / 2)]);
     expect(ok).toEqual([]);
   });
+  it('유압: 빠르게 움직이다 레버를 즉시 놓으면 덜컹(W-JOLT), 서서히 놓으면 없음', () => {
+    const run = (release: (t: number) => number) => {
+      const s = startedSession();
+      s.setPose({ boom: 0.9, arm: -1.6, bucket: -1.0 });
+      for (let i = 0; i < 180; i++) {
+        const t = i / 60;
+        s.input = { lx: t < 1.5 ? -1 : -release(t - 1.5), ly: 0, rx: 0, ry: 0 };
+        s.step();
+      }
+      return s;
+    };
+    const abrupt = run(() => 0);
+    const gentle = run((t) => Math.max(0, 1 - t / 0.6));
+    expect(abrupt.jolts).toBeGreaterThan(0);
+    expect(Math.abs(abrupt.rock.roll) + Math.abs(abrupt.rock.rollV)).toBeGreaterThan(0);
+    expect(gentle.jolts).toBe(0);
+  });
+  it('유압: 레버를 밀면 바로 최고속이 아니라 서서히 붙음', () => {
+    const s = startedSession();
+    s.input = { lx: -1, ly: 0, rx: 0, ry: 0 };
+    s.step();
+    expect(Math.abs(s.vel.swing)).toBeLessThan(MACHINE.speeds.swing * 0.15);
+    for (let i = 0; i < 60; i++) s.step();
+    expect(Math.abs(s.vel.swing)).toBeGreaterThan(MACHINE.speeds.swing * 0.7);
+  });
+  it('고봉으로 실은 흙은 큰 충격에 쏟아지고, 장부는 맞음', () => {
+    const s = startedSession();
+    s.setPose({ boom: 0.9, arm: -1.9, bucket: -1.4 });
+    s.load = s.heapedCap;
+    s.spilled -= s.heapedCap; // 장부 맞추기: 시험용으로 흙을 외부에서 넣음
+    const before = s.load;
+    for (let i = 0; i < 180; i++) {
+      s.input = { lx: i < 90 ? -1 : 1, ly: 0, rx: 0, ry: 0 }; // 선회 중 반대로 꺾기
+      s.step();
+    }
+    expect(s.load).toBeLessThan(before);
+    expect(Math.abs(s.ledgerError())).toBeLessThan(1e-5);
+  });
   it('fk: 시작 자세에서 버킷이 흙을 담는 방향', () => {
     const s = startedSession();
     expect(fk(MACHINE, s.pose).nOpen.y).toBeGreaterThan(0);

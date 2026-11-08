@@ -18,7 +18,11 @@ export class Joystick {
   private down(e: PointerEvent) {
     if (this.id !== null) return;
     this.id = e.pointerId;
-    this.el.setPointerCapture(e.pointerId);
+    try {
+      this.el.setPointerCapture(e.pointerId);
+    } catch {
+      /* 합성 이벤트 등 캡처 불가 시 무시 */
+    }
     const r = this.el.getBoundingClientRect();
     this.cx = r.left + r.width / 2;
     this.cy = r.top + r.height / 2;
