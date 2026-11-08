@@ -465,6 +465,55 @@ input[type='range'] {
   padding: 3px 12px;
   font-size: 13px;
 }
+.pick-label {
+  text-align: left;
+  font-weight: 800;
+  font-size: 14px;
+  margin: 4px 0 6px;
+}
+.pick-label small {
+  font-weight: 600;
+  opacity: 0.6;
+}
+.style-pick {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.stylebtn {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
+  align-items: center;
+  font: 800 14px var(--font);
+  color: var(--ink);
+  background: #fff;
+  border: var(--stroke) solid var(--ink);
+  border-radius: 12px;
+  padding: 6px;
+  cursor: pointer;
+  text-align: center;
+}
+.stylebtn i {
+  height: 12px;
+  border-radius: 4px;
+  border: 2px solid var(--ink);
+}
+.stylebtn b,
+.stylebtn small {
+  grid-column: 1 / -1;
+}
+.stylebtn small {
+  font-size: 10px;
+  font-weight: 600;
+  opacity: 0.7;
+  line-height: 1.2;
+}
+.stylebtn.on {
+  background: #eafff2;
+  box-shadow: 0 0 0 3px var(--ok);
+}
 .checks {
   display: grid;
   gap: 8px;

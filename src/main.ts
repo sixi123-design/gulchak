@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { MACHINE } from './config/machine';
 import rulesJson from './config/rules.json';
 import { PRACTICE, type Violation } from './core/ruleEngine';
-import { ExcavatorView } from './render/excavatorView';
+import { ExcavatorView, MACHINE_STYLES, type MachineStyleKey } from './render/excavatorView';
 import { FxView, SiteView, SoilView } from './render/siteView';
 import { DigSession, type DigEntry, type RulesFile } from './sim/session';
 import { ik } from './sim/kinematics';
@@ -63,13 +63,52 @@ function disposeTree(o: THREE.Object3D) {
   });
 }
 
+// 장비 유형 (시험장 주력 3계열의 색 조합) — 선택은 기억
+let styleKey: MachineStyleKey = 'A';
+try {
+  const v = localStorage.getItem('exc-style');
+  if (v === 'A' || v === 'B' || v === 'C') styleKey = v;
+} catch {
+  /* 저장소 사용 불가 */
+}
+function renderStylePicker() {
+  const box = $('style-pick');
+  box.innerHTML = '';
+  for (const st of Object.values(MACHINE_STYLES)) {
+    const b = document.createElement('button');
+    b.className = 'stylebtn' + (st.key === styleKey ? ' on' : '');
+    const hex = (c: number) => '#' + c.toString(16).padStart(6, '0');
+    b.innerHTML = `<i style="background:${hex(st.body)}"></i><i style="background:${hex(st.boom)}"></i><i style="background:${hex(st.lower)}"></i><b>${st.label}</b><small>${st.desc}</small>`;
+    b.onclick = () => {
+      if (styleKey === st.key) return;
+      styleKey = st.key;
+      try {
+        localStorage.setItem('exc-style', styleKey);
+      } catch {
+        /* 무시 */
+      }
+      rebuildMachine();
+      renderStylePicker();
+    };
+    box.appendChild(b);
+  }
+}
+function rebuildMachine() {
+  if (!exc) return;
+  world.remove(exc.root);
+  disposeTree(exc.root);
+  exc = new ExcavatorView(MACHINE, styleKey);
+  world.add(exc.root);
+  (window as unknown as { __exc: { exc: ExcavatorView } }).__exc.exc = exc;
+}
+
 function newSession() {
   scene.remove(world);
   disposeTree(world);
   world = new THREE.Group();
   scene.add(world);
   session = new DigSession(MACHINE, RULES, PRACTICE);
-  exc = new ExcavatorView(MACHINE);
+  exc = new ExcavatorView(MACHINE, styleKey);
   soilView = new SoilView(session.soil.grids);
   fx = new FxView();
   siteView = new SiteView(session.site, session.soil.grids);
@@ -85,6 +124,7 @@ function newSession() {
   $<HTMLInputElement>('rpm').value = '30';
   syncPrecheck();
   $('precheck').hidden = false;
+  renderStylePicker();
   $('result').hidden = true;
   $('toasts').innerHTML = '';
   (window as unknown as { __exc: unknown }).__exc = { session, camera, exc, ik: (r: number, y: number, k: number) => ik(MACHINE, r, y, k), setCam: (m: CamMode) => (camMode = m) };
@@ -99,6 +139,7 @@ const tmpV = new THREE.Vector3();
 const camPos = new THREE.Vector3(0, 12, 14);
 const camLook = new THREE.Vector3();
 function updateCamera(dt: number) {
+  exc.setCabView(camMode === 'cab');
   if (camMode === 'free') return; // 디버그: 외부에서 카메라 직접 지정
   const s = session;
   const ψ = s.pose.swing;
