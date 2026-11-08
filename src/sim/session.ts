@@ -129,6 +129,8 @@ export class DigSession {
   readyT = 0;
   pose: Pose;
   vel = { swing: 0, boom: 0, arm: 0, bucket: 0 };
+  /** 관절별 실제 이동 비율 (흙 저항·릴리프 반영, 0~1). 덜컹 충격 크기에 사용 */
+  private velEff = { swing: 1, boom: 1, arm: 1, bucket: 1 };
   input: Sticks = { lx: 0, ly: 0, rx: 0, ry: 0 };
   frame: Frame;
   load = 0;
@@ -343,6 +345,7 @@ export class DigSession {
     let curPen = this.penetration(this.frame, this.pose.swing).each;
     // 과부하면 유압이 더 밀지 못한다 (릴리프)
     const relief = this.engineLoad > 1 ? 1 / this.engineLoad : 1;
+    let joltCause: { imp: number; why: 'release' | 'reverse' | 'stroke' } = { imp: 0, why: 'release' };
     let pitchImp = 0;
     let rollImp = 0;
     let shock = 0;
@@ -355,14 +358,29 @@ export class DigSession {
       // 급감속 충격
       const vmax = sp[j] * rf;
       // 원래 방향 기준 속도 감소량 (반대로 꺾으면 더 큰 충격)
-      const along = Math.sign(this.vel[j]) === Math.sign(v0) ? Math.abs(this.vel[j]) : -Math.abs(this.vel[j]);
-      const decel = (Math.abs(v0) - along) / dt;
+      // 덜컹은 레버 조작으로 '실제로 움직이던' 무게가 급히 멈출 때 생긴다.
+      //  - 감속은 레버(유압 명령) 변화로만 센다: 흙 저항으로 느려지는 것은 충격이 아님
+      //  - 크기는 직전에 실제로 움직이던 비율(흙 저항·릴리프)에 비례: 흙에 막혀 거의 안 움직이던 중이면 충격 작음
+      const moveF = this.velEff[j]; // 직전 스텝의 실제 이동 비율 (0~1)
+      const e0 = v0 * moveF;
+      const e1 = this.vel[j] * moveF;
+      this.velEff[j] = j === 'swing' ? 1 : resist * relief;
+      const along = Math.sign(e1) === Math.sign(e0) ? Math.abs(e1) : -Math.abs(e1);
+      const decel = (Math.abs(e0) - along) / dt;
       const safe = this.params.joltSafeDecel * vmax;
-      if (v0 !== 0 && decel > safe) {
+      if (e0 !== 0 && decel > safe) {
         const imp = ((decel - safe) * dt * inertia[j]) / Math.max(sp[j], 1e-6);
         shock += imp;
-        if (j === 'swing') rollImp += imp * Math.sign(v0);
-        else pitchImp += imp * (j === 'boom' ? -Math.sign(v0) : Math.sign(v0)); // 붐 내리다 멈춤 → 앞으로 숙임
+        if (imp > joltCause.imp) joltCause = { imp, why: Math.sign(tgt[j]) === -Math.sign(v0) && tgt[j] !== 0 ? 'reverse' : 'release' };
+        if (j === 'swing') rollImp += imp * Math.sign(e0);
+        else pitchImp += imp * (j === 'boom' ? -Math.sign(e0) : Math.sign(e0)); // 붐 내리다 멈춤 → 앞으로 숙임
+      }
+      // 실린더 쿠션: 관절 한계 15° 앞부터 저절로 감속해 부드럽게 멈춘다 (이 감속은 충격이 아님)
+      if (j !== 'swing') {
+        const lim = this.m.limits[j];
+        const dist = this.vel[j] < 0 ? this.pose[j] - lim[0] : lim[1] - this.pose[j];
+        const cap = sp[j] * rf * clamp(dist / ((15 * Math.PI) / 180), 0.08, 1);
+        if (Math.abs(this.vel[j]) > cap) this.vel[j] = Math.sign(this.vel[j]) * cap;
       }
       if (Math.abs(this.vel[j]) < 1e-5) continue;
       const old = this.pose[j];
@@ -376,6 +394,7 @@ export class DigSession {
           if (frac > 0.3) {
             const imp = (frac - 0.3) * 0.6 * inertia[j];
             shock += imp;
+            if (imp > joltCause.imp) joltCause = { imp, why: 'stroke' };
             pitchImp += imp * (j === 'boom' ? -Math.sign(this.vel[j]) : Math.sign(this.vel[j]));
           }
           this.vel[j] = 0;
@@ -414,7 +433,7 @@ export class DigSession {
       this.effort += hold;
       this.effortDown += hold * 0.5;
     }
-    this.applyJolt(dt, shock, pitchImp, rollImp, working);
+    this.applyJolt(dt, shock, pitchImp, rollImp, working, joltCause.why);
 
     // 2) 흙 상호작용
     let cutTotal = 0;
@@ -490,7 +509,7 @@ export class DigSession {
   }
 
   /** 충격 → 차체 흔들림, 경고, 고봉 흙 쏟아짐 */
-  private applyJolt(dt: number, shock: number, pitchImp: number, rollImp: number, working: boolean) {
+  private applyJolt(dt: number, shock: number, pitchImp: number, rollImp: number, working: boolean, why: 'release' | 'reverse' | 'stroke') {
     const r = this.rock;
     const GAIN = 1.8; // 아케이드 연출: 실제보다 크게 보이게
     r.pitchV += pitchImp * GAIN;
@@ -508,7 +527,12 @@ export class DigSession {
     if (this.joltCd <= 0) {
       this.jolts++;
       this.joltCd = 0.6;
-      this.report('W-JOLT', '레버를 급하게 놓거나 끝까지 밀어 장비가 덜컹거림');
+      const msg = {
+        release: '빠르게 움직이다 레버를 갑자기 놓아 덜컹거림: 멈출 땐 레버를 서서히 놓으세요',
+        reverse: '레버를 반대로 확 꺾어 덜컹거림: 멈춘 뒤 방향을 바꾸세요',
+        stroke: '실린더 끝에 세게 부딪혀 덜컹거림',
+      }[why];
+      this.report('W-JOLT', msg);
     }
     // 고봉으로 담긴 흙은 충격에 쏟아진다
     const sc = this.m.struckCapacity;

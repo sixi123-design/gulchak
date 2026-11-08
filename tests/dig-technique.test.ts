@@ -176,3 +176,14 @@ describe('버킷 속 흙 분포·이빨', () => {
     expect(avg(gaps) - avg(teeth)).toBeGreaterThan(0.01);
   });
 });
+
+describe('자연스러운 퍼 올리기', () => {
+  it('퍼면서 최대한 오므리며 흙에서 꺼내도 덜컹 경고가 없다 (실린더 쿠션)', () => {
+    const s = sess();
+    s.setPose(ik(MACHINE, s.digTarget.rho, 0.2, -0.9)!);
+    // 꽂고 → 잠깐 멈춤 → 당기며 오므림 → 최대한 오므리며 들어 올림 (자연스러운 손동작)
+    run(s, [[26, { ry: 1 }], [12, {}], [130, { ly: -0.7, rx: -0.6, ry: -0.1 }], [150, { rx: -1, ry: -0.6 }], [60, { ry: -0.6 }]]);
+    expect(s.pose.bucket).toBeLessThan(MACHINE.limits.bucket[0] + 0.14); // 끝까지 오므려짐 (쿠션 구간에서는 천천히)
+    expect(s.engine.violations.filter((v) => v.id === 'W-JOLT')).toEqual([]);
+  });
+});
