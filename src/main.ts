@@ -11,6 +11,7 @@ import { LESSONS, Tutor } from './sim/tutorial';
 import { ik } from './sim/kinematics';
 import { Joystick, Keys } from './ui/joystick';
 import { MachineSound, type SoundLevels } from './ui/audio';
+import { ICON } from './ui/icons';
 
 const RULES = rulesJson as unknown as RulesFile;
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -97,7 +98,7 @@ function renderModePicker() {
     const locked = isLocked(k);
     const mi = MODE_INFO[k];
     b.className = `modebtn ${mi.cls}` + (k === modeKey ? ' on' : '') + (locked ? ' locked' : '');
-    b.innerHTML = `${locked ? '<span class="lock">🔒</span>' : ''}<span class="tier">${mi.tier}</span><b>${mi.label}</b><span class="stars">${mi.stars}</span>`;
+    b.innerHTML = `${locked ? `<span class="lock">${ICON.lock}</span>` : ''}<span class="tier">${mi.tier}</span><b>${mi.label}</b><span class="stars">${mi.stars}</span>`;
     b.onclick = () => {
       if (locked) {
         $('paywall').hidden = false;
@@ -187,7 +188,7 @@ function syncSoundUi() {
     $<HTMLInputElement>(`vol-${k}`).value = String(Math.round(levels[k] * 100));
     const on = levels[`${k}On`];
     const b = $(`mute-${k}`);
-    b.textContent = on ? '🔊' : '🔇';
+    b.innerHTML = on ? ICON.sound : ICON.muted;
     b.classList.toggle('off', !on);
   }
 }
@@ -250,7 +251,7 @@ function setMachine(style: MachineStyleKey, site: string) {
 }
 function renderMachineUi() {
   const cs = curSite();
-  $('site-cur').innerHTML = cs ? `<b>${cs.name}</b> · ${cs.machine}` : `<b>${STYLE_NAME[styleKey]}</b> (직접 선택)`;
+  $('site-cur').innerHTML = cs ? `<b>${cs.name}</b> · ${cs.machine}` : '';
   const pick = $('machine-pick');
   pick.innerHTML = '';
   for (const k of ['A', 'B', 'C'] as const) {
@@ -298,7 +299,7 @@ $('btn-near').onclick = () => {
         return 2 * 6371 * Math.asin(Math.sqrt(h));
       });
       $<HTMLInputElement>('site-q').value = '';
-      btn.textContent = '📍 가까운 순';
+      btn.innerHTML = `${ICON.pin} 가까운 순`;
       renderMachineUi();
     },
     () => {
@@ -528,6 +529,7 @@ function onLessonClear() {
 function onLessonFail(v: Violation) {
   if (!tutor || tutor.cleared) return;
   $('fail-detail').textContent = v.detail;
+  $('mission').hidden = true;
   $('fail').hidden = false;
 }
 $('btn-clear-next').onclick = () => startLesson(lessonIdx + 1);
@@ -618,7 +620,28 @@ $('btn-ready').onclick = () => {
   }, boss ? 2400 : 1600);
 };
 $('btn-engine').onclick = () => session.restartEngine();
-$('btn-end').onclick = () => session.abandon();
+// 그만하기: 실수로 끝나지 않게 길게 눌러야(0.6초) 작동
+{
+  const end = $('btn-end');
+  let holdT = 0;
+  const cancel = () => {
+    clearTimeout(holdT);
+    end.classList.remove('holding');
+  };
+  end.onpointerdown = (e) => {
+    e.preventDefault();
+    end.classList.add('holding');
+    holdT = window.setTimeout(() => {
+      end.classList.remove('holding');
+      session.abandon();
+    }, 600);
+  };
+  end.onpointerup = end.onpointerleave = end.onpointercancel = cancel;
+}
+$('btn-settings').innerHTML = ICON.gear;
+$('btn-settings2').innerHTML = ICON.gear;
+$('btn-fs').innerHTML = ICON.expand;
+$('btn-near').innerHTML = `${ICON.pin} 가까운 곳`;
 $('btn-retry').onclick = () => newSession();
 $('btn-rotate-ok').onclick = () => document.body.classList.add('portrait-ok');
 $('btn-cam').onclick = () => {
@@ -629,7 +652,7 @@ $('btn-cam').onclick = () => {
 $('btn-cam').textContent = CAM_LABEL[camMode];
 
 const muteBtn = $('btn-mute');
-const syncMute = () => (muteBtn.textContent = sound.muted ? '🔇' : '🔊');
+const syncMute = () => (muteBtn.innerHTML = sound.muted ? ICON.muted : ICON.sound);
 syncMute();
 muteBtn.onclick = () => {
   sound.start();
@@ -775,7 +798,7 @@ function showResult() {
   // [항목, 값, 문제 있음]
   const items: [string, string, boolean][] = [
     ['시간', `${Math.floor(r.elapsed / 60)}:${String(Math.round(r.elapsed % 60)).padStart(2, '0')} / 4:00`, r.elapsed > 240],
-    ['굴착 · 덤프', `${r.digCount} · ${r.dumpCount}회`, r.digCount < 4],
+    ['굴착 · 덤프', `${r.digCount} · ${r.dumpCount}회`, mode !== 'free' && r.digCount < 4],
     ['흙량 (평적 100%)', r.loadRatios.length ? `${pct(load)} (최저 ${pct(Math.min(...r.loadRatios))})` : '-', r.loadRatios.length > 0 && load < 0.8],
     ['위치 오차 앞뒤 · 좌우', r.entries.length ? `${cmOf(dr)} · ${cmOf(dl)}` : '-', dr > 0.15 || dl > 0.15],
     ['안쪽까지 담김', r.packRatios.length ? pct(pack) : '-', r.packRatios.length > 0 && pack < 0.6],
@@ -785,6 +808,7 @@ function showResult() {
     ['충격 · 덜컹', `${r.impacts} · ${r.jolts}회`, r.impacts + r.jolts > 0],
   ];
   $('res-metrics').innerHTML = items.map(([k, v, bad]) => `<li class="row${bad ? ' bad' : ''}"><span>${k}</span><b>${v}</b></li>`).join('');
+  $('res-cols').classList.toggle('single', !dq.length && !warn.length);
   setTimeout(() => ($('result').hidden = false), 600);
 }
 

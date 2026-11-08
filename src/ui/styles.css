@@ -1588,3 +1588,260 @@ body:has(#settings.seat:not([hidden])) #precheck {
 .timer[hidden] {
   display: none;
 }
+
+/* ---------- UI 검토 반영 ---------- */
+/* 아이콘: 잉크 선 SVG */
+.ico {
+  display: block;
+  width: 22px;
+  height: 22px;
+}
+/* 위쪽 버튼: 손가락 크기(44px), 그만하기는 떨어뜨리고 길게 눌러야 */
+.actions {
+  align-items: center;
+}
+.actions .btn.small {
+  min-width: 44px;
+  min-height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0 10px;
+}
+#btn-end {
+  position: relative;
+  overflow: hidden;
+  margin-left: 14px;
+}
+#btn-end::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: #1d1b2e55;
+  transform: scaleX(0);
+  transform-origin: left;
+}
+#btn-end.holding::before {
+  transform: scaleX(1);
+  transition: transform 0.6s linear;
+}
+.card-gear {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-width: 3px;
+  box-shadow: 0 3px 0 var(--ink);
+}
+/* 글자 크기 (나이 든 사용자도 읽게) */
+.stick .lab {
+  font-size: 13px;
+  padding: 2px 8px;
+}
+.chip b {
+  font-size: 12px;
+  opacity: 1;
+}
+.modebtn .tier {
+  font-size: 12px;
+}
+.ruler i {
+  font-size: 12px;
+}
+/* 레버 라벨이 화면 끝에서 잘리지 않게 */
+.lab.lt {
+  left: 0;
+  transform: translateY(-50%);
+}
+.lab.rt {
+  right: 0;
+  transform: translateY(-50%);
+}
+/* 시작 카드: 모드 카드 → 시작 버튼 바로 이어지게 */
+.mode-pick {
+  margin: 34px 0 16px;
+}
+.modebtn .tier {
+  padding: 0 14px;
+}
+.modebtn .lock {
+  top: 4px;
+  right: 4px;
+}
+.modebtn .lock .ico {
+  width: 14px;
+  height: 14px;
+}
+/* 공용: 버튼 두 개 나란히, 비활성 버튼 */
+.btn-row {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+.btn-row .btn {
+  flex: 1;
+}
+.btn:disabled {
+  background: #cfcfd6;
+  color: #6b6a78;
+  box-shadow: none;
+  transform: translateY(4px);
+  cursor: default;
+}
+/* 결제: 뒤 카드 숨기고, 살 것을 카드로 크게 */
+body:has(#paywall:not([hidden])) #precheck .card {
+  visibility: hidden;
+}
+.pw-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 4px 0 12px;
+}
+.pw-cards .modebtn {
+  font-size: 22px;
+  padding: 14px 6px 10px;
+  cursor: default;
+}
+.pw-cards .modebtn.tier-boss {
+  animation: bossGlow 1.1s ease-in-out infinite;
+}
+.pw-life {
+  font: 900 18px var(--font);
+  margin-bottom: 14px;
+}
+.pw-life b {
+  color: var(--sun-deep);
+}
+/* 실패: 도장이 쾅 */
+.fail-stamp {
+  display: inline-block;
+  margin: 2px 0 6px;
+  font: 900 56px/1.1 var(--font);
+  color: var(--danger);
+  -webkit-text-stroke: 3px var(--ink);
+  paint-order: stroke fill;
+  text-shadow: 0 4px 0 var(--ink);
+  transform: rotate(-6deg);
+  animation: failStamp 0.45s cubic-bezier(0.2, 1.6, 0.4, 1);
+}
+@keyframes failStamp {
+  from {
+    transform: rotate(-6deg) scale(2.4);
+    opacity: 0;
+  }
+}
+#fail .btn + .btn {
+  margin-top: 0;
+}
+/* 설정: 탭·고르기·음소거도 스티커 버튼 */
+.tabs button,
+.pickbtn,
+.mute {
+  border-width: 3px;
+  box-shadow: 0 3px 0 var(--ink);
+  transition: transform 0.06s, box-shadow 0.06s;
+}
+.tabs button.on,
+.pickbtn.on {
+  transform: translateY(3px);
+  box-shadow: none;
+}
+.mute {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 42px;
+}
+.mute .ico {
+  width: 22px;
+  height: 22px;
+}
+.site-list {
+  border-width: 3px;
+}
+#btn-near {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+#btn-near .ico {
+  width: 18px;
+  height: 18px;
+}
+.site-cur:empty {
+  display: none;
+}
+#btn-settings-ok,
+#btn-retry {
+  position: sticky;
+  bottom: 0;
+}
+/* 설정이 열려 있으면 레버는 감춤 (좌석 높이 볼 때 화면을 가리지 않게) */
+body:has(#settings:not([hidden])) .stick {
+  visibility: hidden;
+}
+#settings.seat {
+  place-items: start end;
+  padding-top: 64px;
+}
+#settings.seat .card {
+  width: 190px;
+  max-height: calc(100vh - 80px);
+}
+.ruler-handle {
+  font-size: 22px;
+}
+/* 결과: 실격·주의가 없으면 지표만 한 열로 */
+.cols.single {
+  grid-template-columns: 1fr;
+}
+.cols.single > section:first-child {
+  display: none;
+}
+.cols.single ul:has(li.row) {
+  grid-template-columns: 1fr 1fr;
+  column-gap: 0;
+}
+@media (max-height: 460px) {
+  .card {
+    padding: 14px 16px 12px;
+  }
+  .card.wide h1 {
+    font-size: 22px;
+    margin: 0;
+  }
+  .cols {
+    margin: 8px 0;
+  }
+  .cols li.row {
+    padding: 3px 8px;
+    font-size: 12px;
+  }
+  .cols li.row b {
+    font-size: 13px;
+  }
+  .site-list {
+    max-height: 96px;
+  }
+  .ruler {
+    height: 120px;
+  }
+  .mode-pick {
+    margin: 30px 0 12px;
+  }
+}
+#settings.seat .card {
+  width: 214px;
+}
+#settings.seat .ruler-handle {
+  font-size: 19px;
+  left: 48px;
+}
+@media (max-height: 460px) {
+  #settings.seat {
+    padding-top: 58px;
+  }
+  #settings.seat .ruler {
+    height: 108px;
+  }
+}

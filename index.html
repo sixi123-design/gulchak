@@ -68,7 +68,6 @@
       <div class="card">
         <button class="card-gear" id="btn-settings2" title="설정">⚙</button>
         <div class="mode-pick" id="mode-pick"></div>
-        <h1>굴착 작업</h1>
         <button class="btn big go" id="btn-ready">시작</button>
         <p class="hint" id="pc-hint">PC: W A S D · I J K L</p>
         <p class="fs-hint" id="fs-hint" hidden>전체화면: 공유 → <b>홈 화면에 추가</b></p>
@@ -97,7 +96,6 @@
           <div class="site-list" id="site-list"></div>
         </section>
         <section data-pane="seat" hidden>
-          <p class="seat-note">키에 맞춘 대략적인 높이</p>
           <div class="ruler" id="ruler">
             <div class="ruler-fill" id="ruler-fill"><span class="ruler-handle">🧍 <b id="height-val">170cm</b></span></div>
             <i style="bottom: 0%">150</i><i style="bottom: 22.2%">160</i><i style="bottom: 44.4%">170</i><i style="bottom: 66.7%">180</i><i style="bottom: 88.9%">190</i>
@@ -130,19 +128,26 @@
 
     <div class="modal" id="fail" hidden>
       <div class="card">
-        <h1>다시!</h1>
+        <div class="fail-stamp">다시!</div>
         <p class="sub" id="fail-detail"></p>
-        <button class="btn big go" id="btn-fail-retry">다시 하기</button>
-        <button class="btn" id="btn-fail-map">목록</button>
+        <div class="btn-row">
+          <button class="btn big" id="btn-fail-map">목록</button>
+          <button class="btn big go" id="btn-fail-retry">다시 하기</button>
+        </div>
       </div>
     </div>
 
     <div class="modal" id="paywall" hidden>
-      <div class="card">
-        <h1>🔒 시험 모드</h1>
-        <p class="sub">시험 연습 · 실제 시험 · 한 번 구매로 평생</p>
-        <button class="btn big go" id="btn-buy" disabled>구매 (준비 중)</button>
-        <button class="btn" id="btn-paywall-close">닫기</button>
+      <div class="card paywall-card">
+        <div class="pw-cards">
+          <div class="modebtn tier-mid"><span class="tier">실전 대비</span><b>시험 연습</b><span class="stars">★★</span></div>
+          <div class="modebtn tier-boss"><span class="tier">실전</span><b>실제 시험</b><span class="stars">★★★</span></div>
+        </div>
+        <div class="pw-life">한 번 구매 · <b>평생</b></div>
+        <div class="btn-row">
+          <button class="btn big" id="btn-paywall-close">닫기</button>
+          <button class="btn big go" id="btn-buy" disabled>준비 중</button>
+        </div>
       </div>
     </div>
 
@@ -150,7 +155,7 @@
       <div class="card wide">
         <div class="stamp" id="stamp"></div>
         <h1 id="res-title"></h1>
-        <div class="cols">
+        <div class="cols" id="res-cols">
           <section>
             <h2>실격 판정</h2>
             <ul id="res-dq"></ul>
