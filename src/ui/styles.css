@@ -2858,3 +2858,256 @@ body:has(#paywall:not([hidden])) #precheck .card.start {
 #precheck .modebtn.tier-free {
   background: var(--ok);
 }
+
+/* ===== 4인 감수 (쇼핑·가오레·닌텐도·젠존제) ===== */
+/* 1. 안내 줄: 계기판 위로 */
+.guide {
+  bottom: calc(max(14px, env(safe-area-inset-bottom)) + 68px);
+}
+@media (max-height: 460px) {
+  .guide {
+    bottom: calc(max(10px, env(safe-area-inset-bottom)) + 64px);
+  }
+}
+/* 3. 주 버튼은 어디서나 먹색 + 노란 글자 */
+.btn.go,
+.btn.big.go {
+  background: var(--ink);
+  color: var(--sun);
+  border-color: var(--ink);
+  box-shadow: 0 5px 0 #000;
+}
+/* 4. 제조사 선택은 작은 알약 (위 탭과 구분) */
+.pickbtn {
+  border-radius: 999px;
+  font-size: 13px;
+  padding: 5px 2px;
+  border-width: 2px;
+}
+.pickbtn.on {
+  background: var(--ink);
+  color: var(--sun);
+}
+/* 5. 레버 이름 버튼: 처음 한 번 말풍선 */
+.lab-toggle.tip::before {
+  content: '레버 이름';
+  position: absolute;
+  right: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  white-space: nowrap;
+  font: 800 13px var(--font);
+  color: #fff;
+  background: var(--ink);
+  border-radius: 8px;
+  padding: 4px 8px;
+  animation: pop 0.3s;
+}
+/* 6·7. 결과: 사선 띠 제목 + 도장 쾅 */
+.card.res {
+  position: relative;
+  padding-top: 14px;
+  overflow: hidden;
+}
+.card.res::before {
+  content: '';
+  position: absolute;
+  left: -5%;
+  right: -5%;
+  top: -14px;
+  height: 74px;
+  transform: skewY(-3deg);
+  background: repeating-linear-gradient(-30deg, #2a1566 0 22px, #241158 22px 44px);
+}
+.card.res.tier-free::before {
+  background: repeating-linear-gradient(-30deg, #1f9a57 0 22px, #1a8a4d 22px 44px);
+}
+.card.res.tier-boss::before {
+  background: repeating-linear-gradient(-30deg, #2a0f1a 0 22px, #3a1020 22px 44px);
+}
+.card.res h1 {
+  position: relative;
+  margin: 2px 0 18px;
+  color: #fff;
+  font-size: 26px;
+  text-shadow: 0 3px 0 #0006;
+  font-style: italic;
+}
+.card.res .stamp {
+  z-index: 2;
+  top: 10px;
+  font-size: 24px;
+  border-width: 5px;
+  background: #fffdf5;
+  animation: stampSlam 0.4s 0.35s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+@keyframes stampSlam {
+  0% {
+    transform: rotate(12deg) scale(3);
+    opacity: 0;
+  }
+  100% {
+    transform: rotate(12deg) scale(1);
+    opacity: 1;
+  }
+}
+.card.res .cols {
+  margin: 8px 0 10px;
+}
+.card.res .more {
+  margin-top: 4px;
+}
+.card.res .more summary {
+  min-height: 36px;
+  padding: 6px 2px;
+}
+/* 10. 실격 없이 완주: 크게 축하 */
+#result:has(.clean)::before {
+  content: '';
+  position: absolute;
+  inset: -50%;
+  background: repeating-conic-gradient(from 0deg, #ffc23a55 0 10deg, transparent 10deg 20deg);
+  animation: rays 8s linear infinite;
+  pointer-events: none;
+}
+@keyframes rays {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.card.res.clean {
+  box-shadow: 0 8px 0 var(--ink), 0 0 0 5px var(--sun);
+}
+.card.res.clean .stamp {
+  font-size: 30px;
+}
+/* 8. 모드 고르기: 고른 카드에 사선 빛줄기 */
+#precheck .modebtn {
+  position: relative;
+  overflow: hidden;
+}
+#precheck .modebtn.on::after {
+  content: '';
+  position: absolute;
+  top: -20%;
+  bottom: -20%;
+  width: 45%;
+  left: -60%;
+  transform: skewX(-20deg);
+  background: linear-gradient(90deg, transparent, #fff9, transparent);
+  animation: sweep 0.5s ease-out both;
+  pointer-events: none;
+}
+@keyframes sweep {
+  to {
+    left: 130%;
+  }
+}
+/* 9. 횟수 오를 때 칩이 크게 튐 */
+.chip.pop {
+  animation: chipPop 0.5s;
+}
+@keyframes chipPop {
+  0% {
+    transform: scale(1);
+    background: var(--sun);
+  }
+  30% {
+    transform: scale(1.4);
+    background: var(--sun);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+/* 11~15. 결제 */
+.pw-scene {
+  position: relative;
+  display: grid;
+  place-items: center;
+  gap: 6px;
+}
+.pw-timer {
+  font: 900 44px/1 var(--font);
+  color: var(--sun);
+  background: var(--ink);
+  border: 4px solid #fff;
+  border-radius: 16px;
+  padding: 6px 16px;
+  transform: rotate(-4deg);
+  box-shadow: 0 6px 0 #000;
+}
+.pw-ico .ico {
+  width: 74px;
+  height: 74px;
+  color: #fff;
+  filter: drop-shadow(0 4px 0 #000);
+}
+.pw-dq {
+  position: absolute;
+  right: -18px;
+  bottom: 4px;
+  font: 900 22px var(--font);
+  color: var(--danger);
+  background: #fffdf5;
+  border: 4px solid currentColor;
+  border-radius: 10px;
+  padding: 2px 8px;
+  transform: rotate(14deg);
+}
+.pw-restore {
+  align-self: center;
+  font: 700 12px var(--font);
+  color: var(--ink);
+  opacity: 0.6;
+  background: none;
+  border: 0;
+  padding: 6px;
+  min-height: 32px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+#paid {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 60;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font: 900 28px var(--font);
+  color: var(--ink);
+  background: var(--ok);
+  border: 4px solid var(--ink);
+  border-radius: 999px;
+  padding: 12px 28px;
+  box-shadow: 0 6px 0 var(--ink);
+  animation: pop 0.3s;
+}
+#paid[hidden] {
+  display: none;
+}
+#paid .ico {
+  width: 30px;
+  height: 30px;
+}
+#result {
+  overflow: hidden;
+}
+.card.res {
+  overflow: hidden auto;
+}
+.card.res::before {
+  height: 60px;
+}
+.card.res h1 {
+  margin: 0 0 24px;
+}
+.lab-toggle.tip::before {
+  right: auto;
+  left: 50%;
+  top: auto;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+}

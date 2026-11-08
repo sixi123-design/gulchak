@@ -997,23 +997,23 @@ export class DigSession {
     if (this.phase === 'precheck') return '';
     if (this.phase === 'ready') return '호각! 작업을 시작합니다';
     if (this.phase === 'finished') return '작업 종료';
-    if (!this.engineOn) return '엔진 꺼짐: 시동 버튼을 누르세요';
-    if (!this.leverUnlocked) return '안전레버 잠김: 해제해야 움직입니다';
+    if (!this.engineOn) return '엔진 꺼짐: 시동 누르기';
+    if (!this.leverUnlocked) return '안전레버 잠김';
     const sc = this.m.struckCapacity;
     const tipSt = this.stationOf(toWorld(this.pose.swing, this.frame.tip))?.name ?? null;
     if (this.load >= 0.3 * sc) {
-      if (tipSt === 'C') return 'C 구덩이 위에서 버킷을 펴 쏟으세요';
-      if (!this.fullyCurled) return '버킷을 끝까지 오므리고 들어 올리세요';
-      return '붐을 올려 B 통과구역(폴 사이·줄 위)으로 선회';
+      if (tipSt === 'C') return 'C 위에서 버킷 펴 쏟기';
+      if (!this.fullyCurled) return '버킷 끝까지 오므려 들기';
+      return '붐 올려 B 폴 사이로 선회';
     }
     if (this.digCount < this.params.minDigCount)
-      return `A: ⓑ선 30cm 안쪽을 당기며 퍼 담기 (${this.digCount}/${this.params.minDigCount})`;
-    if (this.flattenVol < this.params.flattenMinVolume) return 'C 평탄: 버킷을 펴고 이빨로 앞으로 밀기';
+      return 'A: ⓑ선 안쪽 당기며 퍼 담기';
+    if (this.flattenVol < this.params.flattenMinVolume) return 'C 평탄: 버킷 펴서 밀기';
     const open = this.pose.bucket >= this.m.limits.bucket[1] - (this.params.endOpenMarginDeg * Math.PI) / 180;
     const cm = Math.round(this.groundGap() * 100);
-    if (!open) return '마무리: 버킷을 끝까지 펴세요';
-    if (!this.onFlatC()) return '마무리: 평탄한 C 흙 위에 내려놓기';
-    return `마무리: 편 버킷을 땅에 내려놓기 (${Math.max(0, cm)}cm)`;
+    if (!open) return '마무리: 버킷 끝까지 펴기';
+    if (!this.onFlatC()) return '마무리: C 평탄면에 내려놓기';
+    return `마무리: 내려놓기 ${Math.max(0, cm)}cm`;
   }
 
   /** 디버그·테스트용 */

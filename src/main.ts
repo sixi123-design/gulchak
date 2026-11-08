@@ -110,6 +110,8 @@ function renderModePicker() {
     b.onclick = () => {
       if (needPay(k)) return openPaywall(k);
       if (modeKey === k) return;
+      sound.start();
+      sound.select();
       modeKey = k;
       try {
         localStorage.setItem('exc-mode', k);
@@ -712,6 +714,13 @@ const standalone = (navigator as Navigator & { standalone?: boolean }).standalon
 if (isIOS && !standalone) $('fs-hint').hidden = false;
 function beginWork() {
   setTimeout(() => sound.whistle('start'), 300);
+  // 이름표 버튼이 뭔지 처음 한 번만 알려줌
+  if (load('exc-labtip') !== '1') {
+    save('exc-labtip', '1');
+    const lb = $('btn-labels');
+    lb.classList.add('tip');
+    setTimeout(() => lb.classList.remove('tip'), 3500);
+  }
   session.ready();
   const f = $('ready-flash');
   f.hidden = false;
@@ -807,9 +816,26 @@ $('btn-buy').onclick = () => {
     newSession();
   }
   payFor = null;
+  // 결제 완료 표시 → 바로 시작
+  sound.start();
+  sound.jingle();
+  const pd = $('paid');
+  pd.hidden = false;
+  setTimeout(() => {
+    pd.hidden = true;
+    $('btn-ready').click();
+  }, 900);
 };
+// TODO: 실제 결제 연동 시 스토어 구매 내역 조회. 지금은 테스트라 복원할 것이 없음
+$('btn-restore').onclick = (e) => {
+  const b = e.currentTarget as HTMLButtonElement;
+  b.textContent = '복원할 구매 없음';
+  setTimeout(() => (b.textContent = '구매 복원'), 1500);
+};
+$('paid-ico').innerHTML = ICON.check;
+$('pw-ico').innerHTML = ICON.mExam;
 $('fail-retry-ico').innerHTML = ICON.retry;
-$('pw-perks').innerHTML = ['4분 실전 타이머', '실격 즉시 판정', '실격 사유 리포트'].map((t) => `<li>${ICON.check}${t}</li>`).join('');
+$('pw-perks').innerHTML = ['실제처럼 4분 재기', '실격하면 바로 알려줌', '왜 떨어졌는지 정리'].map((t) => `<li>${ICON.check}${t}</li>`).join('');
 $('btn-settings2').innerHTML = ICON.gear;
 $('btn-near').innerHTML = `${ICON.pin} 가까운 곳`;
 $('btn-retry').onclick = () => newSession();
@@ -975,14 +1001,11 @@ function showResult() {
   const mode = s.flags.key;
   stamp.textContent = s.abandoned ? (mode === 'exam' ? '기권' : '종료') : dq.length ? (mode === 'exam' ? '실격' : `실격 사유 ${dq.length}`) : '실격 없음';
   stamp.hidden = mode === 'free' && !dq.length;
-  $('res-title').textContent =
-    mode === 'free'
-      ? '자유 연습 끝'
-      : s.abandoned
-        ? mode === 'exam' ? '기권 (실격)' : '중도 종료'
-        : dq.length
-          ? mode === 'exam' ? '실격' : '실전이면 실격'
-          : '실격 없이 완주!';
+  // 제목은 모드, 판정은 도장 (같은 말 두 번 안 함)
+  $('res-title').textContent = MODE_INFO[mode].label;
+  const clean = mode !== 'free' && !s.abandoned && !dq.length;
+  const card = $('result').querySelector('.card')!;
+  card.className = `card wide res ${MODE_INFO[mode].cls}${clean ? ' clean' : ''}`;
   const dqList = $('res-dq');
   dqList.innerHTML =
     (dq.length
@@ -1026,6 +1049,13 @@ function showResult() {
   more.querySelector('summary')!.textContent = items.some((x) => x[2]) ? `자세히 · 확인할 것 ${items.filter((x) => x[2]).length}` : '자세히';
   $('res-cols').classList.toggle('single', mode !== 'exam' && !dq.length && !warn.length);
   setTimeout(() => ($('result').hidden = false), 600);
+  // 도장이 쾅 찍히는 순간 (CSS 지연과 맞춤)
+  if (!stamp.hidden)
+    setTimeout(() => {
+      sound.stamp();
+      if (clean) sound.jingle();
+      if (navigator.vibrate) navigator.vibrate(40);
+    }, 600 + 350);
 }
 
 // ---------- 루프 (고정 60Hz 시뮬레이션) ----------

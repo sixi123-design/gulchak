@@ -154,17 +154,18 @@
       <div class="card pw">
         <button class="pw-x" id="btn-paywall-close" title="닫기"></button>
         <div class="pw-visual">
-          <div class="modebtn tier-mid"><b>시험 연습</b></div>
-          <div class="modebtn tier-boss"><b>실제 시험</b></div>
+          <!-- 실제 시험 장면: 4분 타이머 · 감독관 · 실격 도장 -->
+          <div class="pw-scene"><span class="pw-timer">4:00</span><span class="pw-ico" id="pw-ico"></span><span class="pw-dq">실격</span></div>
         </div>
         <div class="pw-info">
-          <span class="pw-badge">평생 이용권</span>
           <h1>시험 모드 열기</h1>
           <ul class="pw-perks" id="pw-perks"></ul>
           <button class="btn big pw-buy" id="btn-buy"></button>
+          <button class="pw-restore" id="btn-restore">구매 복원</button>
         </div>
       </div>
     </div>
+    <div id="paid" hidden><span id="paid-ico"></span>결제 완료</div>
 
     <div class="modal" id="result" hidden>
       <div class="card wide">

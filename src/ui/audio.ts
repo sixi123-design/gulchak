@@ -322,6 +322,18 @@ export class MachineSound {
     this.blip(0, 988, 0.09, 0.08);
     this.blip(0.08, 1319, 0.16, 0.08);
   }
+  /** 모드 고르기: 짧게 올라가는 틱 */
+  select() {
+    if (!this.ctx || this.muted) return;
+    this.blip(0, 660, 0.05, 0.06);
+    this.blip(0.05, 1320, 0.08, 0.05);
+  }
+  /** 결과 도장: 쿵 + 딱 */
+  stamp() {
+    if (!this.ctx || this.muted) return;
+    this.thump(1);
+    this.blip(0, 220, 0.06, 0.12, 'triangle');
+  }
   /** 미션 클리어: 올라가는 아르페지오 + 마지막 화음 */
   jingle() {
     if (!this.ctx || this.muted) return;
