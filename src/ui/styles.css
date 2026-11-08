@@ -2192,3 +2192,13 @@ body[data-mode='exam'] .console:not(:has(#btn-engine:not([hidden]))) {
 .actions {
   margin-left: auto;
 }
+/* 실제 시험: 시간도 모름. 결과는 실격 판정만 */
+body[data-mode='exam'] #timer {
+  display: none;
+}
+.cols.dq-only {
+  grid-template-columns: 1fr;
+}
+.cols.dq-only > section:last-child {
+  display: none;
+}
