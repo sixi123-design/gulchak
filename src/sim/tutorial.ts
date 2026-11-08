@@ -205,10 +205,15 @@ export const LESSONS: Lesson[] = [
         done: (s, mem) => contactTravel(s, mem, -1) >= 0.8,
       },
       {
-        text: '암 펴며 흙더미를 밀어 고르기',
+        text: '붐 올리고 암 당겨 밀 준비',
+        labels: ['붐 올림', '암 당기기'],
+        done: (s) => s.frame.tip.r <= s.site.stations[1].pitIn + 0.2,
+      },
+      {
+        text: '암·붐 동시에 살살 밀어 고르기',
         labels: ['암 펴기', '붐 내림'],
         begin: (s, mem) => ((mem.r = s.frame.tip.r), (mem.d = 0)),
-        done: (s, mem) => contactTravel(s, mem, 1) >= 0.8 && s.flattenVol >= s.params.flattenMinVolume,
+        done: (s, mem) => contactTravel(s, mem, 1) >= 1.0 && s.flattenVol >= s.params.flattenMinVolume,
       },
       {
         text: '버킷 끝까지 편 채로 흙 위에 내려놓기',

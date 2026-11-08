@@ -66,7 +66,7 @@ describe('배우기', () => {
     expect(t.cleared).toBe(true);
     expect(t.s.engine.disqualifications()).toEqual([]);
   });
-  it('평탄·마무리: 뒤집고 → 뻗고 → 끌어오고 → 밀고 → 내려놓으면 완료', () => {
+  it('평탄·마무리: 뒤집고 → 뻗고 → 끌어오고 → 밀 준비 → 밀고 → 내려놓으면 완료', () => {
     const t = new Tutor(lesson('flatten'), mk(true));
     expect(drive(t, () => ({ rx: 1 }), 400)).toBe(true);
     expect(t.s.flags.autoEnd).toBe(false);
@@ -77,6 +77,7 @@ describe('배우기', () => {
       return g > 0.05 ? { ry: 0.5, ly: 0.3 * dir } : g < -0.08 ? { ly: dir, ry: -0.6 } : { ly: dir };
     };
     expect(drive(t, skim(-1), 900)).toBe(true);
+    expect(drive(t, () => ({ ry: -0.6, ly: -1 }), 900)).toBe(true);
     expect(drive(t, skim(1), 900)).toBe(true);
     expect(t.s.flags.autoEnd).toBe(true);
     const open = (s: DigSession) => s.pose.bucket < s.m.limits.bucket[1] - 0.02;
