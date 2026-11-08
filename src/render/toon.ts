@@ -7,9 +7,9 @@ export const PALETTE = {
   steel: 0x3a3850,
   glass: 0x8fe3ff,
   tire: 0x2b2a3a,
-  dirt: 0xb3804c, // 퍼낸 흙 (모래 섞인 황토)
+  dirt: 0x3d322b, // 흙: 시험장은 거의 검은 흙
   yard: 0xbfbdb6, // 포장 바닥 (콘크리트)
-  sand: 0xd8bd8c, // 굴착장 다진 흙
+  sand: 0x5b4d42, // 굴착장 다진 흙 (어두운)
   rust: 0x6b4a36, // 버킷 몸체
   rustDark: 0x3b2f2a,
   metal: 0xc8c2b8,

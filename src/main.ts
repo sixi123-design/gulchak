@@ -807,7 +807,9 @@ function showResult() {
   dqList.innerHTML =
     (dq.length
       ? dq.map((d) => `<li class="dq"><b>${d.basis} ${d.title}</b>${d.count > 1 ? `<small>${d.count}회</small>` : ''}</li>`).join('')
-      : '<li class="ok"><b>실격 항목 없음</b></li>') +
+      : s.abandoned && mode === 'exam'
+        ? '<li class="dq"><b>기권</b></li>'
+        : '<li class="ok"><b>실격 항목 없음</b></li>') +
     (warn.length ? `<li><b>주의</b><small>${warn.map((w) => `${w.title} ${w.count}`).join(' · ')}</small></li>` : '') ;
   const pct = (v: number) => `${Math.round(v * 100)}%`;
   const avg = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
@@ -829,8 +831,11 @@ function showResult() {
     ['이빨로 밀어 평탄', r.flattenOpenRatio > 0 || fl ? pct(r.flattenOpenRatio) : '-', !!fl && r.flattenOpenRatio < 0.5],
     ['충격 · 덜컹', `${r.impacts} · ${r.jolts}회`, r.impacts + r.jolts > 0],
   ];
-  $('res-metrics').innerHTML = items.map(([k, v, bad]) => `<li class="row${bad ? ' bad' : ''}"><span>${k}</span><b>${v}</b></li>`).join('');
-  $('res-cols').classList.toggle('single', !dq.length && !warn.length);
+  // 실제 시험: 실제처럼 흙량·위치 같은 연습 지표는 알려주지 않음 (시간만)
+  const shown = mode === 'exam' ? items.slice(0, 1) : items;
+  $('res-metrics-h').textContent = mode === 'exam' ? '기록' : '연습 지표';
+  $('res-metrics').innerHTML = shown.map(([k, v, bad]) => `<li class="row${bad ? ' bad' : ''}"><span>${k}</span><b>${v}</b></li>`).join('');
+  $('res-cols').classList.toggle('single', mode !== 'exam' && !dq.length && !warn.length);
   setTimeout(() => ($('result').hidden = false), 600);
 }
 

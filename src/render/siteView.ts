@@ -263,7 +263,7 @@ export class SoilView {
   readonly meshes: THREE.Mesh[] = [];
   private base = new THREE.Color(PALETTE.dirt);
   private ground = new THREE.Color(PALETTE.sand);
-  private dark = new THREE.Color(0x7d5a35);
+  private dark = new THREE.Color(0x1f1915);
   private tmp = new THREE.Color();
   constructor(private grids: SoilGrid[]) {
     for (const g of grids) {
@@ -351,9 +351,10 @@ export class FxView {
     this.particles.count = 0;
     this.particles.frustumCulled = false;
     // 흙 덩어리 색: 마른 황토 / 젖은 짙은 흙 / 모래빛 섞기
-    const tones = [new THREE.Color(PALETTE.dirt), new THREE.Color(0x8a5f37), new THREE.Color(0xc9a06a)];
+    const tones = [new THREE.Color(PALETTE.dirt), new THREE.Color(0x2a221d), new THREE.Color(0x52443a)];
     for (let i = 0; i < MAX_P * CLUMPS; i++) this.particles.setColorAt(i, tones[Math.floor(hash(i * 3.1) * 3)]);
-    const dustMat = new THREE.MeshBasicMaterial({ color: 0xd8bf96, transparent: true, opacity: 0.4, depthWrite: false });
+    // 젖은 흙: 먼지 대신 어두운 흙 튐이 살짝
+    const dustMat = new THREE.MeshBasicMaterial({ color: 0x3a2f28, transparent: true, opacity: 0.25, depthWrite: false });
     this.dust = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.5, 0), dustMat, MAX_DUST);
     this.dust.count = 0;
     this.dust.frustumCulled = false;
