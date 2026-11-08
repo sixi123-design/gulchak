@@ -82,10 +82,10 @@ try {
 } catch {
   /* 저장소 사용 불가 */
 }
-const MODE_INFO: Record<ModeKey, { label: string }> = {
-  free: { label: '자유 연습' },
-  practice: { label: '시험 연습' },
-  exam: { label: '실제 시험' },
+const MODE_INFO: Record<ModeKey, { label: string; tier: string; cls: string; stars: string; start: string }> = {
+  free: { label: '자유 연습', tier: '연습장', cls: 'tier-free', stars: '★', start: '시작' },
+  practice: { label: '시험 연습', tier: '중간 보스', cls: 'tier-mid', stars: '★★', start: '도전' },
+  exam: { label: '실제 시험', tier: '최종 보스', cls: 'tier-boss', stars: '★★★', start: '도전!' },
 };
 function renderModePicker() {
   const box = $('mode-pick');
@@ -93,8 +93,9 @@ function renderModePicker() {
   for (const k of ['free', 'practice', 'exam'] as const) {
     const b = document.createElement('button');
     const locked = isLocked(k);
-    b.className = 'modebtn' + (k === modeKey ? ' on' : '') + (locked ? ' locked' : '');
-    b.innerHTML = `<b>${locked ? '🔒 ' : ''}${MODE_INFO[k].label}</b>`;
+    const mi = MODE_INFO[k];
+    b.className = `modebtn ${mi.cls}` + (k === modeKey ? ' on' : '') + (locked ? ' locked' : '');
+    b.innerHTML = `${locked ? '<span class="lock">🔒</span>' : ''}<span class="tier">${mi.tier}</span><b>${mi.label}</b><span class="stars">${mi.stars}</span>`;
     b.onclick = () => {
       if (locked) {
         $('paywall').hidden = false;
@@ -111,6 +112,9 @@ function renderModePicker() {
     };
     box.appendChild(b);
   }
+  const rb = $('btn-ready');
+  rb.textContent = MODE_INFO[modeKey].start;
+  rb.className = 'btn big go' + (modeKey === 'practice' ? ' mid' : modeKey === 'exam' ? ' boss' : '');
 }
 
 // ---------- 설정: 소리 · 굴착기 · 좌석 높이 ----------
@@ -454,15 +458,36 @@ const standalone = (navigator as Navigator & { standalone?: boolean }).standalon
 if (isIOS && !standalone) $('fs-hint').hidden = false;
 if (matchMedia('(pointer: coarse)').matches) $('pc-hint').hidden = true;
 if (!document.documentElement.requestFullscreen) $('btn-fs').hidden = true;
-$('btn-ready').onclick = () => {
-  if (matchMedia('(pointer: coarse)').matches) goFullscreen();
-  sound.start(); // 휴대폰은 화면을 누른 순간에만 소리를 켤 수 있음
+function beginWork() {
   setTimeout(() => sound.whistle('start'), 300);
   session.ready();
-  $('precheck').hidden = true;
   const f = $('ready-flash');
   f.hidden = false;
   setTimeout(() => (f.hidden = true), 1100);
+}
+$('btn-ready').onclick = () => {
+  if (matchMedia('(pointer: coarse)').matches) goFullscreen();
+  sound.start(); // 휴대폰은 화면을 누른 순간에만 소리를 켤 수 있음
+  $('precheck').hidden = true;
+  const k = session.flags.key;
+  if (k === 'free') return beginWork();
+  // 보스 등장: 중간 보스(시험 연습) / 최종 보스(실제 시험)
+  const boss = k === 'exam';
+  const bi = $('boss-intro');
+  bi.className = boss ? 'boss' : 'mid';
+  $('bi-tag').textContent = MODE_INFO[k].tier;
+  $('bi-title').textContent = MODE_INFO[k].label;
+  $('bi-sub').textContent = boss ? '4:00 · 실격하면 끝' : '4:00';
+  // 애니메이션을 처음부터 다시 재생
+  bi.hidden = true;
+  void bi.offsetWidth;
+  bi.hidden = false;
+  sound.bossIntro(boss);
+  if (boss && navigator.vibrate) navigator.vibrate([60, 120, 200]);
+  setTimeout(() => {
+    bi.hidden = true;
+    beginWork();
+  }, boss ? 2400 : 1600);
 };
 $('btn-engine').onclick = () => session.restartEngine();
 $('btn-end').onclick = () => session.abandon();

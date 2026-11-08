@@ -220,6 +220,61 @@ export class MachineSound {
     o.stop(t + 0.3);
   }
 
+  /** 보스 등장: 북 소리 + 상승음. 최종 보스는 낮은 울림과 더 무거운 타격 */
+  bossIntro(boss: boolean) {
+    const ctx = this.ctx;
+    if (!ctx || this.muted) return;
+    const t0 = ctx.currentTime;
+    const hit = (at: number, f: number, v: number, len: number) => {
+      const o = ctx.createOscillator();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(f, t0 + at);
+      o.frequency.exponentialRampToValueAtTime(f * 0.4, t0 + at + len);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t0 + at);
+      g.gain.exponentialRampToValueAtTime(v, t0 + at + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + at + len);
+      o.connect(g).connect(this.sfx);
+      o.start(t0 + at);
+      o.stop(t0 + at + len + 0.05);
+    };
+    if (boss) {
+      // 낮은 울림이 차오르다가 쾅, 쾅
+      const r = ctx.createOscillator();
+      r.type = 'sawtooth';
+      r.frequency.setValueAtTime(38, t0);
+      r.frequency.linearRampToValueAtTime(55, t0 + 1.4);
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 180;
+      const rg = ctx.createGain();
+      rg.gain.setValueAtTime(0.0001, t0);
+      rg.gain.exponentialRampToValueAtTime(0.35, t0 + 0.5);
+      rg.gain.exponentialRampToValueAtTime(0.0001, t0 + 2.2);
+      r.connect(lp).connect(rg).connect(this.sfx);
+      r.start(t0);
+      r.stop(t0 + 2.3);
+      hit(0.5, 110, 0.6, 0.6);
+      hit(1.0, 95, 0.7, 0.8);
+      hit(1.0, 190, 0.25, 0.3);
+    } else {
+      hit(0.25, 140, 0.45, 0.35);
+      hit(0.45, 140, 0.35, 0.3);
+      // 짧게 올라가는 음
+      const o = ctx.createOscillator();
+      o.type = 'square';
+      o.frequency.setValueAtTime(330, t0 + 0.6);
+      o.frequency.exponentialRampToValueAtTime(880, t0 + 0.95);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t0 + 0.6);
+      g.gain.exponentialRampToValueAtTime(0.06, t0 + 0.65);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 1.0);
+      o.connect(g).connect(this.sfx);
+      o.start(t0 + 0.6);
+      o.stop(t0 + 1.05);
+    }
+  }
+
   /** 호각: 시작은 길게 한 번, 실격은 짧게 두 번 */
   whistle(kind: 'start' | 'fail') {
     const ctx = this.ctx;
