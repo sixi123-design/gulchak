@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { MACHINE } from './config/machine';
 import rulesJson from './config/rules.json';
-import { PRACTICE, type Violation } from './core/ruleEngine';
+import { MODES, type ModeKey, type Violation } from './core/ruleEngine';
 import { ExcavatorView, MACHINE_STYLES, type MachineStyleKey } from './render/excavatorView';
 import { FxView, SiteView, SoilView } from './render/siteView';
 import { DigSession, type DigEntry, type RulesFile } from './sim/session';
@@ -72,6 +72,40 @@ try {
 } catch {
   /* 저장소 사용 불가 */
 }
+// 모드: 자유 연습 / 시험 연습 / 실제 시험 — 선택은 기억
+let modeKey: ModeKey = 'practice';
+try {
+  const v = localStorage.getItem('exc-mode');
+  if (v === 'free' || v === 'practice' || v === 'exam') modeKey = v;
+} catch {
+  /* 저장소 사용 불가 */
+}
+const MODE_INFO: Record<ModeKey, { label: string; desc: string }> = {
+  free: { label: '자유 연습', desc: '시간·순서 없이' },
+  practice: { label: '시험 연습', desc: '안내 받으며 실전 순서' },
+  exam: { label: '실제 시험', desc: '안내 없음 · 실격 즉시 종료' },
+};
+function renderModePicker() {
+  const box = $('mode-pick');
+  box.innerHTML = '';
+  for (const k of ['free', 'practice', 'exam'] as const) {
+    const b = document.createElement('button');
+    b.className = 'modebtn' + (k === modeKey ? ' on' : '');
+    b.innerHTML = `<b>${MODE_INFO[k].label}</b><small>${MODE_INFO[k].desc}</small>`;
+    b.onclick = () => {
+      if (modeKey === k) return;
+      modeKey = k;
+      try {
+        localStorage.setItem('exc-mode', k);
+      } catch {
+        /* 무시 */
+      }
+      newSession();
+    };
+    box.appendChild(b);
+  }
+}
+
 function renderStylePicker() {
   const box = $('style-pick');
   box.innerHTML = '';
@@ -108,12 +142,12 @@ function newSession() {
   disposeTree(world);
   world = new THREE.Group();
   scene.add(world);
-  session = new DigSession(MACHINE, RULES, PRACTICE);
+  session = new DigSession(MACHINE, RULES, MODES[modeKey]);
   exc = new ExcavatorView(MACHINE, styleKey);
   soilView = new SoilView(session.soil.grids);
   fx = new FxView();
   siteView = new SiteView(session.site, session.soil.grids);
-  if (session.flags.guide) siteView.addDigGuide(session.site, session.digTarget.rho, MACHINE.bucketWidth, session.params.digPosTolGood);
+  if (session.flags.feedback) siteView.addDigGuide(session.site, session.digTarget.rho, MACHINE.bucketWidth, session.params.digPosTolGood);
   world.add(siteView.group, exc.root, ...soilView.meshes, fx.particles, fx.dust, fx.bucketShadow, fx.machineShadow);
   session.onViolation(showToast);
   session.onFinish(showResult);
@@ -126,6 +160,7 @@ function newSession() {
   syncPrecheck();
   $('precheck').hidden = false;
   renderStylePicker();
+  renderModePicker();
   $('result').hidden = true;
   $('toasts').innerHTML = '';
   (window as unknown as { __exc: unknown }).__exc = { session, camera, exc, sound, ik: (r: number, y: number, k: number) => ik(MACHINE, r, y, k), setCam: (m: CamMode) => (camMode = m) };
@@ -274,6 +309,7 @@ muteBtn.onclick = () => {
 function showToast(v: Violation) {
   if (v.kind === 'disqualify') sound.whistle('fail');
   if (v.id === 'W-JOLT' || v.id === 'W-IMPACT') sound.thump(0.8);
+  if (v.kind === 'warning' && !session.flags.feedback) return; // 실제 시험: 경고 알림 없음
   const el = document.createElement('div');
   const dq = v.kind === 'disqualify';
   el.className = 'toast' + (dq ? '' : ' warn');
@@ -293,7 +329,7 @@ function showToast(v: Violation) {
 
 /** 첫 삽 위치 피드백: 목표(ⓑ선 안쪽 30cm, 중심) 대비 앞뒤·좌우 */
 function showEntry(e: DigEntry) {
-  if (!session.flags.guide) return;
+  if (!session.flags.feedback) return;
   const cm = (v: number) => Math.round(Math.abs(v) * 100);
   const fb = Math.abs(e.dr) < 0.02 ? '앞뒤 정확' : e.dr > 0 ? `ⓑ선 쪽 ${cm(e.dr)}cm` : `장비 쪽 ${cm(e.dr)}cm`;
   const lr = Math.abs(e.dl) < 0.02 ? '좌우 정확' : `${e.dl > 0 ? 'B 쪽' : 'B 반대쪽'} ${cm(e.dl)}cm`;
@@ -310,20 +346,27 @@ function showEntry(e: DigEntry) {
 let lastDig = -1;
 function updateHud() {
   const s = session;
-  const remain = s.params.digTimeLimitSec - s.t;
   const tm = $('timer');
-  const a = Math.abs(Math.ceil(remain));
-  tm.textContent = `${remain < 0 ? '+' : ''}${Math.floor(a / 60)}:${String(a % 60).padStart(2, '0')}`;
-  tm.className = 'timer' + (remain < 0 ? ' over' : remain < 30 ? ' warn' : '');
+  if (s.flags.timeLimit) {
+    const remain = s.params.digTimeLimitSec - s.t;
+    const a = Math.abs(Math.ceil(remain));
+    tm.textContent = `${remain < 0 ? '+' : ''}${Math.floor(a / 60)}:${String(a % 60).padStart(2, '0')}`;
+    tm.className = 'timer' + (remain < 0 ? ' over' : remain < 30 ? ' warn' : '');
+  } else {
+    // 자유 연습: 경과 시간
+    const a = Math.floor(s.t);
+    tm.textContent = `${Math.floor(a / 60)}:${String(a % 60).padStart(2, '0')}`;
+    tm.className = 'timer';
+  }
   $('dig').textContent = `${s.digCount}/${s.params.minDigCount}`;
   $('chip-dig').classList.toggle('done', s.digCount >= s.params.minDigCount);
   if (s.digCount !== lastDig) {
-    if (lastDig >= 0 && s.flags.guide && s.packRatios.length) {
+    if (lastDig >= 0 && s.flags.feedback && s.packRatios.length) {
       // 끝까지 담겼는지 알려줌
       const pr = s.packRatios[s.packRatios.length - 1];
       const el = document.createElement('div');
       el.className = 'toast entry ' + (pr >= 0.6 ? 'good' : pr >= 0.4 ? 'ok' : 'bad');
-      el.innerHTML = pr >= 0.6 ? `<b>끝까지 담김 ${Math.round(pr * 100)}% 👍</b>오므려 안쪽까지 밀어 넣었어요` : `<b>앞쪽에만 담김 (안쪽 ${Math.round(pr * 100)}%)</b>당기면서 버킷을 오므려 끝까지 밀어 넣으세요`;
+      el.innerHTML = pr >= 0.6 ? `<b>끝까지 담김 ${Math.round(pr * 100)}% 👍</b>` : `<b>앞쪽에만 담김 (안쪽 ${Math.round(pr * 100)}%)</b>당기며 오므려 안쪽까지 밀어 넣기`;
       $('toasts').prepend(el);
       setTimeout(() => el.remove(), 3500);
     }
@@ -336,7 +379,9 @@ function updateHud() {
   }
   $('dump').textContent = String(s.dumpCount);
   $('loadbar').style.width = `${Math.min(100, (s.load / s.heapedCap) * 100)}%`;
-  $('guide').textContent = s.flags.guide ? s.guide() : '';
+  const gd = $('guide');
+  gd.textContent = s.flags.guide ? s.guide() : '';
+  gd.hidden = !s.flags.guide;
   const lv = $('btn-lever');
   lv.textContent = s.leverUnlocked ? '안전레버 해제됨' : '안전레버 잠김';
   lv.classList.toggle('on', s.leverUnlocked);
@@ -347,7 +392,7 @@ function updateHud() {
   lb.parentElement!.classList.toggle('hot', s.engineLoad > 1);
   const ring = $('endring');
   const p = s.endProgress;
-  ring.style.opacity = p > 0 ? '1' : '0';
+  ring.style.opacity = p > 0 && s.flags.feedback ? '1' : '0';
   ring.style.borderColor = `rgba(47,210,122,${0.3 + p * 0.7})`;
   ring.style.transform = `scale(${1 + p * 0.3})`;
 }
@@ -360,8 +405,17 @@ function showResult() {
   const warn = sum.filter((x) => x.kind === 'warning');
   const stamp = $('stamp');
   stamp.className = 'stamp ' + (dq.length || s.abandoned ? 'fail' : 'pass');
-  stamp.textContent = s.abandoned ? '중도 종료' : dq.length ? `실격 사유 ${dq.length}` : '실격 없음';
-  $('res-title').textContent = s.abandoned ? '중도 종료' : dq.length ? '실전이면 실격' : '실격 없이 완주!';
+  const mode = s.flags.key;
+  stamp.textContent = s.abandoned ? (mode === 'exam' ? '기권' : '종료') : dq.length ? (mode === 'exam' ? '실격' : `실격 사유 ${dq.length}`) : '실격 없음';
+  stamp.hidden = mode === 'free' && !dq.length;
+  $('res-title').textContent =
+    mode === 'free'
+      ? '자유 연습 끝'
+      : s.abandoned
+        ? mode === 'exam' ? '기권 (실격)' : '중도 종료'
+        : dq.length
+          ? mode === 'exam' ? '실격' : '실전이면 실격'
+          : '실격 없이 완주!';
   const dqList = $('res-dq');
   const pre = r.precheck;
   const missed = [!pre.belt && '벨트', !pre.lever && '안전레버', !pre.rpm && 'RPM'].filter(Boolean);
@@ -374,7 +428,7 @@ function showResult() {
   const pct = (v: number) => `${Math.round(v * 100)}%`;
   const avg = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
   const cmOf = (v: number) => `${Math.round(v * 100)}cm`;
-  const fl = r.flatness;
+  const fl = r.flattenVol > 0 ? r.flatness : null; // 평탄작업을 안 했으면 표시 안 함
   const load = avg(r.loadRatios);
   const dr = avg(r.entries.map((e) => Math.abs(e.dr)));
   const dl = avg(r.entries.map((e) => Math.abs(e.dl)));

@@ -526,12 +526,12 @@ export class DigSession {
         }
       } else this.stallT = Math.max(0, this.stallT - dt);
       // 시간
-      if (!this.timeReported && this.t > this.params.digTimeLimitSec) {
+      if (this.flags.timeLimit && !this.timeReported && this.t > this.params.digTimeLimitSec) {
         this.timeReported = true;
         this.report('D-TIME', '4분 초과');
       }
       this.trackCycles();
-      this.checkEnd(dt);
+      if (this.flags.autoEnd) this.checkEnd(dt);
     }
     this.simMs = typeof performance !== 'undefined' ? performance.now() - t0 : 0;
   }

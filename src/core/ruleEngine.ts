@@ -7,17 +7,29 @@ export interface RuleDef {
   title: string;
 }
 
+export type ModeKey = 'free' | 'practice' | 'exam';
+
 export interface ModeFlags {
-  /** 실격 시 즉시 종료 (시험모드) */
+  key: ModeKey;
+  /** 실격 시 즉시 종료 (실제 시험) */
   failEnds: boolean;
-  /** 제한시간 강제 */
-  timerEnforced: boolean;
-  /** 단계 안내 표시 */
+  /** 4분 제한 판정 (D-TIME) */
+  timeLimit: boolean;
+  /** 버킷을 펴서 내려놓으면 종료 + 횟수·평탄 판정 */
+  autoEnd: boolean;
+  /** 단계 안내 문구 */
   guide: boolean;
+  /** 경고 알림·굴착 위치 피드백·바닥 목표선 */
+  feedback: boolean;
 }
 
-export const PRACTICE: ModeFlags = { failEnds: false, timerEnforced: false, guide: true };
-export const EXAM: ModeFlags = { failEnds: true, timerEnforced: true, guide: false };
+/** 자유 연습: 시간·순서 없이 마음대로. 경고와 피드백만 */
+export const FREE: ModeFlags = { key: 'free', failEnds: false, timeLimit: false, autoEnd: false, guide: false, feedback: true };
+/** 시험 연습: 시험 순서대로, 안내·피드백을 받으며. 실격돼도 계속 */
+export const PRACTICE: ModeFlags = { key: 'practice', failEnds: false, timeLimit: true, autoEnd: true, guide: true, feedback: true };
+/** 실제 시험: 안내 없음, 실격이면 그 자리에서 종료 */
+export const EXAM: ModeFlags = { key: 'exam', failEnds: true, timeLimit: true, autoEnd: true, guide: false, feedback: false };
+export const MODES: Record<ModeKey, ModeFlags> = { free: FREE, practice: PRACTICE, exam: EXAM };
 
 export interface Violation {
   id: string;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MACHINE } from '../src/config/machine';
 import rules from '../src/config/rules.json';
-import { PRACTICE, EXAM, RuleEngine } from '../src/core/ruleEngine';
+import { PRACTICE, EXAM, FREE, RuleEngine } from '../src/core/ruleEngine';
 import { betaOf, fk, groundReach, ik } from '../src/sim/kinematics';
 import { passHits } from '../src/sim/judge';
 import { DigSession, type RulesFile } from '../src/sim/session';
@@ -306,5 +306,47 @@ describe('굴착 세션', () => {
   it('fk: 시작 자세에서 버킷이 흙을 담는 방향', () => {
     const s = startedSession();
     expect(fk(MACHINE, s.pose).nOpen.y).toBeGreaterThan(0);
+  });
+});
+
+describe('모드', () => {
+  const mk = (flags: typeof FREE) => {
+    const s = new DigSession(MACHINE, rules as unknown as RulesFile, flags, () => 0.5);
+    s.belt = true;
+    s.leverUnlocked = true;
+    s.rpm = 0.8;
+    s.ready();
+    for (let i = 0; i < 100; i++) s.step();
+    return s;
+  };
+  it('실제 시험: 실격이면 그 자리에서 종료', () => {
+    const s = mk(EXAM);
+    s.t = s.params.digTimeLimitSec + 0.1;
+    s.step();
+    expect(s.phase).toBe('finished');
+    expect(s.engine.disqualifications().map((v) => v.id)).toEqual(['D-TIME']);
+  });
+  it('시험 연습: 4분 넘으면 실격 기록만 하고 계속', () => {
+    const s = mk(PRACTICE);
+    s.t = s.params.digTimeLimitSec + 0.1;
+    s.step();
+    expect(s.phase).toBe('working');
+    expect(s.engine.disqualifications().map((v) => v.id)).toEqual(['D-TIME']);
+  });
+  it('자유 연습: 시간 제한 없고, 버킷을 내려놓아도 끝나지 않음', () => {
+    const s = mk(FREE);
+    s.t = s.params.digTimeLimitSec + 60;
+    s.digCount = 4;
+    s.flattenVol = 1;
+    s.setPose({ swing: 2.6, boom: 0.3, arm: -1.6, bucket: MACHINE.limits.bucket[1] });
+    for (let i = 0; i < 600; i++) {
+      s.input = { lx: 0, ly: 0, rx: 0, ry: i < 300 ? 1 : 0 };
+      s.step();
+    }
+    expect(s.groundGap()).toBeLessThan(0.06); // 땅에 내려놓은 상태
+    expect(s.phase).toBe('working');
+    expect(s.engine.violations.filter((v) => v.id === 'D-TIME')).toEqual([]);
+    s.abandon();
+    expect(s.phase).toBe('finished');
   });
 });

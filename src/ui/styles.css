@@ -477,6 +477,34 @@ input[type='range'] {
   font-weight: 600;
   opacity: 0.6;
 }
+.mode-pick {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin: 8px 0 4px;
+}
+.modebtn {
+  font: 800 15px var(--font);
+  color: var(--ink);
+  background: #fff;
+  border: 3px solid var(--ink);
+  border-radius: 12px;
+  padding: 6px 4px;
+  box-shadow: 0 3px 0 var(--ink);
+  cursor: pointer;
+  display: grid;
+  gap: 1px;
+}
+.modebtn small {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.65;
+}
+.modebtn.on {
+  background: var(--sun);
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--ink);
+}
 .style-pick {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
