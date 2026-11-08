@@ -415,7 +415,7 @@ function frame(now: number) {
   kb.rx = ramp(kb.rx, keys.rx);
   kb.ry = ramp(kb.ry, keys.ry);
   session.input = {
-    lx: curve(clamp1(left.x + kb.lx)),
+    lx: curveSwing(clamp1(left.x + kb.lx)),
     ly: curve(clamp1(left.y + kb.ly)),
     rx: curve(clamp1(right.x + kb.rx)),
     ry: curve(clamp1(right.y + kb.ry)),
@@ -453,6 +453,8 @@ function frame(now: number) {
 const clamp1 = (v: number) => Math.max(-1, Math.min(1, v));
 /** 레버 감도 곡선: 조금 기울이면 아주 천천히 (미세 조작) */
 const curve = (v: number) => Math.sign(v) * Math.abs(v) ** 2.2;
+// 선회는 조금 밀면 아주 천천히(미세 조정), 끝까지 밀어야 최고 속도
+const curveSwing = (v: number) => Math.sign(v) * Math.abs(v) ** 3;
 const kb = { lx: 0, ly: 0, rx: 0, ry: 0 };
 let lastBuzz = 0;
 

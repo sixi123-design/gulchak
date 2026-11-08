@@ -100,6 +100,8 @@
     "reposeDeg": 35,
     "hydTauUp": 0.25,
     "hydTauDown": 0.09,
+    "swingTauUp": 0.4,
+    "swingTauDown": 0.09,
     "joltSafeDecel": 3.5,
     "joltWarn": 0.1,
     "joltSpill": 0.18,

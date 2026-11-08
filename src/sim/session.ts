@@ -27,6 +27,9 @@ export interface RuleParams {
   /** 유압 응답: 가속 시간상수(s), 정지 시간상수(s) */
   hydTauUp: number;
   hydTauDown: number;
+  /** 선회: 상부 차체가 무거워 천천히 붙고 천천히 멈춤 */
+  swingTauUp: number;
+  swingTauDown: number;
   /** 이 감속도(최대속도의 배수/s)를 넘으면 충격 */
   joltSafeDecel: number;
   /** 경고를 띄우는 충격량 */
@@ -380,7 +383,10 @@ export class DigSession {
       // 유압 응답: 레버를 밀면 천천히 붙고, 놓으면 밸브가 빨리 닫혀 급정지
       const v0 = this.vel[j];
       const speeding = Math.abs(tgt[j]) > Math.abs(v0) && (v0 === 0 || Math.sign(tgt[j]) === Math.sign(v0));
-      const tau = speeding ? this.params.hydTauUp : this.params.hydTauDown;
+      const tau =
+        j === 'swing'
+          ? speeding ? this.params.swingTauUp : this.params.swingTauDown
+          : speeding ? this.params.hydTauUp : this.params.hydTauDown;
       this.vel[j] += (tgt[j] - v0) * Math.min(1, dt / tau);
       // 급감속 충격
       const vmax = sp[j] * rf;
