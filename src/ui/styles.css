@@ -2178,7 +2178,7 @@ body.labels-off .stick .lab:not(.hint) {
 }
 /* ---------- 모드별 화면 ----------
  배우기: 미션이 진행을 대신 → 굴착·덤프 수 숨김
- 실제 시험: 실제 장비처럼 → 굴착·덤프 수, 흙량, 부하, 시점 숨김 (운전석 고정) */
+ 실제 시험: 실제 장비처럼 → 굴착·덤프 수, 흙량, 시점 숨김 (운전석 고정) */
 body[data-mode='tutorial'] #chip-dig,
 body[data-mode='tutorial'] #chip-dump,
 body[data-mode='exam'] .chips,

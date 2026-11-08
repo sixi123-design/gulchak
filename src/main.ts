@@ -5,6 +5,7 @@ import sitesJson from './config/sites.json';
 import { MODES, type ModeKey, type Violation } from './core/ruleEngine';
 import { isLocked } from './core/entitlement';
 import { ExcavatorView, type MachineStyleKey } from './render/excavatorView';
+import { SmokeView } from './render/smokeView';
 import { FxView, SiteView, SoilView } from './render/siteView';
 import { DigSession, type DigEntry, type RulesFile } from './sim/session';
 import { LESSONS, Tutor } from './sim/tutorial';
@@ -42,6 +43,9 @@ let exc: ExcavatorView;
 let soilView: SoilView;
 let siteView: SiteView;
 let fx: FxView;
+let smoke: SmokeView;
+const smokeTip = new THREE.Vector3();
+const WIND = new THREE.Vector3(0.35, 0, 0.15);
 let world = new THREE.Group();
 scene.add(world);
 
@@ -385,7 +389,8 @@ function newSession(autoEnd?: boolean) {
   fx = new FxView();
   siteView = new SiteView(session.site, session.soil.grids);
   if (session.flags.feedback) siteView.addDigGuide(session.site, session.digTarget.rho, MACHINE.bucketWidth, session.params.digPosTolGood);
-  world.add(siteView.group, exc.root, ...soilView.meshes, fx.particles, fx.dust, fx.bucketShadow, fx.machineShadow);
+  smoke = new SmokeView(); // world를 버릴 때 함께 정리되므로 판마다 새로
+  world.add(siteView.group, exc.root, ...soilView.meshes, fx.particles, fx.dust, fx.bucketShadow, fx.machineShadow, smoke.mesh);
   // 실제 시험: 감독관 3명 (A쪽 · B 통과구역 뒤 · C쪽 = 시간 담당)
   examiners = null;
   cine = null;
@@ -485,6 +490,16 @@ function updateCamera(dt: number) {
   // 충격 시 카메라 떨림 (운전석 시점은 더 크게)
   const j = Math.min(0.6, s.lastJolt) * (camMode === 'cab' ? 0.25 : 0.4);
   if (j > 0.005) camera.position.add(new THREE.Vector3((Math.random() - 0.5) * j, (Math.random() - 0.5) * j, (Math.random() - 0.5) * j));
+  // 부하 떨림: 엔진이 힘들수록 차체가 부르르 (운전석에서 크게 느껴짐)
+  if (s.engineOn && s.phase === 'working') {
+    const over = Math.max(0, s.engineLoad - 0.5);
+    const a = Math.min(0.045, over * over * 0.03) * (camMode === 'cab' ? 1 : 0.5);
+    if (a > 0.001) {
+      const tt = performance.now() / 1000;
+      camera.position.y += Math.sin(tt * 71) * a;
+      camera.position.x += Math.sin(tt * 53 + 1.3) * a * 0.6;
+    }
+  }
   camera.lookAt(camLook);
 }
 
@@ -842,10 +857,6 @@ function updateHud() {
   gd.textContent = s.flags.guide ? s.guide() : '';
   gd.hidden = !gd.textContent;
   $('btn-engine').hidden = s.engineOn;
-  // 엔진 부하: 눈금(2/3) = 엔진 힘의 100%
-  const lb = $('loadbar2');
-  lb.style.width = `${Math.min(100, (s.engineLoad / 1.5) * 100)}%`;
-  lb.parentElement!.classList.toggle('hot', s.engineLoad > 1);
   const ring = $('endring');
   const p = s.endProgress;
   ring.style.opacity = p > 0 && s.flags.feedback ? '1' : '0';
@@ -1002,6 +1013,8 @@ function frame(now: number) {
   exc.sync(session);
   soilView.sync();
   fx.sync(session);
+  exc.root.updateMatrixWorld(true);
+  smoke.update(dt, exc.exhaustWorld(smokeTip), session.engineLoad, session.engineOn && session.phase !== 'precheck', WIND);
   sound.update(session);
   if (tutor && tutor.update()) {
     if (tutor.cleared) onLessonClear();
