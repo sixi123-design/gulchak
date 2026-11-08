@@ -150,15 +150,17 @@ body {
   background: var(--ink);
 }
 .timer {
-  font: 900 34px/1 var(--font);
+  /* 위쪽 가운데는 버킷이 보이는 자리라 오른쪽 위 버튼 줄에 둔다 */
+  font: 900 24px/1 var(--font);
   background: var(--paper);
   border: var(--stroke) solid var(--ink);
   border-radius: 16px;
   padding: 4px 14px;
   box-shadow: var(--press);
   font-variant-numeric: tabular-nums;
-  min-width: 108px;
+  min-width: 84px;
   text-align: center;
+  align-self: center;
 }
 .timer.warn {
   background: var(--sun);
@@ -699,8 +701,8 @@ input[type='range'] {
     grid-template-columns: 1fr;
   }
   .timer {
-    font-size: 26px;
-    min-width: 84px;
+    font-size: 20px;
+    min-width: 70px;
   }
   .chips {
     max-width: 34%;

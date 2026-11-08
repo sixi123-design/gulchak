@@ -35,7 +35,7 @@ export const MACHINE: MachineSpec = {
   bucketLength: 1.0,
   struckCapacity: 0.45,
   heapedFactor: 1.3,
-  limits: { boom: [d(-35), d(60)], arm: [d(-155), d(-30)], bucket: [d(-100), d(95)] },
+  limits: { boom: [d(-35), d(60)], arm: [d(-155), d(-30)], bucket: [d(-135), d(70)] }, // 버킷: 날이 암 아래로 감길 때까지 오므림
   speeds: { swing: d(40), boom: d(28), arm: d(35), bucket: d(55) },
   radii: { boom: 0.22, arm: 0.16, bucket: 0.05 },
   wheelbase: 2.6,

@@ -145,7 +145,51 @@ function bucketShapes(m: MachineSpec) {
   const inner = outer.slice(1, -1).map((p) => chord(p).lerp(p, 0.78)).reverse();
   const shell = new THREE.Shape([...outer, new THREE.Vector2(tip.x - 0.06, 0.03), ...inner, new THREE.Vector2(0.06, 0.03)]);
   const side = new THREE.Shape(outer);
-  return { shell, side };
+  // 버킷 안쪽 공간: 입구(핀→날 끝 직선) + 안쪽 벽 곡선
+  const cavity: [number, number][] = [[0.06, 0.02], [m.L3 - 0.1, 0.02], ...inner.map((p): [number, number] => [p.x, p.y])];
+  return { shell, side, cavity };
+}
+
+/** 다각형을 y ≥ c 쪽만 남기고 자름 (Sutherland–Hodgman) */
+function clipAbove(poly: [number, number][], c: number): [number, number][] {
+  const out: [number, number][] = [];
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i];
+    const b = poly[(i + 1) % poly.length];
+    const ain = a[1] >= c;
+    const bin = b[1] >= c;
+    if (ain) out.push(a);
+    if (ain !== bin) {
+      const t = (c - a[1]) / (b[1] - a[1]);
+      out.push([a[0] + (b[0] - a[0]) * t, c]);
+    }
+  }
+  return out;
+}
+
+/** 버킷 속 흙: 안쪽을 바닥(버킷 등)부터 채우고, 평적을 넘으면 입구 위로 울퉁불퉁한 고봉 */
+function soilFillGeometry(cavity: [number, number][], L3: number, W: number, fill: number) {
+  const ymax = Math.max(...cavity.map((p) => p[1]));
+  const parts: THREE.BufferGeometry[] = [];
+  const f = Math.min(1, fill);
+  const poly = clipAbove(cavity, (1 - f) * ymax);
+  if (poly.length >= 3) parts.push(extrude(poly, W * 0.94));
+  if (fill > 1.001) {
+    // 고봉: 입구 위(-y 쪽)로 솟은 흙더미. 꼭짓점을 흔들어 흙덩이 느낌
+    const h = Math.min(0.32, ((fill - 1) / 0.3) * 0.3);
+    const cap = new THREE.SphereGeometry(1, 14, 6, 0, Math.PI * 2, 0, Math.PI / 2);
+    const pos = cap.getAttribute('position') as THREE.BufferAttribute;
+    for (let i = 0; i < pos.count; i++) {
+      const n = 1 + 0.12 * Math.sin(i * 12.9898) * Math.sin(i * 78.233);
+      pos.setXYZ(i, pos.getX(i) * n, pos.getY(i) * n, pos.getZ(i) * n);
+    }
+    cap.scale(L3 * 0.4, h, W * 0.45);
+    cap.rotateX(Math.PI); // 입구 바깥(-y)으로
+    cap.translate(L3 * 0.5, 0.0, 0);
+    parts.push(cap.toNonIndexed());
+  }
+  if (!parts.length) return null;
+  return mergeGeometries(parts.map(clean));
 }
 
 /** 2단 유압 실린더 (통 + 크롬 막대). 부모 그룹의 xy 평면 안에서 a→b */
@@ -192,6 +236,9 @@ export class ExcavatorView {
   readonly bucket = new THREE.Group();
   readonly style: MachineStyle;
   private loadMesh: THREE.Mesh;
+  private fillCache = new Map<number, THREE.BufferGeometry | null>();
+  private fillKey = -1;
+  private cavity: [number, number][];
   private cabParts: THREE.Object3D[] = [];
   private cabInterior: THREE.Group;
   private boomCyls: Cylinder[] = [];
@@ -370,7 +417,8 @@ export class ExcavatorView {
     this.bucket.position.x = L2;
     this.arm.add(this.bucket);
     const W = m.bucketWidth;
-    const { shell, side: bside } = bucketShapes(m);
+    const { shell, side: bside, cavity } = bucketShapes(m);
+    this.cavity = cavity;
     const bk = new Batch();
     bk.add(new THREE.ExtrudeGeometry(shell, { depth: W, bevelEnabled: false }).translate(0, 0, -W / 2), PALETTE.rust, 0.03);
     const sideG = new THREE.ExtrudeGeometry(bside, { depth: 0.06, bevelEnabled: false });
@@ -381,7 +429,8 @@ export class ExcavatorView {
     for (let i = 0; i < 5; i++) bk.add(toothG.clone().translate(m.L3 + 0.05, 0, -W / 2 + 0.08 + ((W - 0.16) * i) / 4), PALETTE.metal, 0);
     for (const z of [-0.18, 0.18]) bk.add(boxG(0.34, 0.16, 0.05, 0.05, 0.22, z), PALETTE.rustDark, 0.02);
     bk.build(this.bucket);
-    this.loadMesh = new THREE.Mesh(new THREE.SphereGeometry(0.5, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), toon(PALETTE.dirt));
+    this.loadMesh = new THREE.Mesh(new THREE.BufferGeometry(), toon(PALETTE.dirt));
+    this.loadMesh.visible = false;
     this.bucket.add(this.loadMesh);
   }
 
@@ -479,12 +528,15 @@ export class ExcavatorView {
     for (const lk of this.links.idler) placeLink(lk, this.K, J);
     for (const lk of this.links.push) placeLink(lk, J, E);
 
+    // 버킷 속 흙: 채움 비율을 5% 단위로 나눠 모양을 캐시
     const fill = Math.min(1.3, s.load / s.m.struckCapacity);
-    this.loadMesh.visible = fill > 0.03;
-    if (this.loadMesh.visible) {
-      this.loadMesh.position.set(s.m.L3 * 0.5, 0.02, 0);
-      this.loadMesh.rotation.set(Math.PI, 0, 0);
-      this.loadMesh.scale.set(1.0, 0.15 + 0.45 * fill, s.m.bucketWidth * 0.95);
+    const key = Math.round(fill * 20);
+    if (key !== this.fillKey) {
+      this.fillKey = key;
+      if (!this.fillCache.has(key)) this.fillCache.set(key, key > 0 ? soilFillGeometry(this.cavity, m.L3, m.bucketWidth, key / 20) : null);
+      const g = this.fillCache.get(key);
+      this.loadMesh.visible = !!g;
+      if (g) this.loadMesh.geometry = g;
     }
   }
 }
