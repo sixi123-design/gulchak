@@ -2845,3 +2845,16 @@ body:has(#paywall:not([hidden])) #precheck .card.start {
   font-size: 24px;
   padding: 12px 28px;
 }
+/* 시작 버튼: 모드 카드 색(파랑·초록·보라·검붉음)과 겹치지 않게 늘 먹색 + 노란 글자 */
+#precheck .card.start #btn-ready,
+#precheck .card.start #btn-ready.mid,
+#precheck .card.start #btn-ready.boss {
+  background: var(--ink);
+  color: var(--sun);
+  border-color: var(--ink);
+  box-shadow: 0 5px 0 #000;
+}
+/* 시작 페이지: 모든 모드 카드는 늘 제 색 (선택은 흰 테두리로만) */
+#precheck .modebtn.tier-free {
+  background: var(--ok);
+}
