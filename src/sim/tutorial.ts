@@ -44,6 +44,8 @@ export interface Lesson {
   title: string;
   /** 마지막 단계에서 '버킷 내려놓기' 종료 판정을 켬 */
   autoEnd?: boolean;
+  /** 레버만 익힘: 시험장 판정(실격·경고)을 안 보여 줌 */
+  noFail?: boolean;
   setup: (s: DigSession) => void;
   steps: Step[];
 }
@@ -61,6 +63,34 @@ const moved = (j: Joint, dir: 1 | -1, amount: number, text: string, labels: stri
   done: (s, mem) => {
     mem[j] = dir > 0 ? Math.min(mem[j], s.pose[j]) : Math.max(mem[j], s.pose[j]);
     return (s.pose[j] - mem[j]) * dir >= amount;
+  },
+});
+
+/** 오른 레버 방향 (시계: 12시 = 0°, 3시 = 90°)과 기울인 정도 */
+const rightClock = (s: DigSession) => {
+  const { rx, ry } = s.input;
+  return { a: ((Math.atan2(rx, ry) * 180) / Math.PI + 360) % 360, m: Math.hypot(rx, ry) };
+};
+const nearDeg = (a: number, t: number, tol: number) => Math.abs(((a - t + 540) % 360) - 180) <= tol;
+/** 오른 레버를 그 방향으로 끝까지 */
+const clockAt = (t: number, text: string, labels: string[]): Step => ({
+  text,
+  labels,
+  done: (s) => {
+    const { a, m } = rightClock(s);
+    return m > 0.6 && nearDeg(a, t, 25);
+  },
+});
+/** 레버를 놓지 않고 via(대각선)를 지나 t까지 돌림. 중간에 놓으면 처음부터 */
+const clockArc = (via: number, t: number, text: string, labels: string[]): Step => ({
+  text,
+  labels,
+  begin: (_s, mem) => (mem.via = 0),
+  done: (s, mem) => {
+    const { a, m } = rightClock(s);
+    if (m < 0.4) mem.via = 0;
+    else if (m > 0.6 && nearDeg(a, via, 30)) mem.via = 1;
+    return mem.via === 1 && m > 0.6 && nearDeg(a, t, 25);
   },
 });
 
@@ -105,6 +135,7 @@ export const LESSONS: Lesson[] = [
     id: 'levers',
     icon: 'stLevers',
     title: '레버 익히기',
+    noFail: true,
     setup: () => {},
     steps: [
       moved('boom', 1, 12 * deg, '붐 올리기', ['붐 올림']),
@@ -113,6 +144,11 @@ export const LESSONS: Lesson[] = [
       moved('arm', -1, 15 * deg, '암 당기기', ['암 당기기']),
       moved('bucket', -1, 25 * deg, '버킷 오므리기', ['버킷 오므림']),
       moved('bucket', 1, 25 * deg, '버킷 펴기', ['버킷 펴기']),
+      // 이어서 조작: 오른 레버를 12시 → 3시로 돌리고, 7시 → 9시로 돌리기
+      clockAt(0, '오른 레버 12시로', ['붐 내림']),
+      clockArc(45, 90, '그대로 3시까지 천천히 돌리기', ['붐 내림', '버킷 펴기']),
+      clockAt(210, '7시로 내리기', ['붐 올림', '버킷 오므림']),
+      clockArc(240, 270, '그대로 9시까지 천천히 돌리기', ['붐 올림', '버킷 오므림']),
     ],
   },
   {

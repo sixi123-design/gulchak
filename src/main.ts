@@ -438,7 +438,7 @@ function newSession(autoEnd?: boolean) {
   }
   session.onViolation(showToast);
   session.onFinish(showResult);
-  session.onViolation((v) => v.kind === 'disqualify' && onLessonFail(v));
+  session.onViolation((v) => v.kind === 'disqualify' && !tutor?.lesson.noFail && onLessonFail(v));
   session.onDigEntry(showEntry);
   // 점검 화면 초기화
   // 안전벨트·안전레버·RPM은 준비된 것으로 본다
@@ -971,6 +971,7 @@ $('btn-cam').title = CAM_LABEL[camMode];
 $('btn-cam').innerHTML = ICON.camera;
 
 function showToast(v: Violation) {
+  if (tutor?.lesson.noFail) return; // 레버 익히기: 시험장 판정 안 보임
   if (v.kind === 'disqualify' && session.flags.key === 'exam') return; // 실제 시험: 감독관 연출이 알림
   if (v.kind === 'disqualify') sound.whistle('fail');
   if (v.id === 'W-JOLT' || v.id === 'W-IMPACT') sound.thump(0.8);

@@ -38,6 +38,18 @@ describe('배우기', () => {
     const t = new Tutor(lesson('levers'), mk());
     const seq: Partial<Sticks>[] = [{ ry: -1 }, { ry: 1 }, { ly: 1 }, { ly: -1 }, { rx: -1 }, { rx: 1 }];
     for (const inp of seq) expect(drive(t, () => inp, 300)).toBe(true);
+    // 오른 레버 시계 방향 (12시 = ry+, 3시 = rx+)
+    const at = (deg: number) => ({ rx: Math.sin((deg * Math.PI) / 180), ry: Math.cos((deg * Math.PI) / 180) });
+    expect(drive(t, () => at(0), 300)).toBe(true);
+    // 가운데로 놓았다 3시로 바로 가면 안 됨
+    for (const inp of [{}, at(90)]) for (let i = 0; i < 30; i++) (t.s.input = { lx: 0, ly: 0, rx: 0, ry: 0, ...inp }), t.s.step(), t.update();
+    expect(t.current?.text).toContain('3시');
+    // 12시 → 3시로 1초에 걸쳐 돌림
+    let k = 0;
+    expect(drive(t, () => at(Math.min(90, (k++ * 90) / 60)), 300)).toBe(true);
+    expect(drive(t, () => at(210), 300)).toBe(true);
+    k = 0;
+    expect(drive(t, () => at(Math.min(270, 210 + (k++ * 60) / 60)), 300)).toBe(true);
     expect(t.cleared).toBe(true);
     expect(t.s.engine.disqualifications()).toEqual([]);
   });
