@@ -3685,3 +3685,11 @@ body:has(#paywall:not([hidden])) #precheck .card.start {
   border-top: 0;
   border-left: 1px solid #1d1b2e22;
 }
+/* 주요 버튼: 초록 (진행 색) */
+.btn.go,
+.btn.big.go {
+  background: var(--ok);
+  color: var(--ink);
+  border-color: var(--ink);
+  box-shadow: 0 5px 0 var(--ink);
+}
