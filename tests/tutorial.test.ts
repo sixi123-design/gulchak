@@ -40,6 +40,27 @@ describe('배우기', () => {
     for (const inp of seq) expect(drive(t, () => inp, 300)).toBe(true);
     expect(t.cleared).toBe(true);
   });
+  it('레버 익히기: 앞 단계 레버를 더 밀다가 되돌려도 되돌린 만큼 셈', () => {
+    const t = new Tutor(lesson('levers'), mk());
+    expect(drive(t, () => ({ ry: -1 }), 300)).toBe(true); // 붐 올리기
+    expect(drive(t, () => ({ ry: 1 }), 300)).toBe(true); // 붐 내리기
+    expect(drive(t, () => ({ ly: 1 }), 300)).toBe(true); // 암 펴기
+    // 암 당기기 단계인데 펴기를 1초 더 누름 (넘어감)
+    for (let i = 0; i < 60; i++) {
+      t.s.input = { lx: 0, ly: 1, rx: 0, ry: 0 };
+      t.s.step();
+      t.update();
+    }
+    // 넘어간 자리에서 16°만 되돌려도 완료여야 함
+    const top = t.s.pose.arm;
+    const st = t.step;
+    for (let i = 0; i < 300 && t.s.pose.arm > top - (16 * Math.PI) / 180; i++) {
+      t.s.input = { lx: 0, ly: -1, rx: 0, ry: 0 };
+      t.s.step();
+      t.update();
+    }
+    expect(t.step).toBe(st + 1);
+  });
   it('흙 쏟기: C 위에서 버킷을 펴면 완료, 흙은 C 구덩이에', () => {
     const t = new Tutor(lesson('dump'), mk());
     const g = t.s.soil.grids.find((x) => x.name === 'C')!;

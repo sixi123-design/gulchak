@@ -57,7 +57,11 @@ const moved = (j: Joint, dir: 1 | -1, amount: number, text: string, labels: stri
   text,
   labels,
   begin: (s, mem) => (mem[j] = s.pose[j]),
-  done: (s, mem) => (s.pose[j] - mem[j]) * dir >= amount,
+  // 시작점은 반대쪽으로 가장 멀리 간 곳: 앞 단계 레버를 계속 밀어 넘어가도(관성) 되돌린 만큼 다 셈
+  done: (s, mem) => {
+    mem[j] = dir > 0 ? Math.min(mem[j], s.pose[j]) : Math.max(mem[j], s.pose[j]);
+    return (s.pose[j] - mem[j]) * dir >= amount;
+  },
 });
 
 /**
