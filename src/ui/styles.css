@@ -3849,3 +3849,205 @@ body:has(#fail:not([hidden])) .lab-toggle {
     box-shadow: 0 0 0 5px #ffffff88;
   }
 }
+
+/* ===== 배우기 레버 표시: 화면 가운데 아래, 손에 안 가림 ===== */
+.lever-ind {
+  position: absolute;
+  left: 50%;
+  bottom: calc(max(14px, env(safe-area-inset-bottom)) + 62px);
+  transform: translateX(-50%);
+  display: flex;
+  gap: 70px;
+  pointer-events: none;
+}
+.lever-ind[hidden] {
+  display: none;
+}
+.li-pad {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: #1d1b2e55;
+  border: 3px solid #fff6;
+  opacity: 0.35;
+}
+.li-pad.on {
+  opacity: 1;
+  background: #1d1b2e99;
+  border-color: #fff;
+}
+.li-dot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
+  border-radius: 50%;
+  background: var(--sun);
+  border: 2px solid var(--ink);
+}
+.li-pad[data-pad='r'] .li-dot {
+  background: #7fd3ff;
+}
+/* 방향 화살표 + 레버 이름 */
+.li-arrow {
+  position: absolute;
+  white-space: nowrap;
+  font: 900 15px var(--font);
+  color: var(--ink);
+  background: #fff;
+  border: 3px solid var(--ink);
+  border-radius: 10px;
+  padding: 2px 8px;
+  animation: liNudge 0.8s ease-in-out infinite;
+}
+.li-arrow.up {
+  left: 50%;
+  bottom: calc(100% + 6px);
+  --dx: 0px;
+  --dy: -6px;
+}
+.li-arrow.dn {
+  left: 50%;
+  top: calc(100% + 6px);
+  --dx: 0px;
+  --dy: 6px;
+}
+.li-arrow.lt {
+  right: calc(100% + 6px);
+  top: 50%;
+  --dx: -6px;
+  --dy: 0px;
+}
+.li-arrow.rt {
+  left: calc(100% + 6px);
+  top: 50%;
+  --dx: 6px;
+  --dy: 0px;
+}
+.li-arrow.up,
+.li-arrow.dn {
+  transform: translateX(-50%);
+}
+.li-arrow.lt,
+.li-arrow.rt {
+  transform: translateY(-50%);
+}
+.li-arrow.up::before { content: '▲ '; }
+.li-arrow.dn::before { content: '▼ '; }
+.li-arrow.lt::before { content: '◀ '; }
+.li-arrow.rt::after { content: ' ▶'; }
+@keyframes liNudge {
+  50% {
+    translate: var(--dx) var(--dy);
+  }
+}
+/* 상태: 맞음 초록 / 틀림 빨강 / 다음(손 떼기) 흰색 깜빡 */
+.lever-ind.good .li-pad.on {
+  border-color: var(--ok);
+  box-shadow: 0 0 0 4px #2fd27a88;
+}
+.lever-ind.good .li-arrow {
+  background: var(--ok);
+}
+.lever-ind.bad .li-pad.on {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 4px #ff4d5e88;
+}
+.lever-ind.bad .li-arrow {
+  background: #ffd0d5;
+}
+.lever-ind.next .li-arrow {
+  background: var(--sun);
+}
+/* 구덩이를 가리지 않게: 맨 아래 버킷 막대 양옆, 화살표는 원 안쪽 가장자리 (글자 없음) */
+.lever-ind {
+  bottom: max(8px, env(safe-area-inset-bottom));
+  gap: 150px;
+  align-items: flex-end;
+}
+.li-pad {
+  width: 66px;
+  height: 66px;
+}
+.li-arrow {
+  font-size: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  width: 0;
+  height: 0;
+}
+.li-arrow::before,
+.li-arrow::after {
+  content: none !important;
+}
+.li-arrow.up,
+.li-arrow.dn,
+.li-arrow.lt,
+.li-arrow.rt {
+  left: 50%;
+  top: 50%;
+  bottom: auto;
+  right: auto;
+  transform: none;
+  border-style: solid;
+  border-color: transparent;
+  filter: drop-shadow(0 0 1px var(--ink)) drop-shadow(0 0 1px var(--ink));
+}
+.li-arrow.up {
+  border-width: 0 13px 16px;
+  border-bottom-color: var(--sun);
+  margin: -31px 0 0 -13px;
+}
+.li-arrow.dn {
+  border-width: 16px 13px 0;
+  border-top-color: var(--sun);
+  margin: 15px 0 0 -13px;
+}
+.li-arrow.lt {
+  border-width: 13px 16px 13px 0;
+  border-right-color: var(--sun);
+  margin: -13px 0 0 -31px;
+}
+.li-arrow.rt {
+  border-width: 13px 0 13px 16px;
+  border-left-color: var(--sun);
+  margin: -13px 0 0 15px;
+}
+.li-arrow.up { --dy: -4px; }
+.li-arrow.dn { --dy: 4px; }
+.li-arrow.lt { --dx: -4px; }
+.li-arrow.rt { --dx: 4px; }
+.lever-ind.good .li-arrow.up { border-bottom-color: var(--ok); }
+.lever-ind.good .li-arrow.dn { border-top-color: var(--ok); }
+.lever-ind.good .li-arrow.lt { border-right-color: var(--ok); }
+.lever-ind.good .li-arrow.rt { border-left-color: var(--ok); }
+.lever-ind.next .li-arrow.up { border-bottom-color: #fff; }
+.lever-ind.next .li-arrow.dn { border-top-color: #fff; }
+.lever-ind.next .li-arrow.lt { border-right-color: #fff; }
+.lever-ind.next .li-arrow.rt { border-left-color: #fff; }
+.lever-ind.next .li-pad.on {
+  animation: nextPulse 0.7s ease-in-out infinite alternate;
+}
+.lever-ind.bad .li-pad.on {
+  animation: shake 0.3s;
+}
+.lever-ind .li-dot {
+  z-index: 1;
+}
+/* 더 크게 */
+.li-pad {
+  width: 84px;
+  height: 84px;
+  border-width: 4px;
+}
+.lever-ind {
+  gap: 140px;
+}
+.li-arrow.up { border-width: 0 17px 21px; margin: -40px 0 0 -17px; }
+.li-arrow.dn { border-width: 21px 17px 0; margin: 19px 0 0 -17px; }
+.li-arrow.lt { border-width: 17px 21px 17px 0; margin: -17px 0 0 -40px; }
+.li-arrow.rt { border-width: 17px 0 17px 21px; margin: -17px 0 0 19px; }
