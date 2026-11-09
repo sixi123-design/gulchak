@@ -3585,3 +3585,13 @@ body:has(#paywall:not([hidden])) #precheck .card.start {
 .card.res.clean h1 {
   margin: 0 0 24px;
 }
+/* 결과 제목 띠: 반듯한 모양 + 줄무늬 */
+.card.res::before {
+  background: repeating-linear-gradient(-30deg, #2a1566 0 22px, #241158 22px 44px);
+}
+.card.res.tier-free::before {
+  background: repeating-linear-gradient(-30deg, #1f9a57 0 22px, #1a8a4d 22px 44px);
+}
+.card.res.tier-boss::before {
+  background: repeating-linear-gradient(-30deg, #2a0f1a 0 22px, #3a1020 22px 44px);
+}
