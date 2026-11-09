@@ -3428,3 +3428,93 @@ body:has(#paywall:not([hidden])) #precheck .card.start {
 .card.res .cols h2 {
   display: none;
 }
+/* 설정 아래 버튼 줄: [기본값] [확인] (결과의 [처음으로] [다시 하기]와 같은 모양) */
+.set-foot {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+}
+#btn-keys-reset {
+  position: static;
+  min-height: 48px;
+  background: #fff;
+}
+#btn-keys-reset[hidden] {
+  display: none;
+}
+#btn-settings-ok {
+  position: static;
+}
+.key-grid {
+  margin: 14px 0 16px;
+}
+/* 설정 간격 규칙: 묶음 사이 12px, 묶음 안 8px. 카드는 화면 높이 안에서 목록만 줄어듦 */
+.settings-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: calc(100vh - 16px);
+  overflow: hidden;
+}
+.settings-card .tabs {
+  margin: 0;
+  gap: 8px;
+}
+.settings-card section:not([hidden]) {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.settings-card .machine-pick,
+.settings-card .site-tools {
+  margin: 0;
+  gap: 8px;
+}
+.settings-card .site-list {
+  flex: 1 1 auto;
+  min-height: 56px;
+  max-height: 180px;
+  margin: 0;
+}
+.settings-card .vol-row {
+  margin: 0;
+}
+.settings-card .key-grid {
+  margin: 0;
+}
+.set-foot {
+  flex: none;
+}
+@media (max-height: 460px) {
+  .settings-card {
+    gap: 10px;
+    padding: 12px 16px;
+  }
+  .settings-card .site-list {
+    max-height: none;
+  }
+  #btn-settings-ok {
+    font-size: 20px;
+    padding: 8px 30px;
+  }
+  .settings-card section[data-pane='sound'] {
+    gap: 4px;
+  }
+}
+#settings.seat .tabs button {
+  min-height: 36px;
+}
+@media (max-height: 460px) {
+  .settings-card section[data-pane='sound'] {
+    gap: 8px;
+  }
+  .settings-card .vol-row .mute {
+    width: 40px;
+    height: 40px;
+  }
+}

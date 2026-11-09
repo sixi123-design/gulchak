@@ -336,6 +336,7 @@ function showTab(tab: string) {
   for (const p of document.querySelectorAll<HTMLElement>('#settings [data-pane]')) p.hidden = p.dataset.pane !== tab;
   // 좌석 높이: 뒤의 운전석 화면을 보면서 맞추도록 창을 옆으로 비킴
   $('settings').classList.toggle('seat', tab === 'seat');
+  $('btn-keys-reset').hidden = tab !== 'keys';
   if (tab === 'seat') {
     if (camBeforeSeat === null) camBeforeSeat = camMode;
     camMode = 'cab';
