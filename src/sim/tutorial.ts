@@ -66,34 +66,6 @@ const moved = (j: Joint, dir: 1 | -1, amount: number, text: string, labels: stri
   },
 });
 
-/** 오른 레버 방향 (시계: 12시 = 0°, 3시 = 90°)과 기울인 정도 */
-const rightClock = (s: DigSession) => {
-  const { rx, ry } = s.input;
-  return { a: ((Math.atan2(rx, ry) * 180) / Math.PI + 360) % 360, m: Math.hypot(rx, ry) };
-};
-const nearDeg = (a: number, t: number, tol: number) => Math.abs(((a - t + 540) % 360) - 180) <= tol;
-/** 오른 레버를 그 방향으로 끝까지 */
-const clockAt = (t: number, text: string, labels: string[]): Step => ({
-  text,
-  labels,
-  done: (s) => {
-    const { a, m } = rightClock(s);
-    return m > 0.6 && nearDeg(a, t, 25);
-  },
-});
-/** 레버를 놓지 않고 via(대각선)를 지나 t까지 돌림. 중간에 놓으면 처음부터 */
-const clockArc = (via: number, t: number, text: string, labels: string[]): Step => ({
-  text,
-  labels,
-  begin: (_s, mem) => (mem.via = 0),
-  done: (s, mem) => {
-    const { a, m } = rightClock(s);
-    if (m < 0.4) mem.via = 0;
-    else if (m > 0.6 && nearDeg(a, via, 30)) mem.via = 1;
-    return mem.via === 1 && m > 0.6 && nearDeg(a, t, 25);
-  },
-});
-
 /**
  * 버킷 날 끝을 (r, y)에 두는 자세로 순간이동. bucketRel: 버킷 관절각(없으면 ik 그대로).
  * 버킷 각을 바꾸면 날 끝이 움직이므로 몇 번 되풀이해 맞춘다.
@@ -144,11 +116,6 @@ export const LESSONS: Lesson[] = [
       moved('arm', -1, 15 * deg, '암 당기기', ['암 당기기']),
       moved('bucket', -1, 25 * deg, '버킷 오므리기', ['버킷 오므림']),
       moved('bucket', 1, 25 * deg, '버킷 펴기', ['버킷 펴기']),
-      // 이어서 조작: 오른 레버를 12시 → 3시로 돌리고, 7시 → 9시로 돌리기
-      clockAt(0, '오른 레버 12시로', ['붐 내림']),
-      clockArc(45, 90, '그대로 3시까지 천천히 돌리기', ['붐 내림', '버킷 펴기']),
-      clockAt(210, '7시로 내리기', ['붐 올림', '버킷 오므림']),
-      clockArc(240, 270, '그대로 9시까지 천천히 돌리기', ['붐 올림', '버킷 오므림']),
     ],
   },
   {
