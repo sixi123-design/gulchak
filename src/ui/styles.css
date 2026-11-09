@@ -4122,3 +4122,6 @@ body:has(#fail:not([hidden])) .lab-toggle {
 #hud > .intro-lines {
   pointer-events: none;
 }
+.mission {
+  max-width: min(320px, 40vw);
+}

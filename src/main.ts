@@ -595,40 +595,6 @@ const LAB_AXIS: Record<string, [keyof Sticks, 1 | -1]> = Object.fromEntries(
   KEY_ACTIONS.map((a) => [a.label, [a.id.slice(0, 2) as keyof Sticks, a.id.endsWith('+') ? 1 : -1]]),
 );
 let sayState = '';
-/** 가운데 아래 레버 표시: 두 레버 그림 + 가야 할 방향 화살표 + 지금 손 위치 점 */
-const indEl = $('lever-ind');
-let indKey = '';
-function updateLeverInd(labels: readonly string[], state: string) {
-  const show = labels.length > 0 && $('fail').hidden && $('clear').hidden;
-  indEl.hidden = !show;
-  if (!show) return;
-  const key = labels.join('|');
-  if (key !== indKey) {
-    indKey = key;
-    for (const pad of indEl.querySelectorAll<HTMLElement>('.li-pad')) {
-      pad.querySelectorAll('.li-arrow').forEach((e) => e.remove());
-      pad.classList.remove('on');
-    }
-    for (const l of labels) {
-      const a = LAB_AXIS[l];
-      if (!a) continue;
-      const [ax, sg] = a;
-      const pad = indEl.querySelector<HTMLElement>(`[data-pad="${ax[0]}"]`)!;
-      const dir = ax[1] === 'y' ? (sg > 0 ? 'up' : 'dn') : sg > 0 ? 'rt' : 'lt';
-      const ar = document.createElement('b');
-      ar.className = `li-arrow ${dir}`;
-      ar.title = l;
-      pad.appendChild(ar);
-      pad.classList.add('on');
-    }
-  }
-  indEl.className = 'lever-ind ' + state;
-  // 손 위치 점
-  const inp = session.input;
-  const dots = indEl.querySelectorAll<HTMLElement>('.li-dot');
-  dots[0].style.transform = `translate(${inp.lx * 26}px, ${-inp.ly * 26}px)`;
-  dots[1].style.transform = `translate(${inp.rx * 26}px, ${-inp.ry * 26}px)`;
-}
 /** 단계가 바뀔 때 이미 잡고 있던 레버: 한 번 놓기 전까지는 '틀림'으로 안 봄 */
 const heldAtStep = new Set<keyof Sticks>();
 let sayStep = -1;
@@ -662,7 +628,6 @@ function updateSay() {
       text = '좋아요, 계속';
     }
   }
-  updateLeverInd(st?.labels ?? [], state);
   if (state === sayState) return;
   sayState = state;
   el.textContent = text;
