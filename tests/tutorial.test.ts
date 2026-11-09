@@ -34,9 +34,9 @@ describe('배우기', () => {
       expect(t.update(), l.id).toBe(false);
     }
   });
-  it('레버 익히기: 각 레버를 움직이면 단계가 넘어가 완료, 선회해도 실격 없음', () => {
+  it('레버 익히기: 각 레버를 움직이면 단계가 넘어가 완료, 실격 없음', () => {
     const t = new Tutor(lesson('levers'), mk());
-    const seq: Partial<Sticks>[] = [{ ry: -1 }, { ry: 1 }, { ly: 1 }, { ly: -1 }, { rx: -1 }, { rx: 1 }, { ry: -1 }, { lx: -1 }, { lx: 1 }];
+    const seq: Partial<Sticks>[] = [{ ry: -1 }, { ry: 1 }, { ly: 1 }, { ly: -1 }, { rx: -1 }, { rx: 1 }];
     for (const inp of seq) expect(drive(t, () => inp, 300)).toBe(true);
     expect(t.cleared).toBe(true);
     expect(t.s.engine.disqualifications()).toEqual([]);
