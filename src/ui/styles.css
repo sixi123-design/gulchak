@@ -3837,3 +3837,15 @@ body:has(#fail:not([hidden])) .lab-toggle {
   border-color: var(--danger);
   animation: shake 0.3s;
 }
+.m-say.next {
+  color: #fff;
+}
+.mission.next {
+  border-color: #fff;
+  animation: nextPulse 0.7s ease-in-out infinite alternate;
+}
+@keyframes nextPulse {
+  to {
+    box-shadow: 0 0 0 5px #ffffff88;
+  }
+}

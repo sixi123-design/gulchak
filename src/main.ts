@@ -613,9 +613,14 @@ function updateSay() {
     for (const ax of heldAtStep) if (Math.abs(inp[ax]) <= TH) heldAtStep.delete(ax);
     const good = want.some(([ax, sg]) => inp[ax] * sg > TH);
     const wrong = (['lx', 'ly', 'rx', 'ry'] as const).some((ax) => Math.abs(inp[ax]) > TH && !heldAtStep.has(ax) && !want.some(([a, sg]) => a === ax && inp[ax] * sg > 0));
+    // 앞 단계 레버를 아직 잡고 있음: 단계가 바뀌었으니 다른 레버로 (틀림은 아님)
+    const stale = [...heldAtStep].some((ax) => !want.some(([a, sg]) => a === ax && inp[ax] * sg > 0));
     if (wrong) {
       state = 'bad';
       text = `그 레버 아니에요 → ${st.labels.join(' · ')}`;
+    } else if (stale && !good) {
+      state = 'next';
+      text = `다음! 손 떼고 → ${st.labels.join(' · ')}`;
     } else if (good) {
       state = 'good';
       text = '좋아요, 계속';
@@ -627,6 +632,7 @@ function updateSay() {
   el.className = 'm-say ' + state;
   $('mission').classList.toggle('good', state === 'good');
   $('mission').classList.toggle('bad', state === 'bad');
+  $('mission').classList.toggle('next', state === 'next');
 }
 function updateMeter() {
   updateSay();
