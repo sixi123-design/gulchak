@@ -971,15 +971,16 @@ $('btn-cam').title = CAM_LABEL[camMode];
 $('btn-cam').innerHTML = ICON.camera;
 
 function showToast(v: Violation) {
-  if (tutor?.lesson.noFail) return; // 레버 익히기: 시험장 판정 안 보임
+  // 레버 익히기: 실격으로 끝내지 않고 주의로만 알림
+  const soft = !!tutor?.lesson.noFail;
   if (v.kind === 'disqualify' && session.flags.key === 'exam') return; // 실제 시험: 감독관 연출이 알림
-  if (v.kind === 'disqualify') sound.whistle('fail');
+  if (v.kind === 'disqualify' && !soft) sound.whistle('fail');
   if (v.id === 'W-JOLT' || v.id === 'W-IMPACT') sound.thump(0.8);
   if (v.kind === 'warning' && !session.flags.feedback) return; // 실제 시험: 경고 알림 없음
   const el = document.createElement('div');
-  const dq = v.kind === 'disqualify';
+  const dq = v.kind === 'disqualify' && !soft;
   el.className = 'toast' + (dq ? '' : ' warn');
-  el.innerHTML = `<b>${dq ? `실격 · ${v.basis}` : '주의'}</b>${v.detail}`;
+  el.innerHTML = `<b>${dq ? `실격 · ${v.basis}` : v.kind === 'disqualify' ? '주의 · 시험이면 실격' : '주의'}</b>${v.detail}`;
   const box = $('toasts');
   box.prepend(el);
   while (box.children.length > 3) box.lastElementChild!.remove();
