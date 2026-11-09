@@ -3793,11 +3793,3 @@ body:has(#fail:not([hidden])) .lab-toggle {
     bottom: calc(max(18px, env(safe-area-inset-bottom)) + min(46vh, 200px) + 4px);
   }
 }
-.lab-toggle {
-  bottom: calc(max(18px, env(safe-area-inset-bottom)) + min(40vw, 240px) + 44px);
-}
-@media (max-height: 460px) {
-  .lab-toggle {
-    bottom: calc(max(18px, env(safe-area-inset-bottom)) + min(46vh, 200px) + 44px);
-  }
-}
