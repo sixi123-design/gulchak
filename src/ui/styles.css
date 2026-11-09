@@ -4051,3 +4051,74 @@ body:has(#fail:not([hidden])) .lab-toggle {
 .li-arrow.dn { border-width: 21px 17px 0; margin: 19px 0 0 -17px; }
 .li-arrow.lt { border-width: 17px 21px 17px 0; margin: -17px 0 0 -40px; }
 .li-arrow.rt { border-width: 17px 0 17px 21px; margin: -17px 0 0 19px; }
+
+/* 레버 표시: 미션 카드 안, 지시문 옆에 작게 */
+.m-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.m-row .m-text {
+  flex: 1;
+}
+.mission .lever-ind {
+  position: static;
+  transform: none;
+  display: flex;
+  gap: 6px;
+  flex: none;
+}
+.mission .lever-ind[hidden] {
+  display: none;
+}
+.mission .li-pad {
+  width: 46px;
+  height: 46px;
+  border-width: 3px;
+}
+.mission .li-dot {
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+}
+.mission .li-arrow.up { border-width: 0 9px 11px; margin: -21px 0 0 -9px; }
+.mission .li-arrow.dn { border-width: 11px 9px 0; margin: 10px 0 0 -9px; }
+.mission .li-arrow.lt { border-width: 9px 11px 9px 0; margin: -9px 0 0 -21px; }
+.mission .li-arrow.rt { border-width: 9px 0 9px 11px; margin: -9px 0 0 10px; }
+.mission {
+  max-width: min(380px, 46vw);
+}
+/* 처음 배우는 레버: 부위 → 조이스틱 위 연결선 */
+.intro-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
+.intro-lines line {
+  stroke: #ff5a1f;
+  stroke-width: 4;
+  stroke-dasharray: 10 7;
+  animation: introDash 0.6s linear infinite;
+  filter: drop-shadow(0 0 2px #fff);
+}
+.intro-lines circle {
+  fill: #ff5a1f;
+  stroke: #fff;
+  stroke-width: 3;
+}
+.intro-lines circle.end {
+  animation: pop 0.6s infinite alternate;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+@keyframes introDash {
+  to {
+    stroke-dashoffset: -17;
+  }
+}
+#hud > .intro-lines {
+  pointer-events: none;
+}

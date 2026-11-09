@@ -581,6 +581,8 @@ function startLesson(i: number) {
   sound.start();
   session.ready();
   tutor = new Tutor(L, session);
+  introduced.clear();
+  introStep = -1;
   renderMission(true);
 }
 /** 미션 도움 게이지: 막대(얼마나 왔나) 또는 바늘+목표 구간(각도 맞추기) */
@@ -669,8 +671,75 @@ function updateSay() {
   $('mission').classList.toggle('bad', state === 'bad');
   $('mission').classList.toggle('next', state === 'next');
 }
+/** 처음 배우는 레버: 그 부위를 깜빡 강조하고 조이스틱 위까지 선으로 이어 줌 (2초) */
+type Part = 'boom' | 'arm' | 'bucket';
+const PART_OF = (l: string): Part | null => (l.startsWith('붐') ? 'boom' : l.startsWith('암') ? 'arm' : l.startsWith('버킷') ? 'bucket' : null);
+const introduced = new Set<Part>();
+let intro: { part: Part; pad: 'l' | 'r' }[] = [];
+let introUntil = 0;
+let introStep = -1;
+const introSvg = $('intro-lines') as unknown as SVGSVGElement;
+const pv = new THREE.Vector3();
+const pv2 = new THREE.Vector3();
+function updateIntro() {
+  const now = performance.now();
+  if (tutor && !tutor.cleared && tutor.step !== introStep) {
+    introStep = tutor.step;
+    const fresh: typeof intro = [];
+    for (const l of tutor.current?.labels ?? []) {
+      const part = PART_OF(l);
+      if (!part || introduced.has(part) || fresh.some((f) => f.part === part)) continue;
+      introduced.add(part);
+      fresh.push({ part, pad: LAB_AXIS[l][0][0] as 'l' | 'r' });
+    }
+    if (fresh.length) {
+      intro = fresh;
+      introUntil = now + 2200;
+    }
+  }
+  const on = !!tutor && now < introUntil && $('fail').hidden && $('clear').hidden;
+  if (!on) {
+    if (intro.length) {
+      intro = [];
+      exc.highlight([]);
+      introSvg.innerHTML = '';
+    }
+    return;
+  }
+  exc.highlight(Math.floor(now / 220) % 2 ? intro.map((x) => x.part) : []);
+  const W = innerWidth;
+  const H = innerHeight;
+  let svg = '';
+  for (const { part, pad } of intro) {
+    // 부위 가운데 (붐은 붐 뿌리~암 뿌리 중간)
+    const a = part === 'boom' ? exc.boom : part === 'arm' ? exc.arm : exc.bucket;
+    const b = part === 'boom' ? exc.arm : part === 'arm' ? exc.bucket : null;
+    // 화면에 보이는 점을 부위 길이를 따라 찾음 (운전석에서는 붐 뿌리가 화면 밖)
+    let x1 = -1;
+    let y1 = -1;
+    for (const t of b ? [0.5, 0.65, 0.35, 0.8, 0.2, 0.9, 0.1] : [0]) {
+      a.getWorldPosition(pv);
+      if (b) pv.lerp(b.getWorldPosition(pv2), t);
+      pv.project(camera);
+      const x = ((pv.x + 1) / 2) * W;
+      const y = ((1 - pv.y) / 2) * H;
+      if (pv.z < 1 && x > 24 && x < W - 24 && y > 24 && y < H - 24) {
+        x1 = x;
+        y1 = y;
+        break;
+      }
+    }
+    if (x1 < 0) continue;
+    const r = $(pad === 'l' ? 'stick-l' : 'stick-r').getBoundingClientRect();
+    const x2 = r.left + r.width / 2;
+    const y2 = r.top - 26; // 엄지에 안 가리게 조이스틱 위 빈자리
+    svg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/><circle cx="${x1}" cy="${y1}" r="9"/><circle class="end" cx="${x2}" cy="${y2}" r="9"/>`;
+  }
+  introSvg.innerHTML = svg;
+}
 function updateMeter() {
   updateSay();
+  updateIntro();
   const m = tutor?.meter() ?? null;
   meterEl.hidden = !m;
   if (!m) return;

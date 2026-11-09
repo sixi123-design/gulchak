@@ -441,6 +441,25 @@ export class ExcavatorView {
   }
 
   /** 운전석 시점: 외부 모형을 숨기고 내부 프레임(기둥·지붕·핸들·미러)을 보인다 */
+  /** 배우기: 부위 강조 (밝은 몸체 + 주황 테두리). 빈 배열이면 원래대로 */
+  private hl: { m: THREE.Mesh; mat: THREE.Material | THREE.Material[] }[] = [];
+  private static hlLine = new THREE.MeshBasicMaterial({ color: 0xff5a1f, side: THREE.BackSide });
+  highlight(parts: ('boom' | 'arm' | 'bucket')[]) {
+    for (const h of this.hl) h.m.material = h.mat;
+    this.hl = [];
+    const stop = new Set<THREE.Object3D>([this.boom, this.arm, this.bucket]);
+    const fill = toon(0xfff1b0);
+    const walk = (o: THREE.Object3D, top: boolean) => {
+      if (!top && stop.has(o)) return; // 아래 부위(붐 안의 암 등)는 제외
+      if ((o as THREE.Mesh).isMesh) {
+        const m = o as THREE.Mesh;
+        this.hl.push({ m, mat: m.material });
+        m.material = m.material === outlineMat ? ExcavatorView.hlLine : fill;
+      }
+      for (const c of o.children) walk(c, false);
+    };
+    for (const p of parts) walk(this[p], true);
+  }
   setCabView(on: boolean) {
     for (const o of this.cabParts) o.visible = !on;
     this.cabInterior.visible = on;

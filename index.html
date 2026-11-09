@@ -31,17 +31,19 @@
       <div class="guide" id="guide"></div>
       <div class="mission" id="mission" hidden>
         <div class="m-head" id="m-head"></div>
-        <div class="m-text" id="m-text"></div>
+        <div class="m-row">
+          <div class="m-text" id="m-text"></div>
+          <div class="lever-ind" id="lever-ind" hidden>
+            <div class="li-pad" data-pad="l"><i class="li-dot"></i></div>
+            <div class="li-pad" data-pad="r"><i class="li-dot"></i></div>
+          </div>
+        </div>
         <div class="m-say" id="m-say"></div>
         <div class="m-meter" id="m-meter" hidden><b class="band"></b><b class="fill"></b><b class="needle"></b></div>
         <div class="m-pips" id="m-pips"></div>
       </div>
       <div class="toasts" id="toasts"></div>
-      <!-- 배우기: 어느 레버를 어느 쪽으로 (손에 가리지 않게 화면 가운데 아래) -->
-      <div class="lever-ind" id="lever-ind" hidden>
-        <div class="li-pad" data-pad="l"><i class="li-dot"></i></div>
-        <div class="li-pad" data-pad="r"><i class="li-dot"></i></div>
-      </div>
+      <svg class="intro-lines" id="intro-lines"></svg>
 
       <button class="lab-toggle" id="btn-labels" title="레버 글자"></button>
       <button class="cam-float" id="btn-cam" title="시점"></button>
