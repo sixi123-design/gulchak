@@ -6,7 +6,7 @@ import { MODES, type ModeKey, type Violation } from './core/ruleEngine';
 import { isLocked } from './core/entitlement';
 import { ExcavatorView, type MachineStyleKey } from './render/excavatorView';
 import { FxView, SiteView, SoilView } from './render/siteView';
-import { DigSession, type DigEntry, type RulesFile } from './sim/session';
+import { DigSession, type DigEntry, type RulesFile, type Sticks } from './sim/session';
 import { LESSONS, Tutor } from './sim/tutorial';
 import { ik } from './sim/kinematics';
 import { Joystick, KEY_ACTIONS, keyName, Keys } from './ui/joystick';
@@ -588,7 +588,39 @@ const meterEl = $('m-meter');
 const meterFill = meterEl.querySelector<HTMLElement>('.fill')!;
 const meterBand = meterEl.querySelector<HTMLElement>('.band')!;
 const meterNeedle = meterEl.querySelector<HTMLElement>('.needle')!;
+/** 지금 조작이 맞는지: 이 단계 레버를 움직이면 '좋아요', 다른 레버면 '그 레버 아니에요' */
+const LAB_AXIS: Record<string, [keyof Sticks, 1 | -1]> = Object.fromEntries(
+  KEY_ACTIONS.map((a) => [a.label, [a.id.slice(0, 2) as keyof Sticks, a.id.endsWith('+') ? 1 : -1]]),
+);
+let sayState = '';
+function updateSay() {
+  const el = $('m-say');
+  const st = tutor && !tutor.cleared ? tutor.current : null;
+  let state = '';
+  let text = '';
+  if (st?.labels?.length) {
+    const want = st.labels.map((l) => LAB_AXIS[l]).filter(Boolean);
+    const inp = session.input;
+    const TH = 0.25;
+    const good = want.some(([ax, sg]) => inp[ax] * sg > TH);
+    const wrong = (['lx', 'ly', 'rx', 'ry'] as const).some((ax) => Math.abs(inp[ax]) > TH && !want.some(([a, sg]) => a === ax && inp[ax] * sg > 0));
+    if (wrong) {
+      state = 'bad';
+      text = `그 레버 아니에요 → ${st.labels.join(' · ')}`;
+    } else if (good) {
+      state = 'good';
+      text = '좋아요, 계속';
+    }
+  }
+  if (state === sayState) return;
+  sayState = state;
+  el.textContent = text;
+  el.className = 'm-say ' + state;
+  $('mission').classList.toggle('good', state === 'good');
+  $('mission').classList.toggle('bad', state === 'bad');
+}
 function updateMeter() {
+  updateSay();
   const m = tutor?.meter() ?? null;
   meterEl.hidden = !m;
   if (!m) return;
@@ -615,7 +647,7 @@ function renderMission(intro = false) {
   const st = tutor.current;
   const n = tutor.lesson.steps.length;
   m.hidden = false;
-  $('m-head').innerHTML = `${ICON[tutor.lesson.icon]}${tutor.lesson.title}`;
+  $('m-head').innerHTML = `${ICON[tutor.lesson.icon]}${tutor.lesson.title}<span class="m-n">${Math.min(tutor.step + 1, n)}/${n}</span>`;
   $('m-text').textContent = st ? st.text : '';
   $('m-pips').innerHTML = Array.from({ length: n }, (_, k) => `<i class="${k < tutor!.step ? 'ok' : k === tutor!.step ? 'now' : ''}"></i>`).join('');
   // 다음 단계 문구가 튀어 들어오게

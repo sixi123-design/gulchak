@@ -3793,3 +3793,47 @@ body:has(#fail:not([hidden])) .lab-toggle {
     bottom: calc(max(18px, env(safe-area-inset-bottom)) + min(46vh, 200px) + 4px);
   }
 }
+
+/* 배우기 미션 카드: 지시 글자 크게, 몇 번째 단계인지, 지금 조작이 맞는지 */
+.mission {
+  max-width: min(340px, 42vw);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.mission .m-text {
+  font-size: 21px;
+  line-height: 1.2;
+}
+.m-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+}
+.m-n {
+  margin-left: auto;
+  padding-left: 10px;
+  font: 900 13px var(--font);
+  color: var(--sun);
+}
+.m-say {
+  font: 800 14px var(--font);
+  margin: 0 0 4px;
+  min-height: 0;
+}
+.m-say:empty {
+  display: none;
+}
+.m-say.good {
+  color: var(--ok);
+}
+.m-say.bad {
+  color: #ff8a8a;
+}
+.mission.good {
+  border-color: var(--ok);
+  box-shadow: 0 0 0 3px #2fd27a66;
+}
+.mission.bad {
+  border-color: var(--danger);
+  animation: shake 0.3s;
+}
