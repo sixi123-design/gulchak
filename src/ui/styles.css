@@ -3693,3 +3693,78 @@ body:has(#paywall:not([hidden])) #precheck .card.start {
   border-color: var(--ink);
   box-shadow: 0 5px 0 var(--ink);
 }
+
+/* 시점: 오른쪽 위 버튼 줄 아래, 반투명 아이콘 */
+.cam-float {
+  position: absolute;
+  top: calc(max(10px, env(safe-area-inset-top)) + 54px);
+  right: max(12px, env(safe-area-inset-right));
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  color: #fff;
+  background: #1d1b2e66;
+  border: 2px solid #fff8;
+  border-radius: 50%;
+  backdrop-filter: blur(2px);
+  cursor: pointer;
+}
+.cam-float .ico {
+  width: 22px;
+  height: 22px;
+}
+body[data-mode='exam'] .cam-float {
+  display: none;
+}
+/* 레버 이름: 토글 스위치 (아이콘 + 켜짐/꺼짐 손잡이), 반투명 */
+.lab-toggle {
+  width: 64px;
+  height: 32px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+  padding: 0 4px 0 8px;
+}
+.lab-toggle .ico {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+.lab-toggle .sw {
+  position: relative;
+  width: 28px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--ok);
+  flex: none;
+  transition: background 0.15s;
+}
+.lab-toggle .sw::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 12px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  transition: left 0.15s;
+}
+.lab-toggle.off .sw {
+  background: #fff4;
+}
+.lab-toggle.off .sw::after {
+  left: 2px;
+}
+.lab-toggle.off::after {
+  display: none;
+}
+/* 조이스틱이 안 보일 때는 같이 숨김 */
+body:has(#settings:not([hidden])) .lab-toggle,
+body:has(#fail:not([hidden])) .lab-toggle {
+  visibility: hidden;
+}
