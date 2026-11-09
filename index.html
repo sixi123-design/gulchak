@@ -97,10 +97,9 @@
           <div class="site-cur" id="site-cur"></div>
           <div class="machine-pick" id="machine-pick"></div>
           <div class="site-tools">
-            <input class="site-q" id="site-q" type="search" placeholder="시험장 검색 (예: 광주)" autocomplete="off" />
+            <button class="site-q" id="btn-site-search">시험장 검색</button>
             <button class="btn small" id="btn-near">📍 가까운 곳</button>
           </div>
-          <div class="site-list" id="site-list"></div>
         </section>
         <section data-pane="keys" hidden>
           <div class="key-grid" id="key-grid"></div>
@@ -115,6 +114,16 @@
           <button class="btn" id="btn-keys-reset" hidden>기본값</button>
           <button class="btn big go" id="btn-settings-ok">확인</button>
         </div>
+      </div>
+    </div>
+
+    <div class="modal" id="site-pop" hidden>
+      <div class="card site-card">
+        <div class="site-head">
+          <input class="site-q" id="site-q" type="search" placeholder="시험장 검색 (예: 광주)" autocomplete="off" />
+          <button class="pw-x" id="btn-site-close" title="닫기"></button>
+        </div>
+        <div class="site-list" id="site-list"></div>
       </div>
     </div>
 

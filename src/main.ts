@@ -294,6 +294,7 @@ function renderMachineUi() {
     b.innerHTML = `${km}<b>${x.region}</b> ${x.name}<small>${x.machine}</small>`;
     b.onclick = () => {
       $<HTMLInputElement>('site-q').value = '';
+      $('site-pop').hidden = true;
       setMachine(x.style, x.name);
     };
     list.appendChild(b);
@@ -301,11 +302,37 @@ function renderMachineUi() {
   if (!hits.length) list.innerHTML = '<p class="site-none">없음</p>';
 }
 $<HTMLInputElement>('site-q').oninput = () => renderMachineUi();
+// 시험장 검색: 누르면 검색 팝업 + 목록
+function openSitePop(focus: boolean) {
+  renderMachineUi();
+  $('site-pop').hidden = false;
+  $('site-list').scrollTop = 0;
+  if (focus) $<HTMLInputElement>('site-q').focus();
+}
+$('btn-site-search').onclick = () => openSitePop(true);
+$('btn-site-close').innerHTML = ICON.close;
+$('btn-site-close').onclick = () => {
+  $<HTMLInputElement>('site-q').value = '';
+  $('site-pop').hidden = true;
+  $('btn-site-search').focus();
+};
+// 휴대폰 키보드가 올라오면 보이는 높이에 맞춰 팝업을 줄임 (목록만 스크롤)
+{
+  const vv = window.visualViewport;
+  const fit = () => document.documentElement.style.setProperty('--vvh', `${vv ? vv.height : innerHeight}px`);
+  vv?.addEventListener('resize', fit);
+  fit();
+}
 $('btn-near').onclick = () => {
   const btn = $<HTMLButtonElement>('btn-near');
   if (!navigator.geolocation) {
     btn.textContent = '위치 사용 불가';
     return;
+  }
+  // 이미 위치를 알면 바로 가까운 순 목록
+  if (nearKm) {
+    $<HTMLInputElement>('site-q').value = '';
+    return openSitePop(false);
   }
   btn.textContent = '찾는 중…';
   navigator.geolocation.getCurrentPosition(
@@ -319,8 +346,8 @@ $('btn-near').onclick = () => {
         return 2 * 6371 * Math.asin(Math.sqrt(h));
       });
       $<HTMLInputElement>('site-q').value = '';
-      btn.innerHTML = `${ICON.pin} 가까운 순`;
-      renderMachineUi();
+      btn.innerHTML = `${ICON.pin} 가까운 곳`;
+      openSitePop(false);
     },
     () => {
       btn.textContent = '위치 권한 없음';
