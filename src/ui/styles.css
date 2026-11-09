@@ -4152,3 +4152,17 @@ body:has(#mission.good) .stick .lab.hint::after {
   animation: none;
   opacity: 0;
 }
+/* 배우기 목록: 주사위 5 배치 (왼쪽 2 · 가운데 1 · 오른쪽 2, 왼→오 순서) */
+.stage-map {
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: auto auto;
+  grid-auto-flow: column;
+  row-gap: 14px;
+}
+.stage-map::before {
+  display: none;
+}
+.stage-map .stage:nth-child(3) {
+  grid-row: 1 / 3;
+  align-self: center;
+}
