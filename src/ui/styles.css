@@ -3768,3 +3768,28 @@ body:has(#settings:not([hidden])) .lab-toggle,
 body:has(#fail:not([hidden])) .lab-toggle {
   visibility: hidden;
 }
+/* 레버 이름 토글: 초록 없이, 왼쪽 끝 */
+.lab-toggle .sw {
+  background: #fffc;
+}
+.lab-toggle .sw::after {
+  background: var(--ink);
+}
+.lab-toggle,
+.lab-toggle.tip {
+  left: max(12px, env(safe-area-inset-left));
+}
+@media (max-height: 460px) {
+  .lab-toggle {
+    left: max(12px, env(safe-area-inset-left));
+  }
+}
+/* '암 펴기' 글자와 붙지 않게 조금 위로 */
+.lab-toggle {
+  bottom: calc(max(18px, env(safe-area-inset-bottom)) + min(40vw, 240px) + 4px);
+}
+@media (max-height: 460px) {
+  .lab-toggle {
+    bottom: calc(max(18px, env(safe-area-inset-bottom)) + min(46vh, 200px) + 4px);
+  }
+}
