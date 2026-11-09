@@ -25,7 +25,7 @@ export interface ModeFlags {
 
 /** 자유 연습: 시간·순서 없이 마음대로. 경고와 피드백만 */
 export const FREE: ModeFlags = { key: 'free', failEnds: false, timeLimit: false, autoEnd: false, guide: false, feedback: true };
-/** 시험 연습: 시험 순서대로, 안내·피드백을 받으며. 실격돼도 계속 */
+/** 연습 시험: 시험 순서대로, 안내·피드백을 받으며. 실격돼도 계속 */
 export const PRACTICE: ModeFlags = { key: 'practice', failEnds: false, timeLimit: true, autoEnd: true, guide: true, feedback: true };
 /** 실제 시험: 안내 없음, 실격이면 그 자리에서 종료 */
 export const EXAM: ModeFlags = { key: 'exam', failEnds: true, timeLimit: true, autoEnd: true, guide: false, feedback: false };

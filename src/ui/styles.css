@@ -3182,81 +3182,6 @@ body:has(#paywall:not([hidden])) #precheck .card.start {
 .hero {
   grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
 }
-/* 설정: 오른쪽 서랍 (탭을 바꿔도 창이 안 움직임, 좌석 높이는 왼쪽 화면을 보며) */
-#settings,
-#settings.seat {
-  place-items: stretch end;
-  padding: 0;
-  background: rgba(29, 27, 46, 0.3);
-}
-#settings.seat {
-  background: transparent;
-}
-#settings .settings-card,
-#settings.seat .settings-card {
-  width: min(440px, 100%);
-  height: 100%;
-  max-height: none;
-  border-radius: 24px 0 0 24px;
-  border-right: 0;
-  box-shadow: -6px 0 0 #0003;
-  display: flex;
-  flex-direction: column;
-  padding: max(10px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) 16px;
-  overflow-y: auto;
-  animation: drawerIn 0.2s ease-out;
-}
-@keyframes drawerIn {
-  from {
-    transform: translateX(40px);
-    opacity: 0;
-  }
-}
-#settings .tabs,
-#settings.seat .tabs {
-  gap: 6px;
-  margin-bottom: 10px;
-}
-#settings .tabs button,
-#settings.seat .tabs button {
-  white-space: nowrap;
-  font-size: 14px;
-  padding: 6px 0;
-  border-width: 3px;
-}
-#settings section {
-  flex: 1 1 auto;
-  min-height: 0;
-}
-#settings section[hidden] {
-  display: none;
-}
-#settings [data-pane='machine']:not([hidden]) {
-  display: flex;
-  flex-direction: column;
-}
-#settings .site-list {
-  flex: 1 1 60px;
-  max-height: none;
-  min-height: 60px;
-}
-#settings #btn-settings-ok,
-#settings.seat .go {
-  position: static;
-  align-self: center;
-  margin-top: 8px;
-  font-size: 20px;
-  padding: 8px 32px;
-}
-#settings.seat .ruler {
-  margin-left: 40px;
-}
-.key-grid {
-  flex-wrap: wrap;
-}
-.key-pad {
-  grid-template-columns: repeat(3, 56px);
-}
 /* 휴대폰(터치)은 키보드가 없으니 조작키 탭 없음 */
 @media (pointer: coarse) {
   #settings [data-tab='keys'] {
@@ -3281,19 +3206,225 @@ body:has(#paywall:not([hidden])) #precheck .card.start {
   padding: 6px 12px;
   z-index: 5;
 }
-/* 세로 화면 안내: 뒤 화면과 겹치지 않게 불투명 */
-#rotate {
-  background: var(--sun) repeating-linear-gradient(-45deg, #0000 0 28px, #0000000d 28px 56px);
-  z-index: 40;
-}
-#rotate h1 {
-  font-size: 24px;
-  margin-bottom: 14px;
-}
 .card.pw h1 {
   font-size: 22px;
   padding-right: 44px;
 }
 #btn-home {
   background: #fff;
+}
+
+/* ===== 사용자 수정 요청 ===== */
+/* 결과: 고칠 것 칩 (펼침 없음 → 스크롤 없음) */
+.checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.checks:empty {
+  display: none;
+}
+.checks span {
+  font: 700 13px var(--font);
+  background: #ffe3e0;
+  border: 2px solid var(--danger);
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+.checks b {
+  color: var(--danger);
+}
+.card.res {
+  max-height: calc(100vh - 20px);
+}
+#result {
+  padding: 10px;
+}
+/* 모드 선택: 긴 직사각형 2열 2행, 큰 글자 */
+#precheck .mode-pick {
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  gap: 12px 16px;
+  height: 100%;
+  max-height: 340px;
+}
+#precheck .modebtn {
+  height: auto;
+  grid-auto-flow: column;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+  font-size: clamp(24px, 4.2vw, 38px);
+}
+#precheck .modebtn .ico {
+  width: clamp(34px, 9vh, 52px);
+  height: clamp(34px, 9vh, 52px);
+}
+#precheck .card.start {
+  grid-template-rows: auto 1fr;
+}
+/* 배우기 단계 이름 2배 */
+.stage b {
+  font-size: 26px;
+  line-height: 1.15;
+  word-break: keep-all;
+  text-align: center;
+}
+@media (max-height: 460px) {
+  .stage b {
+    font-size: 22px;
+  }
+}
+/* 좌석 높이: 화면을 가리지 않게 오른쪽 좁은 패널, 탭 2×2 */
+#settings.seat {
+  place-items: start end;
+  padding: 58px 10px 0 0;
+  background: transparent;
+}
+#settings.seat .card {
+  width: 200px;
+  padding: 8px 10px;
+}
+#settings.seat .tabs {
+  grid-template-columns: 1fr 1fr;
+}
+#settings.seat .tabs button {
+  white-space: nowrap;
+  font-size: 13px;
+}
+#settings.seat .ruler {
+  height: 110px;
+}
+/* 작은 폰: 설정 카드가 화면 안에 */
+@media (max-height: 400px) {
+  .settings-card {
+    padding: 10px 14px 10px;
+    max-height: calc(100vh - 16px);
+  }
+  #settings:not(.seat) {
+    padding: 8px;
+  }
+  .settings-card .tabs {
+    margin-bottom: 6px;
+  }
+  .settings-card .site-list {
+    max-height: 64px;
+  }
+  .settings-card .machine-pick {
+    margin-bottom: 4px;
+  }
+}
+/* 결과: 실격 줄은 한 줄로 촘촘히 (스크롤 없음) */
+.card.res .cols li {
+  padding: 4px 10px;
+  margin-bottom: 4px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+}
+.card.res .cols li small {
+  white-space: nowrap;
+}
+.card.res .cols h2 {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+/* 조작키: 화면 조이스틱처럼 둥근 판 가운데 손잡이, 키캡 크게 */
+.key-grid {
+  gap: 28px;
+  margin: 6px 0 10px;
+}
+.key-pad {
+  position: relative;
+  grid-template-columns: repeat(3, 66px);
+  grid-template-rows: repeat(3, 52px);
+  gap: 4px;
+  place-items: stretch;
+}
+.key-pad::before {
+  content: '';
+  position: absolute;
+  inset: 26px 33px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid var(--ink);
+  opacity: 0.5;
+}
+.key-knob {
+  grid-area: 2 / 2;
+  place-self: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 3px solid var(--ink);
+  background: var(--sun);
+  z-index: 1;
+}
+.key-pad + .key-pad .key-knob {
+  background: #7fd3ff;
+}
+.keybtn {
+  position: relative;
+  z-index: 1;
+}
+.keybtn b {
+  font-size: 20px;
+}
+.keybtn small {
+  font-size: 11px;
+}
+.cols[hidden] {
+  display: none;
+}
+/* 조작키: 작은 폰에서도 한 화면 */
+.key-grid {
+  gap: 16px;
+  margin: 2px 0 4px;
+}
+.key-pad {
+  grid-template-columns: repeat(3, 58px);
+  grid-template-rows: repeat(3, 44px);
+}
+.key-pad::before {
+  inset: 22px 29px;
+}
+.keybtn b {
+  font-size: 18px;
+}
+#btn-keys-reset {
+  position: absolute;
+  left: 18px;
+  bottom: 22px;
+}
+/* 결과: 작은 폰에서 스크롤 없게 촘촘히 */
+@media (max-height: 460px) {
+  .card.res {
+    padding-bottom: 10px;
+  }
+  .card.res h1 {
+    margin-bottom: 14px;
+  }
+  .card.res .hero-tile b {
+    font-size: 24px;
+  }
+  .card.res .hero-tile {
+    padding: 2px 4px 4px;
+  }
+  .checks {
+    gap: 4px;
+    margin-top: 6px;
+  }
+  .checks span {
+    font-size: 12px;
+    padding: 1px 8px;
+  }
+  .card.res .cols {
+    margin: 4px 0 8px;
+  }
+}
+/* 분홍 줄만으로 실격임이 보임: 제목 없앰 */
+.card.res .cols h2 {
+  display: none;
 }

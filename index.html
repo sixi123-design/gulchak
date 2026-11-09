@@ -153,11 +153,11 @@
       <div class="card pw">
         <button class="pw-x" id="btn-paywall-close" title="닫기"></button>
         <div class="pw-visual">
-          <!-- 실제 시험 장면: 4분 타이머 · 감독관 · 실격 도장 -->
-          <div class="pw-scene"><span class="pw-timer">4:00</span><span class="pw-ico" id="pw-ico"></span><span class="pw-dq">실격</span></div>
+          <div class="modebtn tier-mid"><b>연습 시험</b></div>
+          <div class="modebtn tier-boss"><b>실제 시험</b></div>
         </div>
         <div class="pw-info">
-          <h1 id="pw-title">시험 연습 · 실제 시험 열기</h1>
+          <h1 id="pw-title">연습 시험 · 실제 시험 열기</h1>
           <ul class="pw-perks" id="pw-perks"></ul>
           <button class="btn big pw-buy" id="btn-buy"></button>
           <button class="pw-restore" id="btn-restore">구매 복원</button>
@@ -177,7 +177,7 @@
           </section>
           <section>
             <div class="hero" id="res-hero"></div>
-            <details class="more" id="res-more"><summary>자세히</summary><ul id="res-metrics"></ul></details>
+            <div class="checks" id="res-checks"></div>
           </section>
         </div>
         <div class="res-btns">
@@ -187,12 +187,6 @@
       </div>
     </div>
 
-    <div class="modal" id="rotate">
-      <div class="card">
-        <h1>가로로 돌려 주세요</h1>
-        <button class="btn" id="btn-rotate-ok">세로로 계속하기</button>
-      </div>
-    </div>
 
     <div id="ready-flash" hidden>호각!</div>
     <div id="dq-banner" hidden><b>실격</b><span id="dq-why"></span></div>

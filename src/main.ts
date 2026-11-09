@@ -77,7 +77,7 @@ try {
 } catch {
   /* 저장소 사용 불가 */
 }
-// 모드: 자유 연습 / 시험 연습 / 실제 시험 — 선택은 기억
+// 모드: 자유 연습 / 연습 시험 / 실제 시험 — 선택은 기억
 let modeKey: ModeKey = 'free';
 try {
   const v = localStorage.getItem('exc-mode');
@@ -88,7 +88,7 @@ try {
 const MODE_INFO: Record<ModeKey, { label: string; cls: string; start: string; icon: keyof typeof ICON }> = {
   tutorial: { label: '배우기', cls: 'tier-learn', start: '스테이지 고르기', icon: 'mLearn' },
   free: { label: '자유 연습', cls: 'tier-free', start: '시작', icon: 'mFree' },
-  practice: { label: '시험 연습', cls: 'tier-mid', start: '도전', icon: 'mPractice' },
+  practice: { label: '연습 시험', cls: 'tier-mid', start: '도전', icon: 'mPractice' },
   exam: { label: '실제 시험', cls: 'tier-boss', start: '도전!', icon: 'mExam' },
 };
 // 테스트 결제: 구매하면 그 모드 1판만 열림 (판이 끝나면 다시 결제 유도)
@@ -683,7 +683,7 @@ function renderKeys(wait?: string) {
   $('key-grid').innerHTML = pads
     .map(
       (ids) =>
-        `<div class="key-pad">${ids
+        `<div class="key-pad"><i class="key-knob"></i>${ids
           .map((id, i) => {
             const a = KEY_ACTIONS.find((x) => x.id === id)!;
             return `<button class="keybtn ${pos[i]}${wait === id ? ' wait' : ''}" data-k="${id}"><b>${wait === id ? '?' : keyName(keys.map[id])}</b><small>${a.label}</small></button>`;
@@ -739,7 +739,7 @@ function startMode() {
   $('precheck').hidden = true;
   const k = session.flags.key;
   if (k === 'free') return beginWork();
-  // 등장 연출: 시험 연습(긴장) / 실제 시험(최고 긴장)
+  // 등장 연출: 연습 시험(긴장) / 실제 시험(최고 긴장)
   const boss = k === 'exam';
   const bi = $('boss-intro');
   bi.className = boss ? 'boss' : 'mid';
@@ -849,7 +849,6 @@ $('btn-restore').onclick = (e) => {
   setTimeout(() => (b.textContent = '구매 복원'), 1500);
 };
 $('paid-ico').innerHTML = ICON.check;
-$('pw-ico').innerHTML = ICON.mExam;
 $('fail-retry-ico').innerHTML = ICON.retry;
 $('pw-perks').innerHTML = ['실제처럼 4분 재기', '실격하면 바로 알려줌', '왜 떨어졌는지 정리'].map((t) => `<li>${ICON.check}${t}</li>`).join('');
 $('btn-settings2').innerHTML = ICON.gear;
@@ -859,7 +858,6 @@ $('btn-retry').onclick = () => {
   startMode();
 };
 $('btn-home').onclick = () => newSession();
-$('btn-rotate-ok').onclick = () => document.body.classList.add('portrait-ok');
 $('btn-cam').onclick = () => {
   const order: CamMode[] = ['cab', 'chase', 'overview'];
   camMode = order[(order.indexOf(camMode) + 1) % order.length];
@@ -1031,11 +1029,11 @@ function showResult() {
   const dqList = $('res-dq');
   dqList.innerHTML =
     (dq.length
-      ? dq.map((d) => `<li class="dq"><b>${d.basis} ${d.title}</b>${d.count > 1 ? `<small>${d.count}회</small>` : ''}</li>`).join('')
+      ? dq.slice(0, 2).map((d) => `<li class="dq"><b>${d.basis} ${d.title}</b>${d.count > 1 ? `<small>${d.count}회</small>` : ''}</li>`).join('') + (dq.length > 2 ? `<li class="dq"><b>외 ${dq.length - 2}건</b></li>` : '')
       : s.abandoned && mode === 'exam'
-        ? '<li class="dq"><b>기권</b></li>'
+        ? '' // 기권은 도장으로 이미 알림
         : '<li class="ok"><b>실격 항목 없음</b></li>') +
-    (warn.length ? `<li><b>주의</b><small>${warn.map((w) => `${w.title} ${w.count}`).join(' · ')}</small></li>` : '') ;
+    '';
   const pct = (v: number) => `${Math.round(v * 100)}%`;
   const avg = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
   const cmOf = (v: number) => `${Math.round(v * 100)}cm`;
@@ -1065,11 +1063,13 @@ function showResult() {
   ];
   // 실제 시험: 실제처럼 시간·흙량 같은 기록은 알려주지 않음 (실격 판정만)
   $('res-cols').classList.toggle('dq-only', mode === 'exam');
-  $('res-metrics').innerHTML = items.filter(([, v]) => v !== '-').map(([k, v, bad]) => `<li class="row${bad ? ' bad' : ''}"><span>${k}</span><b>${v}</b></li>`).join('');
-  const more = $<HTMLDetailsElement>('res-more');
-  more.open = false;
-  more.querySelector('summary')!.textContent = items.some((x) => x[2]) ? `자세히 · 확인할 것 ${items.filter((x) => x[2]).length}` : '자세히';
-  $('res-cols').classList.toggle('single', mode !== 'exam' && !dq.length && !warn.length);
+  // 스크롤 없게: 펼침 목록 대신 고칠 것만 칩으로 (자유 연습은 없음)
+  const bad = mode === 'practice' ? items.filter((x) => x[2]) : [];
+  // 주의(경고)도 칩으로 합침
+  const chips = [...(mode === 'practice' ? warn.map((w) => [w.title, `${w.count}회`]) : []), ...bad.map(([k, v]) => [k, v])];
+  $('res-checks').innerHTML = chips.map(([k, v]) => `<span>${k} <b>${v}</b></span>`).join('');
+  $('res-cols').classList.toggle('single', mode !== 'exam' && !dq.length);
+  $('res-cols').hidden = mode === 'exam' && !dq.length && s.abandoned;
   setTimeout(() => ($('result').hidden = false), 600);
   // 도장이 쾅 찍히는 순간 (CSS 지연과 맞춤)
   if (!stamp.hidden)
