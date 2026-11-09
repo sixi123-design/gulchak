@@ -593,6 +593,9 @@ const LAB_AXIS: Record<string, [keyof Sticks, 1 | -1]> = Object.fromEntries(
   KEY_ACTIONS.map((a) => [a.label, [a.id.slice(0, 2) as keyof Sticks, a.id.endsWith('+') ? 1 : -1]]),
 );
 let sayState = '';
+/** 단계가 바뀔 때 이미 잡고 있던 레버: 한 번 놓기 전까지는 '틀림'으로 안 봄 */
+const heldAtStep = new Set<keyof Sticks>();
+let sayStep = -1;
 function updateSay() {
   const el = $('m-say');
   const st = tutor && !tutor.cleared ? tutor.current : null;
@@ -602,8 +605,14 @@ function updateSay() {
     const want = st.labels.map((l) => LAB_AXIS[l]).filter(Boolean);
     const inp = session.input;
     const TH = 0.25;
+    if (tutor!.step !== sayStep) {
+      sayStep = tutor!.step;
+      heldAtStep.clear();
+      for (const ax of ['lx', 'ly', 'rx', 'ry'] as const) if (Math.abs(inp[ax]) > TH) heldAtStep.add(ax);
+    }
+    for (const ax of heldAtStep) if (Math.abs(inp[ax]) <= TH) heldAtStep.delete(ax);
     const good = want.some(([ax, sg]) => inp[ax] * sg > TH);
-    const wrong = (['lx', 'ly', 'rx', 'ry'] as const).some((ax) => Math.abs(inp[ax]) > TH && !want.some(([a, sg]) => a === ax && inp[ax] * sg > 0));
+    const wrong = (['lx', 'ly', 'rx', 'ry'] as const).some((ax) => Math.abs(inp[ax]) > TH && !heldAtStep.has(ax) && !want.some(([a, sg]) => a === ax && inp[ax] * sg > 0));
     if (wrong) {
       state = 'bad';
       text = `그 레버 아니에요 → ${st.labels.join(' · ')}`;
