@@ -3563,3 +3563,25 @@ body:has(#paywall:not([hidden])) #precheck .card.start {
 .site-card {
   max-height: calc(var(--vvh, 100vh) - 20px);
 }
+/* 결과 제목 띠: 사선 없이 반듯하게, 단색 */
+.card.res::before {
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 54px;
+  transform: none;
+  background: #2a1566;
+}
+.card.res.tier-free::before {
+  background: #1f9a57;
+}
+.card.res.tier-boss::before {
+  background: #2a0f1a;
+}
+.card.res h1 {
+  font-style: normal;
+}
+.card.res h1,
+.card.res.clean h1 {
+  margin: 0 0 24px;
+}
