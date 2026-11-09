@@ -747,13 +747,6 @@ const standalone = (navigator as Navigator & { standalone?: boolean }).standalon
 if (isIOS && !standalone) $('fs-hint').hidden = false;
 function beginWork() {
   setTimeout(() => sound.whistle('start'), 300);
-  // 이름표 버튼이 뭔지 처음 한 번만 알려줌
-  if (load('exc-labtip') !== '1') {
-    save('exc-labtip', '1');
-    const lb = $('btn-labels');
-    lb.classList.add('tip');
-    setTimeout(() => lb.classList.remove('tip'), 3500);
-  }
   session.ready();
   const f = $('ready-flash');
   f.hidden = false;
