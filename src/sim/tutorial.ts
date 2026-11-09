@@ -80,7 +80,9 @@ function pose(s: DigSession, swing: number, r: number, y: number, bucketAbs: num
     ty += y - tip.y;
   }
 }
-const tipStation = (s: DigSession) => s.stationOf(toWorld(s.pose.swing, s.frame.tip))?.name ?? null;
+/** 버킷 가장 낮은 점 높이 */
+const bucketLow = (s: DigSession) => Math.min(s.frame.tip.y, s.frame.heel.y);
+const tipStation =(s: DigSession) => s.stationOf(toWorld(s.pose.swing, s.frame.tip))?.name ?? null;
 /** 흙에 닿은 채 dir(1 = 바깥, -1 = 몸 쪽)으로 움직인 거리 누적 */
 /** 버킷 바닥(힐→이빨)이 수평(이빨이 몸 쪽)에서 기운 각(°, +면 이빨이 위) */
 const bottomSigned = (s: DigSession) => {
@@ -113,6 +115,14 @@ export const LESSONS: Lesson[] = [
       moved('arm', -1, 15 * deg, '암 당기기', ['암 당기기']),
       moved('bucket', -1, 25 * deg, '버킷 오므리기', ['버킷 오므림']),
       moved('bucket', 1, 25 * deg, '버킷 펴기', ['버킷 펴기']),
+      // 낮은 채 선회하면 구역선·장애물선 실격 → 먼저 버킷을 장애물선 위로
+      {
+        text: '선회 전 붐 올려 높이 맞추기',
+        labels: ['붐 올림'],
+        begin: (s, mem) => (mem.g0 = bucketLow(s)),
+        done: (s) => bucketLow(s) >= s.site.B.ropeY + 0.6,
+        meter: (s, mem) => toward(bucketLow(s), mem, s.site.B.ropeY + 0.6),
+      },
       moved('swing', -1, 15 * deg, '왼쪽으로 선회', ['선회 ◀']),
       moved('swing', 1, 15 * deg, '오른쪽으로 선회', ['▶ 선회']),
     ],
