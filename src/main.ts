@@ -695,10 +695,15 @@ function updateIntro() {
       }
     }
     if (x1 < 0) continue;
-    const r = $(pad === 'l' ? 'stick-l' : 'stick-r').getBoundingClientRect();
-    const x2 = r.left + r.width / 2;
-    const y2 = r.top - 26; // 엄지에 안 가리게 조이스틱 위 빈자리
-    svg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/><circle cx="${x1}" cy="${y1}" r="9"/><circle class="end" cx="${x2}" cy="${y2}" r="9"/>`;
+    // 조이스틱 테두리에 연결하고 조이스틱을 원으로 감쌈
+    const r = $(pad === 'l' ? 'stick-l' : 'stick-r').querySelector('.ring')!.getBoundingClientRect();
+    const cx = r.left + r.width / 2;
+    const cy = r.top + r.height / 2;
+    const rad = r.width / 2 + 6;
+    const d = Math.hypot(x1 - cx, y1 - cy) || 1;
+    const x2 = cx + ((x1 - cx) / d) * rad;
+    const y2 = cy + ((y1 - cy) / d) * rad;
+    svg += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/><circle cx="${x1}" cy="${y1}" r="9"/><circle class="ring" cx="${cx}" cy="${cy}" r="${rad}"/>`;
   }
   introSvg.innerHTML = svg;
 }

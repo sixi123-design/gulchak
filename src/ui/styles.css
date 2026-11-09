@@ -4109,6 +4109,11 @@ body:has(#fail:not([hidden])) .lab-toggle {
   stroke: #fff;
   stroke-width: 3;
 }
+.intro-lines circle.ring {
+  fill: none;
+  stroke: #ff5a1f;
+  stroke-width: 5;
+}
 .intro-lines circle.end {
   animation: pop 0.6s infinite alternate;
   transform-box: fill-box;
