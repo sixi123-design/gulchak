@@ -4130,3 +4130,27 @@ body:has(#fail:not([hidden])) .lab-toggle {
 .mission {
   max-width: min(320px, 40vw);
 }
+/* 배우기: 눌러야 할 방향 라벨에 퍼지는 테두리 (맞게 누르는 중엔 멈춤) */
+.stick .lab.hint::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border: 4px solid #ff5a1f;
+  border-radius: 12px;
+  animation: labRipple 0.9s ease-out infinite;
+  pointer-events: none;
+}
+@keyframes labRipple {
+  from {
+    transform: scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: scale(1.7);
+    opacity: 0;
+  }
+}
+body:has(#mission.good) .stick .lab.hint::after {
+  animation: none;
+  opacity: 0;
+}
