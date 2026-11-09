@@ -3673,3 +3673,15 @@ body:has(#paywall:not([hidden])) #precheck .card.start {
 .card.res .cols {
   margin-bottom: 14px;
 }
+/* 이름과 숫자를 붙여서: 한 장 흰 바에 칸을 가로로, 칸 사이 세로줄 */
+.card.res .hero {
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+}
+.card.res .hero-tile {
+  justify-content: center;
+  gap: 12px;
+}
+.card.res .hero-tile + .hero-tile {
+  border-top: 0;
+  border-left: 1px solid #1d1b2e22;
+}
