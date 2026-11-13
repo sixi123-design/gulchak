@@ -7555,3 +7555,18 @@ body.stage-on #precheck .mode-pick {
   font: 800 13px var(--font);
   color: var(--ink);
 }
+/* ---------- 쌓인 연습 판수 (결과 · 결제 벽) ---------- */
+.res-runs {
+  margin: 6px 0 0;
+  font: 800 13px var(--font);
+  color: #1d1b2e99;
+}
+.pw-runs {
+  margin: 0;
+  padding: 4px 10px;
+  font: 900 13px var(--font);
+  color: var(--ink);
+  background: var(--sun);
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+}

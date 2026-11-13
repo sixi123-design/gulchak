@@ -4,6 +4,7 @@ import rulesJson from './config/rules.json';
 import sitesJson from './config/sites.json';
 import { MODES, type ModeKey, type Violation } from './core/ruleEngine';
 import { isLocked, redeem } from './core/entitlement';
+import { bumpRuns, loadRuns, todayKey } from './core/practiceLog';
 import { ExcavatorView, type MachineStyleKey } from './render/excavatorView';
 import { FxView, SiteView, SoilView } from './render/siteView';
 import { DigSession, type DigEntry, type RulesFile, type Sticks } from './sim/session';
@@ -154,6 +155,10 @@ function openPaywall(k: ModeKey) {
   // 누른 모드를 앞에 (이용권은 두 모드 모두)
   const other: ModeKey = k === 'exam' ? 'practice' : 'exam';
   $('pw-title').textContent = `${MODE_INFO[k].label} · ${MODE_INFO[other].label} 열기`;
+  const runs = loadRuns(todayKey());
+  const pr = $('pw-runs');
+  pr.hidden = runs.total < 3;
+  pr.textContent = `지금까지 ${runs.total}판 연습했어요`;
   $('paywall').hidden = false;
 }
 // ----- 시작 페이지 카드 스티커 (CSS: .mb-badge). 유료 모드도 잠김 표시 없이: 누를 때 결제 -----
@@ -1848,6 +1853,14 @@ function renderTip(dq: { id: string; title: string }[], verdict: Score | null, a
   box.innerHTML = `<div class="rt-text"><small>다음엔 이렇게</small><b></b></div>`;
   box.querySelector('b')!.textContent = t.tip;
 }
+/** 한 판 끝냈다. 연습은 많이 할수록 좋으니 막지 않고 쌓아서 보여준다 */
+function showRuns() {
+  const runs = bumpRuns(todayKey());
+  const el = $('res-runs');
+  el.hidden = false;
+  el.textContent = runs.today > 1 ? `연습 ${runs.total}판째 · 오늘 ${runs.today}판` : `연습 ${runs.total}판째`;
+}
+
 function showResult() {
   const s = session;
   if (s.flags.key === 'tutorial') {
@@ -1873,6 +1886,8 @@ function showResult() {
     return;
   }
   const r = s.result();
+  showRuns();
+  showRuns();
   const sum = s.engine.summary();
   const dq = sum.filter((x) => x.kind === 'disqualify');
   const warn = sum.filter((x) => x.kind === 'warning');
