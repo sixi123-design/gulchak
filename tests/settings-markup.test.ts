@@ -1,8 +1,10 @@
-import { readFileSync } from 'node:fs';
 import { expect, it } from 'vitest';
+// 파일을 글자 그대로 읽는다. html·ts는 vite의 ?raw로 되지만 css는 vitest가 비워서 fs로 읽는다.
+// (선언은 tests/node-fs.d.ts)
+import { readFileSync } from 'node:fs';
+import html from '../index.html?raw';
+import main from '../src/main.ts?raw';
 
-const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-const main = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../src/ui/styles.css', import.meta.url), 'utf8');
 
 const ids = new Set([...html.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]));
