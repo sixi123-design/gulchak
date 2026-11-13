@@ -1904,9 +1904,7 @@ function showResult() {
       ? dq.slice(0, 2).map((d) => `<li class="dq"><b>${d.basis} ${d.title}</b>${d.count > 1 ? `<small>${d.count}회</small>` : ''}</li>`).join('') + (dq.length > 2 ? `<li class="dq"><b>외 ${dq.length - 2}건</b></li>` : '')
       : s.abandoned && mode === 'exam'
         ? '' // 기권은 도장으로 이미 알림
-        : mode === 'free'
-          ? '<li class="ok"><b>연습 끝 — 채점은 안 했어요</b></li>'
-          : '<li class="ok"><b>실격 없음</b></li>') +
+        : '<li class="ok"><b>실격 없음</b></li>') +
     '';
   if (mode === 'exam') dqList.innerHTML += precheckLi(s.precheck);
   const pct = (v: number) => `${Math.round(v * 100)}%`;
@@ -2017,9 +2015,7 @@ function showDriveResult() {
     ? dq.slice(0, 2).map((x) => `<li class="dq"><b>${x.basis} ${x.title}</b>${x.count > 1 ? `<small>${x.count}회</small>` : ''}</li>`).join('') + (dq.length > 2 ? `<li class="dq"><b>외 ${dq.length - 2}건</b></li>` : '')
     : s.abandoned && mode === 'exam'
       ? ''
-      : mode === 'free'
-        ? '<li class="ok"><b>연습 끝 — 채점은 안 했어요</b></li>'
-        : '<li class="ok"><b>실격 없음</b></li>';
+      : '<li class="ok"><b>실격 없음</b></li>';
   if (mode === 'exam') $('res-dq').innerHTML += precheckLi(s.precheck);
   const mmss = (t: number) => `${Math.floor(t / 60)}:${String(Math.round(t % 60)).padStart(2, '0')}`;
   const hero: [string, string, boolean][] = [
