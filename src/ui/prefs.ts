@@ -71,3 +71,14 @@ export function cssVars(): Record<string, string> {
 export function pickTab(saved: string | null, tabs: readonly string[], def: string): string {
   return saved !== null && tabs.includes(saved) ? saved : def;
 }
+
+/** 오프닝을 본 적 있는지 */
+export const INTRO_KEY = 'exc-seen-intro';
+
+/**
+ * 오프닝을 재생할지. 처음 온 사람에게만 보여주고, 두 번째부터는 바로 시작 화면으로 간다
+ * (링크를 누른 사람이 조작까지 가는 시간이 4초 짧아진다). `?nointro`면 언제나 생략.
+ */
+export function wantIntro(saved: string | null, noIntro: boolean): boolean {
+  return !noIntro && saved !== '1';
+}

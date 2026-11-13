@@ -13,7 +13,7 @@ import { ik } from './sim/kinematics';
 import { Joystick, KEY_ACTIONS, keyName, Keys } from './ui/joystick';
 import { Pedal, SteeringWheel } from './ui/driveControls';
 import { MachineSound, type SoundLevels } from './ui/audio';
-import { cssVars, loadNum, loadStep, pickTab, saveRaw, saveStep, STEPS } from './ui/prefs';
+import { cssVars, INTRO_KEY, loadNum, loadRaw, loadStep, pickTab, saveRaw, saveStep, STEPS, wantIntro } from './ui/prefs';
 import { buzz, buzzOn, setBuzz } from './ui/buzz';
 import { Q, current as qNow, markRendererAa, pick as qPick, tick as qTick, type QLevel } from './ui/quality';
 import { ICON } from './ui/icons';
@@ -2239,7 +2239,10 @@ applySize();
 addEventListener('resize', applySize);
 addEventListener('orientationchange', () => setTimeout(applySize, 300));
 if (typeof ResizeObserver !== 'undefined') new ResizeObserver(applySize).observe(canvas);
-// ----- 오프닝: 앱을 켤 때마다 (탭·키로 건너뜀, ?nointro면 생략) -----
+// ----- 오프닝: 처음 온 사람에게만 (탭·키로 건너뜀, ?nointro면 생략) -----
+// 두 번째부터는 바로 시작 화면. 링크를 누른 사람이 조작까지 가는 시간을 줄인다
 const startStage = new StartStage(renderer, () => styleKey);
-let opening: Intro | null = new URLSearchParams(location.search).has('nointro') ? null : new Intro(renderer, startStage, () => (opening = null));
+const playIntro = wantIntro(loadRaw(INTRO_KEY), new URLSearchParams(location.search).has('nointro'));
+if (playIntro) saveRaw(INTRO_KEY, '1');
+let opening: Intro | null = playIntro ? new Intro(renderer, startStage, () => (opening = null)) : null;
 requestAnimationFrame(frame);
