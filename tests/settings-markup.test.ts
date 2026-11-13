@@ -73,3 +73,17 @@ it('설정 탭 칸 수가 탭 개수와 맞는다', () => {
   const wrong = tabRules.filter(([, , body]) => !/repeat\(4,/.test(body)).map(([, sel]) => sel.trim());
   expect(wrong).toEqual([]);
 });
+
+it('설정을 닫아도 마지막 탭이 남는다', () => {
+  // 확인으로 닫을 때 탭을 조작으로 되돌리면, 소리에서 음량 만지고 닫았다 열면 조작 탭이 뜬다
+  const close = main.slice(main.indexOf("$('btn-settings-ok').onclick"));
+  expect(close.slice(0, 400)).not.toMatch(/showTab\('(keys|view|sound|machine)'\)/);
+});
+
+it('누르는 것들은 손가락 크기만큼 높다', () => {
+  // 장갑 낀 손가락 기준. 칩·탭 모두 최소 높이를 둔다
+  for (const sel of ['.lk-chip', '.settings-card .tabs button']) {
+    const blocks = [...css.matchAll(/([^{}]*)\{([^}]*)\}/g)].filter(([, s2]) => s2.includes(sel));
+    expect(blocks.some(([, , body]) => /min-height:\s*4[4-9]px|min-height:\s*5\dpx/.test(body)), sel).toBe(true);
+  }
+});

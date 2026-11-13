@@ -7504,3 +7504,16 @@ body.stage-on #precheck .mode-pick {
 #paywall .redeem {
   align-self: stretch;
 }
+/* ---------- 설정: 장갑 낀 손가락으로도 눌리게 (최소 44px) ---------- */
+.lk-chip {
+  min-height: 44px;
+}
+.settings-card .tabs button {
+  min-height: 44px;
+}
+/* 화질은 칸이 넷이라 좁은 화면에서 2줄로 나눈다 */
+@media (max-width: 520px) {
+  #q-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

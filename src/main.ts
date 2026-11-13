@@ -681,7 +681,7 @@ $('btn-seat-cancel').onclick = () => {
 $('btn-settings-ok').onclick = () => {
   if ($('settings').classList.contains('seat')) return showTab(seatFrom);
   keys.cancelRebind();
-  showTab('keys');
+  // 탭은 그대로 둔다: 방금 보던 자리에서 다시 열리게
   $('settings').hidden = true;
 };
 
