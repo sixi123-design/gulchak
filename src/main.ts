@@ -13,6 +13,7 @@ import { Joystick, KEY_ACTIONS, keyName, Keys } from './ui/joystick';
 import { Pedal, SteeringWheel } from './ui/driveControls';
 import { MachineSound, type SoundLevels } from './ui/audio';
 import { loadNum, saveRaw } from './ui/prefs';
+import { buzz } from './ui/buzz';
 import { ICON } from './ui/icons';
 import { ExaminerView } from './render/examinerView';
 import { EXAM_SKY, paintExamSite } from './render/examSite';
@@ -1056,7 +1057,7 @@ function updateSay() {
   // 틀린 레버를 처음 잡은 순간 / 새 바로잡기 안내가 뜬 순간만 소리 (계속 잡고 있어도 반복 안 함)
   if (state === 'bad' && sayKind !== 'bad') {
     sound.wrong();
-    if (navigator.vibrate) navigator.vibrate(15);
+    buzz(15);
   } else if (state === 'coach' && text !== sayCoach) sound.cue();
   sayKind = state;
   if (state === 'coach') sayCoach = text;
@@ -1170,7 +1171,7 @@ function renderMission(intro = false) {
 function onRewind() {
   if (!tutor) return;
   sound.thump(0.5);
-  if (navigator.vibrate) navigator.vibrate(40);
+  buzz(40);
   if (tutor.wantReset) {
     const msg = tutor.notice;
     startLesson(lessonIdx, true, guideLv);
@@ -1207,10 +1208,10 @@ function onLessonClear() {
   // 자동으로 다시 시작하지 않음: '반복'·'다음'·'목록' 중 사용자가 고름
   if (big) {
     sound.jingle();
-    if (navigator.vibrate) navigator.vibrate([30, 40, 30, 40, 80]);
+    buzz([30, 40, 30, 40, 80]);
   } else {
     sound.ding();
-    if (navigator.vibrate) navigator.vibrate(30);
+    buzz(30);
   }
 }
 function onLessonFail(v: Violation) {
@@ -1436,7 +1437,7 @@ function startMode() {
   void bi.offsetWidth;
   bi.hidden = false;
   sound.bossIntro(boss);
-  if (boss && navigator.vibrate) navigator.vibrate([60, 120, 200]);
+  if (boss) buzz([60, 120, 200]);
   setTimeout(() => {
     bi.hidden = true;
     if (boss) openExamCheck();
@@ -1587,12 +1588,10 @@ function showToast(v: Violation) {
   box.prepend(el);
   while (box.children.length > 3) box.lastElementChild!.remove();
   setTimeout(() => el.remove(), 3500);
-  if (navigator.vibrate) {
-    if (dq) navigator.vibrate(120);
-    else if (v.id === 'W-JOLT' && performance.now() - lastBuzz > 400) {
-      lastBuzz = performance.now();
-      navigator.vibrate([40, 30, 25]); // 덜컹
-    }
+  if (dq) buzz(120);
+  else if (v.id === 'W-JOLT' && performance.now() - lastBuzz > 400) {
+    lastBuzz = performance.now();
+    buzz([40, 30, 25]); // 덜컹
   }
 }
 
@@ -1760,7 +1759,7 @@ function playDq(v: Violation, done: () => void) {
     const side = new THREE.Vector3(-toMachine.z, 0, toMachine.x);
     cine = { pos: head.clone().addScaledVector(toMachine, 3.2).addScaledVector(side, 1.2).setY(1.9), look: head.clone().setY(1.55) };
     sound.whistle(timeUp ? 'time' : 'fail');
-    if (navigator.vibrate) navigator.vibrate(timeUp ? [400] : [120, 80, 120]);
+    buzz(timeUp ? [400] : [120, 80, 120]);
     setTimeout(() => {
       banner.hidden = true;
       done();
@@ -1881,7 +1880,7 @@ function showResult() {
       () => {
         sound.stamp();
         sound.jingle();
-        if (navigator.vibrate) navigator.vibrate([40, 60, 80]);
+        buzz([40, 60, 80]);
       },
       () => ($('result').hidden = false),
     );
@@ -1891,7 +1890,7 @@ function showResult() {
     setTimeout(() => {
       sound.stamp();
       if (clean) sound.jingle();
-      if (navigator.vibrate) navigator.vibrate(40);
+      buzz(40);
     }, 600 + 350);
 }
 
@@ -1966,7 +1965,7 @@ function showDriveResult() {
       () => {
         sound.stamp();
         sound.jingle();
-        if (navigator.vibrate) navigator.vibrate([40, 60, 80]);
+        buzz([40, 60, 80]);
       },
       () => ($('result').hidden = false),
     );
@@ -1976,7 +1975,7 @@ function showDriveResult() {
     setTimeout(() => {
       sound.stamp();
       if (clean) sound.jingle();
-      if (navigator.vibrate) navigator.vibrate(40);
+      buzz(40);
     }, 600 + 350);
 }
 
@@ -2102,7 +2101,7 @@ function driveFrame(dt: number, _now: number) {
   d.s.lockPush = 0;
   if (wheelCtl.hitLock) {
     // 끝에 '턱' 걸리는 느낌: 짧은 진동 + 둔탁한 소리
-    if (navigator.vibrate) navigator.vibrate(25);
+    buzz(25);
     sound.thump(0.35);
   }
   acc += dt;
