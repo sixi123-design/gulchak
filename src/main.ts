@@ -10,28 +10,62 @@ import { DigSession, type DigEntry, type RulesFile, type Sticks } from './sim/se
 import { LESSONS, Tutor } from './sim/tutorial';
 import { ik } from './sim/kinematics';
 import { Joystick, KEY_ACTIONS, keyName, Keys } from './ui/joystick';
+import { Pedal, SteeringWheel } from './ui/driveControls';
 import { MachineSound, type SoundLevels } from './ui/audio';
+import { loadNum, saveRaw } from './ui/prefs';
 import { ICON } from './ui/icons';
 import { ExaminerView } from './render/examinerView';
+import { EXAM_SKY, paintExamSite } from './render/examSite';
+import { EXAM_TIMES, examLook, SEASONS, seasonOfMonth, type ExamTime, type Season } from './render/examLook';
+import { DriveApp } from './driveApp';
+import { DRIVE_LESSONS } from './sim/drive/driveTutorial';
+import { fixTip } from './sim/fixTips';
+import type { Lesson } from './sim/tutorial';
+import { Intro } from './ui/intro';
+import { StartStage } from './ui/startStage';
+import { playPass } from './ui/passFx';
+import { installPatterns } from './ui/patterns';
+import { Pad } from './ui/gamepad';
+// 합격·완료 연출용 증서 무늬: 첫 화면을 늦추지 않게 한가할 때 미리 그려 둠
+(window.requestIdleCallback ?? ((f: () => void) => setTimeout(f, 1200)))(() => installPatterns());
+import { renderScore } from './ui/scoreView';
+import { scoreDig, scoreDrive, type Score } from './sim/score';
 
 const RULES = rulesJson as unknown as RulesFile;
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+const loadPct = $('loadpct');
 const debug = new URLSearchParams(location.search).has('debug');
 
 // ---------- 렌더러 ----------
 const canvas = $<HTMLCanvasElement>('view');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: true, powerPreference: 'default' });
+if (debug) (window as unknown as { __r: unknown }).__r = renderer;
 let dprCap = 1.25;
+let sizeW = 0;
+let sizeH = 0;
+let sizeDpr = 0;
+/**
+ * 그리는 크기를 실제 화면(캔버스) 크기에 맞춤. 휴대폰을 돌리면 resize가 크기가 바뀌기 전에 오기도 해서
+ * 캔버스 크기 변화(ResizeObserver)로도 다시 맞춤 (안 그러면 세로 크기로 그린 그림이 가로로 늘어남)
+ */
 const applySize = () => {
-  renderer.setPixelRatio(Math.min(devicePixelRatio, dprCap));
-  renderer.setSize(innerWidth, innerHeight, false);
-  camera.aspect = innerWidth / innerHeight;
+  const w = canvas.clientWidth || innerWidth;
+  const h = canvas.clientHeight || innerHeight;
+  const dpr = Math.min(devicePixelRatio, dprCap);
+  if (w === sizeW && h === sizeH && dpr === sizeDpr) return;
+  sizeW = w;
+  sizeH = h;
+  sizeDpr = dpr;
+  renderer.setPixelRatio(dpr);
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
   camera.updateProjectionMatrix();
 };
 const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0xcfeeff, 28, 70);
 const camera = new THREE.PerspectiveCamera(62, 1, 0.05, 150);
-scene.add(new THREE.HemisphereLight(0xffffff, 0x9a8a70, 1.4));
+const hemiLight = new THREE.HemisphereLight(0xffffff, 0x9a8a70, 1.4);
+scene.add(hemiLight);
 const sunLight = new THREE.DirectionalLight(0xffffff, 1.6);
 sunLight.position.set(-6, 14, 9);
 scene.add(sunLight);
@@ -78,6 +112,15 @@ try {
   /* 저장소 사용 불가 */
 }
 // 모드: 자유 연습 / 연습 시험 / 실제 시험 — 선택은 기억
+// 종목: 굴착 / 주행(코스운전) — 선택은 기억
+type KindKey = 'dig' | 'drive';
+let kindKey: KindKey = 'dig';
+try {
+  if (localStorage.getItem('exc-kind') === 'drive') kindKey = 'drive';
+} catch {
+  /* 저장소 사용 불가 */
+}
+let drive: DriveApp | null = null;
 let modeKey: ModeKey = 'free';
 try {
   const v = localStorage.getItem('exc-mode');
@@ -102,14 +145,25 @@ function openPaywall(k: ModeKey) {
   $('pw-title').textContent = `${MODE_INFO[k].label} · ${MODE_INFO[other].label} 열기`;
   $('paywall').hidden = false;
 }
+// ----- 시작 페이지 카드 스티커 (CSS: .mb-badge). 유료 모드도 잠김 표시 없이: 누를 때 결제 -----
+function modeBadge(k: ModeKey) {
+  let t = '';
+  if (k === 'tutorial') {
+    const n = loadCleared().filter((id) => curLessons().some((l) => l.id === id)).length;
+    t = n === 0 ? '처음이면 여기부터' : n < curLessons().length ? `이어서 ${n + 1}단계` : '복습하기';
+  } else if (k === 'free') t = '시간 제한 없음';
+  else if (k === 'practice') t = '안내·피드백 포함';
+  else if (k === 'exam') t = '실제 시험 조건';
+  return t ? `<i class="mb-badge">${t}</i>` : '';
+}
 function renderModePicker() {
   const box = $('mode-pick');
   box.innerHTML = '';
   for (const k of ['tutorial', 'free', 'practice', 'exam'] as const) {
     const b = document.createElement('button');
     const mi = MODE_INFO[k];
-    b.className = `modebtn ${mi.cls}` + (k === modeKey ? ' on' : '');
-    b.innerHTML = `${ICON[mi.icon]}<b>${mi.label}</b>`;
+    b.className = `modebtn ${mi.cls}` + (k === modeKey ? ' on' : '') + (needPay(k) ? ' pay' : '');
+    b.innerHTML = `${ICON[mi.icon]}<b>${mi.label}</b>` + modeBadge(k);
     b.onclick = () => {
       // 카드를 누르면 바로 시작 (유료 모드는 결제 먼저)
       if (needPay(k)) return openPaywall(k);
@@ -145,6 +199,76 @@ const load = (k: string) => {
     return null;
   }
 };
+
+// 실제 시험 시각·계절: 해 위치·빛 색·하늘·나무 색 (화면만, 판정과 무관)
+// 시간 기본 점심, 계절 기본 기기 날짜
+// 직접 고르기에서 고른 값 (현재 시간이면 쓰지 않음)
+let lookNow = load('exc-looknow') !== '0';
+let examTime: ExamTime = (EXAM_TIMES.find((t) => t.key === load('exc-examtime'))?.key ?? 'pm') as ExamTime;
+let examSeason: Season = (SEASONS.find((t) => t.key === load('exc-season'))?.key ?? seasonOfMonth(new Date().getMonth())) as Season;
+function applySceneLook() {
+  const fog = scene.fog as THREE.Fog;
+  if (modeKey === 'exam') {
+    const L = lookNow ? examLook('pm', 'auto') : examLook(examTime, examSeason);
+    sunLight.position.copy(L.sunDir).multiplyScalar(17);
+    sunLight.color.copy(L.sunColor);
+    sunLight.intensity = L.sunI;
+    hemiLight.color.copy(L.hemiSky);
+    hemiLight.groundColor.copy(L.hemiGround);
+    hemiLight.intensity = L.hemiI;
+    fog.color.copy(L.skyHorizon);
+    fog.near = EXAM_SKY.fogNear;
+    fog.far = EXAM_SKY.fogFar;
+    paintExamSite(scene, L);
+  } else {
+    sunLight.position.set(-6, 14, 9);
+    sunLight.color.setHex(0xffffff);
+    sunLight.intensity = 1.6;
+    hemiLight.color.setHex(0xffffff);
+    hemiLight.groundColor.setHex(0x9a8a70);
+    hemiLight.intensity = 1.4;
+    fog.color.setHex(0xcfeeff);
+    fog.near = 28;
+    fog.far = 70;
+  }
+}
+function renderExamLookUi() {
+  const el = $('exam-look');
+  const d = new Date();
+  const lab = (k: string, arr: { key: string; label: string }[]) => arr.find((x) => x.key === k)!.label;
+  const hourOf = (t: ExamTime) => EXAM_TIMES.find((x) => x.key === t)!.hour;
+  const tl = (t: ExamTime) => `${lab(t, EXAM_TIMES)} ${hourOf(t) > 12 ? hourOf(t) - 12 : hourOf(t)}시`;
+  const nowSub = `${d.getMonth() + 1}월 ${d.getDate()}일 · ${lab(seasonOfMonth(d.getMonth()), SEASONS)} · ${tl('pm')}`;
+  const chips = (items: { key: string; label: string }[], cur: string, cls: string) =>
+    items.map((it) => `<button class="lk-chip${it.key === cur ? ' on' : ''}" data-${cls}="${it.key}">${it.label}</button>`).join('');
+  el.innerHTML = `
+    <button class="lk-card${lookNow ? ' on' : ''}" data-mode="now">
+      <i class="lk-radio"></i><span class="lk-t">현재 시간<em>기본</em></span><span class="lk-s">${nowSub}</span>
+    </button>
+    <div class="lk-card lk-custom${lookNow ? '' : ' on'}">
+      <button class="lk-head" data-mode="custom">
+        <i class="lk-radio"></i><span class="lk-t">직접 고르기</span>
+        <span class="lk-s">${lookNow ? '계절·아침/점심' : `${lab(examSeason, SEASONS)} · ${tl(examTime)}`}</span><b class="lk-arrow">›</b>
+      </button>
+      ${lookNow ? '' : `<div class="lk-body">
+        <p class="lk-label">계절</p><div class="lk-row s4">${chips(SEASONS, examSeason, 'season')}</div>
+        <p class="lk-label">시간 <small>입실 12:30 · 8:30</small></p>
+        <div class="lk-row s2">${chips(EXAM_TIMES.map((t) => ({ key: t.key, label: tl(t.key) })), examTime, 'time')}</div>
+      </div>`}
+    </div>`;
+  el.querySelectorAll<HTMLElement>('[data-mode]').forEach((b) => (b.onclick = () => {
+    lookNow = b.dataset.mode === 'now';
+    save('exc-looknow', lookNow ? '1' : '0');
+    renderExamLookUi();
+    applySceneLook();
+  }));
+  el.querySelectorAll<HTMLElement>('[data-season],[data-time]').forEach((b) => (b.onclick = () => {
+    if (b.dataset.season) save('exc-season', (examSeason = b.dataset.season as Season));
+    if (b.dataset.time) save('exc-examtime', (examTime = b.dataset.time as ExamTime));
+    renderExamLookUi();
+    applySceneLook();
+  }));
+}
 
 // 좌석 높이: 키에 맞춘 대략적인 눈높이 (앉은 눈높이 ≈ 키의 45%, 기준 172cm)
 const H_MIN = 150;
@@ -192,11 +316,14 @@ try {
 } catch {
   /* 무시 */
 }
+// 전체 음량 (0~1). 음소거와 따로 기억한다
+let volAll = loadNum('exc-vol-all', 1, 0, 1);
 const SOUND_KEYS = ['eng', 'amb', 'sfx'] as const;
 function syncSoundUi() {
   const all = $('mute-all');
   all.innerHTML = sound.muted ? ICON.muted : ICON.sound;
   all.classList.toggle('off', sound.muted);
+  $<HTMLInputElement>('vol-all').value = String(Math.round(volAll * 100));
   $('settings').classList.toggle('all-off', sound.muted);
   for (const k of SOUND_KEYS) {
     $<HTMLInputElement>(`vol-${k}`).value = String(Math.round(levels[k] * 100));
@@ -208,6 +335,7 @@ function syncSoundUi() {
 }
 const applySound = () => {
   sound.setLevels(levels);
+sound.setMaster(volAll);
   save('exc-audio', JSON.stringify(levels));
   syncSoundUi();
 };
@@ -216,6 +344,12 @@ $('mute-all').onclick = () => {
   sound.setMuted(!sound.muted);
   save('exc-mute', sound.muted ? '1' : '0');
   syncSoundUi();
+};
+$<HTMLInputElement>('vol-all').oninput = (e) => {
+  sound.start();
+  volAll = Number((e.target as HTMLInputElement).value) / 100;
+  sound.setMaster(volAll);
+  saveRaw('exc-vol-all', String(volAll));
 };
 for (const k of SOUND_KEYS) {
   $<HTMLInputElement>(`vol-${k}`).oninput = (e) => {
@@ -239,7 +373,8 @@ interface TestSite {
   lng: number;
 }
 const SITES = sitesJson as TestSite[];
-const STYLE_NAME: Record<MachineStyleKey, string> = { A: '현대 계열', B: '두산 계열', C: '볼보 계열' };
+// 기종 버튼은 중립 이름 (제조사 이름은 시험장 목록의 사실 안내에만)
+const STYLE_NAME: Record<MachineStyleKey, string> = { A: 'A형 · 노랑/남색', B: 'B형 · 주황', C: 'C형 · 노랑/검은 붐' };
 let siteName = load('exc-site') ?? '';
 const curSite = () => SITES.find((x) => x.name === siteName) ?? null;
 if (curSite()) styleKey = curSite()!.style;
@@ -269,6 +404,58 @@ function setMachine(style: MachineStyleKey, site: string) {
   }
   renderMachineUi();
 }
+// 설정 > 굴착기 모델: 고른 모델을 한 번 그려 사진처럼 보여줌 (같은 렌더러 · 계열별 캐시)
+const thumbCache = new Map<MachineStyleKey, string>();
+function machineThumb(k: MachineStyleKey): string {
+  const hit = thumbCache.get(k);
+  if (hit) return hit;
+  const W = 480;
+  const H = 270;
+  const sc = new THREE.Scene();
+  sc.add(new THREE.HemisphereLight(0xffffff, 0x9a8a70, 1.5));
+  const sun = new THREE.DirectionalLight(0xffffff, 1.6);
+  sun.position.set(-4, 10, 8);
+  sc.add(sun);
+  const v = new ExcavatorView(MACHINE, k);
+  v.setDrive(0, 0, 0, 0, 0);
+  const fake = {
+    pose: { swing: 0, boom: 0.35, arm: -0.6, bucket: 0.4 },
+    rock: { pitch: 0, pitchV: 0, roll: 0, rollV: 0 },
+    lift: 0, load: 0, loadBack: 0, backCap: 1, m: MACHINE,
+  };
+  v.sync(fake as unknown as DigSession);
+  sc.add(v.root);
+  const box = new THREE.Box3().setFromObject(v.root);
+  const c = box.getCenter(new THREE.Vector3());
+  const r = box.getSize(new THREE.Vector3()).length() / 2;
+  const cam = new THREE.PerspectiveCamera(30, W / H, 0.1, 100);
+  cam.position.copy(c).add(new THREE.Vector3(0.55, 0.32, 0.78).normalize().multiplyScalar(r / Math.sin((15 * Math.PI) / 180) * 0.62));
+  cam.lookAt(c);
+  const rt = new THREE.WebGLRenderTarget(W, H, { samples: 4 });
+  rt.texture.colorSpace = THREE.SRGBColorSpace;
+  const prev = renderer.getRenderTarget();
+  const clear = renderer.getClearAlpha();
+  renderer.setRenderTarget(rt);
+  renderer.setClearAlpha(0);
+  renderer.clear();
+  renderer.render(sc, cam);
+  const px = new Uint8Array(W * H * 4);
+  renderer.readRenderTargetPixels(rt, 0, 0, W, H, px);
+  renderer.setRenderTarget(prev);
+  renderer.setClearAlpha(clear);
+  rt.dispose();
+  v.disposeCache();
+  disposeTree(v.root);
+  const cv = document.createElement('canvas');
+  cv.width = W;
+  cv.height = H;
+  const img = cv.getContext('2d')!.createImageData(W, H);
+  for (let y = 0; y < H; y++) img.data.set(px.subarray((H - 1 - y) * W * 4, (H - y) * W * 4), y * W * 4);
+  cv.getContext('2d')!.putImageData(img, 0, 0);
+  const url = cv.toDataURL('image/png');
+  thumbCache.set(k, url);
+  return url;
+}
 function renderMachineUi() {
   const cs = curSite();
   $('site-cur').innerHTML = cs ? `<b>${cs.name}</b> · ${cs.machine}` : '';
@@ -281,6 +468,9 @@ function renderMachineUi() {
     b.onclick = () => setMachine(k, '');
     pick.appendChild(b);
   }
+  const im = $<HTMLImageElement>('machine-img');
+  im.src = machineThumb(styleKey);
+  im.alt = STYLE_NAME[styleKey];
   const q = norm($<HTMLInputElement>('site-q').value);
   let hits = SITES.map((x, i) => ({ x, i })).filter(({ i }) => !q || SITE_KEYS[i].t.includes(q) || SITE_KEYS[i].c.includes(q));
   if (nearKm && !q) hits = hits.sort((p, r) => nearKm![p.i] - nearKm![r.i]).slice(0, 10);
@@ -356,14 +546,50 @@ $('btn-near').onclick = () => {
   );
 };
 
+// 설정 > 화면: 버튼·글자·레버 크기 (CSS 변수 → zoom / scale)
+const UI_SIZES = {
+  btn: { label: ['작게', '보통', '크게'], v: [0.88, 1, 1.15] },
+  txt: { label: ['보통', '크게', '아주 크게'], v: [1, 1.18, 1.36] },
+  stick: { label: ['작게', '보통', '크게'], v: [0.85, 1, 1.18] },
+} as const;
+type UiSizeKey = keyof typeof UI_SIZES;
+const uiSize: Record<UiSizeKey, number> = { btn: 1, txt: 0, stick: 1 };
+for (const k of Object.keys(UI_SIZES) as UiSizeKey[]) {
+  const v = Number(load(`exc-z-${k}`));
+  if (load(`exc-z-${k}`) !== null && v >= 0 && v <= 2) uiSize[k] = v;
+}
+function applyUiSize() {
+  for (const k of Object.keys(UI_SIZES) as UiSizeKey[]) document.documentElement.style.setProperty(`--z-${k}`, String(UI_SIZES[k].v[uiSize[k]]));
+}
+function renderUiSize() {
+  for (const k of Object.keys(UI_SIZES) as UiSizeKey[]) {
+    const el = $(`z-${k}`);
+    el.innerHTML = UI_SIZES[k].label.map((l, i) => `<button class="lk-chip${i === uiSize[k] ? ' on' : ''}" data-i="${i}">${l}</button>`).join('');
+    el.querySelectorAll<HTMLElement>('[data-i]').forEach((b) => (b.onclick = () => {
+      uiSize[k] = Number(b.dataset.i);
+      save(`exc-z-${k}`, String(uiSize[k]));
+      applyUiSize();
+      renderUiSize();
+    }));
+  }
+}
+applyUiSize();
+
 // 탭 · 열기/닫기
 let camBeforeSeat: CamMode | null = null;
+// 좌석 높이는 따로 들어가는 화면: 들어올 때의 탭·키를 기억 → [취소]는 되돌리고 나감
+let seatFrom = 'machine';
+let heightBefore = 170;
 function showTab(tab: string) {
+  if (tab === 'seat' && !$('settings').classList.contains('seat')) {
+    seatFrom = load('exc-settab') ?? 'machine';
+    heightBefore = heightCm;
+  }
   for (const b of document.querySelectorAll<HTMLElement>('#settings [data-tab]')) b.classList.toggle('on', b.dataset.tab === tab);
   for (const p of document.querySelectorAll<HTMLElement>('#settings [data-pane]')) p.hidden = p.dataset.pane !== tab;
   // 좌석 높이: 뒤의 운전석 화면을 보면서 맞추도록 창을 옆으로 비킴
   $('settings').classList.toggle('seat', tab === 'seat');
-  $('btn-keys-reset').hidden = tab !== 'keys';
+  $('btn-keys-reset').hidden = tab !== 'keys' || matchMedia('(pointer: coarse)').matches;
   if (tab === 'seat') {
     if (camBeforeSeat === null) camBeforeSeat = camMode;
     camMode = 'cab';
@@ -372,31 +598,52 @@ function showTab(tab: string) {
     camMode = camBeforeSeat;
     camBeforeSeat = null;
   }
-  save('exc-settab', tab);
+  $('btn-seat-cancel').hidden = tab !== 'seat';
+  if (tab !== 'seat') save('exc-settab', tab);
 }
 for (const b of document.querySelectorAll<HTMLElement>('#settings [data-tab]')) b.onclick = () => showTab(b.dataset.tab!);
 const openSettings = () => {
   syncSoundUi();
   renderMachineUi();
+  renderExamLookUi();
   syncRuler();
   $('settings').hidden = false;
   const t = load('exc-settab') ?? 'machine';
-  showTab(t === 'keys' && matchMedia('(pointer: coarse)').matches ? 'machine' : t);
+  renderPadUi();
+  renderUiSize();
+  showTab(t);
 };
 $('btn-paywall-close').onclick = () => ($('paywall').hidden = true);
 $('btn-settings').onclick = openSettings;
 $('btn-settings2').onclick = openSettings;
+$('btn-seat-cancel').onclick = () => {
+  heightCm = heightBefore;
+  save('exc-height', String(heightCm));
+  syncRuler();
+  showTab(seatFrom);
+};
 $('btn-settings-ok').onclick = () => {
+  if ($('settings').classList.contains('seat')) return showTab(seatFrom);
   keys.cancelRebind();
   showTab('machine');
   $('settings').hidden = true;
 };
 
+/** 날 앞 흙더미가 화면에 올라간 지형 높이 위에 놓이도록 연결 */
+function wireSoilShown() {
+  if (!exc || !soilView) return;
+  const sv = soilView;
+  exc.soilShown = (g) => sv.shownOf(g);
+}
+
 function rebuildMachine() {
+  if (drive) return newSession();
   if (!exc) return;
   world.remove(exc.root);
+  exc.disposeCache();
   disposeTree(exc.root);
   exc = new ExcavatorView(MACHINE, styleKey);
+  wireSoilShown();
   world.add(exc.root);
   (window as unknown as { __exc: { exc: ExcavatorView } }).__exc.exc = exc;
 }
@@ -407,19 +654,93 @@ let cine: { pos: THREE.Vector3; look: THREE.Vector3 } | null = null;
 let dqShown = false;
 let dqPlaying = false;
 const END_LABEL: Record<ModeKey, string> = { tutorial: '목록', free: '그만하기', practice: '그만하기', exam: '기권' };
+/** 스틱 글자: 굴착(레버) / 주행(핸들·페달) */
+const STICK_LABELS: Record<KindKey, [string, string, string, string, string, string, string, string]> = {
+  dig: ['암 펴기', '암 당기기', '선회&nbsp;◀', '▶&nbsp;선회', '붐 내림', '붐 올림', '버킷 오므림', '버킷 펴기'],
+  drive: ['', '', '핸들&nbsp;◀', '▶&nbsp;핸들', '가속', '브레이크', '', ''],
+};
+function setStickLabels(k: KindKey) {
+  const L = STICK_LABELS[k];
+  const put = (id: string, i: number) => {
+    const st = $(id);
+    (['up', 'down', 'lt', 'rt'] as const).forEach((c, j) => {
+      const el = st.querySelector<HTMLElement>(`.lab.${c}`);
+      if (el) {
+        el.innerHTML = L[i + j];
+        el.hidden = !L[i + j];
+      }
+    });
+  };
+  put('stick-l', 0);
+  put('stick-r', 4);
+}
 function newSession(autoEnd?: boolean) {
+  $('btn-lookwheel').classList.remove('on');
+  $('btn-lookmirror').classList.remove('on');
+  $('btn-lookfront').classList.add('on');
+  drive?.dispose();
+  drive = null;
+  exc?.disposeCache();
   scene.remove(world);
   disposeTree(world);
   world = new THREE.Group();
   scene.add(world);
   session = new DigSession(MACHINE, RULES, modeKey === 'tutorial' ? { ...MODES.tutorial, autoEnd: !!autoEnd } : MODES[modeKey]);
+  // 시험·연습: 마지막 자세(버킷 끝까지 펴서 내려놓기) 그대로 A 흙 위에서 시작 (배우기는 단계마다 자세를 따로 잡음)
+  if (modeKey !== 'tutorial') {
+    const A = session.site.stations[0];
+    session.restOnSoil(Math.PI, (A.pitIn + A.pitOut) / 2 + 0.4);
+  }
   tutor = null;
   renderMission();
   exc = new ExcavatorView(MACHINE, styleKey);
   soilView = new SoilView(session.soil.grids);
+  wireSoilShown();
   fx = new FxView();
-  siteView = new SiteView(session.site, session.soil.grids);
+  siteView = new SiteView(session.site, session.soil.grids, modeKey === 'exam');
+  // 실제 시험: 하늘 돔 색에 맞춘 먼 안개. 다른 모드는 기본값으로
+  applySceneLook();
+  document.body.dataset.kind = kindKey;
+  setStickLabels(kindKey);
+  if (kindKey === 'drive') {
+    // 주행: 굴착 세션은 화면 밖에 두고(모드 정보용) 코스·장비·미러를 띄움
+    drive = new DriveApp(world, renderer, MODES[modeKey], styleKey);
+    applySceneLook();
+    drive.s.onViolation(showToast);
+    drive.s.onViolation((v) => v.kind === 'disqualify' && onLessonFail(v));
+    drive.s.onFinish(showDriveResult);
+    tutor = null;
+    examiners = null;
+    if (modeKey === 'exam') {
+      drive.s.belt = false;
+      drive.s.leverUnlocked = false;
+      drive.s.rpm = 0.3;
+      // 출발 감독관: 주차구역 왼쪽, 출발선 뒤 (코스·주행로 밖)에서 운전석을 봄
+      const c = drive.s.c;
+      examiners = new ExaminerView([[c.startMid.x + c.width / 2 + 3.2, c.startMid.z - 1.2]]);
+      world.add(examiners.group);
+      drive.exc.root.updateMatrixWorld(true);
+      examiners.face(0, drive.exc.eyeWorld(new THREE.Vector3(), eyeOffset()));
+    }
+    resetExamCheck();
+    cine = null;
+    dqShown = false;
+    dqPlaying = false;
+    $('dq-banner').hidden = true;
+    document.body.dataset.mode = modeKey;
+    camMode = 'cab';
+    $('btn-end').textContent = END_LABEL[modeKey];
+    $('btn-end').classList.toggle('danger', modeKey !== 'tutorial');
+    $('precheck').hidden = false;
+    renderModePicker();
+    $('result').hidden = true;
+    $('toasts').innerHTML = '';
+    $('mission').hidden = true;
+    (window as unknown as { __exc: unknown }).__exc = { drive, camera, sound, setCam: (m: CamMode) => (camMode = m) };
+    return;
+  }
   if (session.flags.feedback) siteView.addDigGuide(session.site, session.digTarget.rho, MACHINE.bucketWidth, session.params.digPosTolGood);
+  if (session.flags.feedback) siteView.addFlatGuide(session.site);
   world.add(siteView.group, exc.root, ...soilView.meshes, fx.particles, fx.dust, fx.bucketShadow, fx.machineShadow);
   // 실제 시험: 감독관 3명 (A쪽 · B 통과구역 뒤 · C쪽 = 시간 담당)
   examiners = null;
@@ -433,8 +754,13 @@ function newSession(autoEnd?: boolean) {
       [-(A.zoneOut + 2.6), -4.6],
       [-2.4, session.site.B.rF + 2.6],
       [Cst.zoneOut + 2.6, -4.6],
+      START_SPOT_DIG,
     ]);
     world.add(examiners.group);
+    // 출발 감독관은 처음부터 운전석(나)을 보고 서 있음: 손 드는 걸 봐야 하니까
+    exc.sync(session);
+    exc.root.updateMatrixWorld(true);
+    examiners.face(3, exc.eyeWorld(new THREE.Vector3(), eyeOffset()));
   }
   session.onViolation(showToast);
   session.onFinish(showResult);
@@ -442,9 +768,12 @@ function newSession(autoEnd?: boolean) {
   session.onDigEntry(showEntry);
   // 점검 화면 초기화
   // 안전벨트·안전레버·RPM은 준비된 것으로 본다
-  session.belt = true;
-  session.leverUnlocked = true;
-  session.rpm = 0.8;
+  // 실제 시험은 직접 점검: 안전벨트 풀림 · 안전레버 잠김 · RPM 저속으로 시작
+  const selfCheck = modeKey === 'exam';
+  session.belt = !selfCheck;
+  session.leverUnlocked = !selfCheck;
+  session.rpm = selfCheck ? 0.3 : 0.8;
+  resetExamCheck();
   // 모드별로 보일 것·숨길 것은 CSS(body[data-mode])에서. 실제 시험은 운전석 시점 고정
   document.body.dataset.mode = modeKey;
   if (modeKey === 'exam') camMode = 'cab';
@@ -454,12 +783,16 @@ function newSession(autoEnd?: boolean) {
   renderModePicker();
   $('result').hidden = true;
   $('toasts').innerHTML = '';
-  (window as unknown as { __exc: unknown }).__exc = { session, camera, exc, sound, ik: (r: number, y: number, k: number) => ik(MACHINE, r, y, k), setCam: (m: CamMode) => (camMode = m) };
+  warmToasts();
+  warmShaders();
+  // 흙덩이·흙 알갱이 예열은 시작 0.5초 뒤 (시작 직후 몇 프레임 안에 그리면 효과가 남지 않음: 30ms 뒤 예열은 실패, 0.4·1.2초 뒤는 성공)
+  warmPending = performance.now() + 500;
+  warmFxPending = performance.now() + 900;
+  (window as unknown as { __exc: unknown }).__exc = { session, camera, scene, exc, sound, soilView, fx, ik: (r: number, y: number, k: number) => ik(MACHINE, r, y, k), setCam: (m: CamMode) => (camMode = m) };
 }
 
 // ---------- 카메라 ----------
 type CamMode = 'chase' | 'cab' | 'overview' | 'free';
-const CAM_LABEL: Record<CamMode, string> = { chase: '시점: 뒤', cab: '시점: 운전석', overview: '시점: 전체', free: '시점: 자유' };
 let camMode: CamMode = 'cab'; // 실제 시험처럼 운전석 시점이 기본
 const gaze = new THREE.Vector3();
 const tmpV = new THREE.Vector3();
@@ -500,7 +833,9 @@ function updateCamera(dt: number) {
     const ahead = tmpV.copy(fwd).multiplyScalar(6.2).addScaledVector(lat, -0.3).setY(-0.6);
     exc.bucketWorld(look);
     look.lerp(ahead, 0.45);
-    gaze.lerp(look, 1 - Math.exp(-dt * 5));
+    // 감독관 쪽으로 돌아봄: 감독관이 화면 왼쪽 위(점검 버튼 위)에 오게
+    if (examLookAt) look.lerp(examLookAt, 0.7).setY(1.4);
+    gaze.lerp(look, 1 - Math.exp(-dt * (examLookAt ? 3 : 5)));
     look.copy(gaze);
   } else {
     pos.set(0, 15, -9.5);
@@ -526,7 +861,9 @@ function updateCamera(dt: number) {
   // 부하 떨림: 엔진이 힘들수록 차체가 부르르 (운전석에서 크게 느껴짐)
   if (s.engineOn && s.phase === 'working') {
     const over = Math.max(0, s.engineLoad - 0.5);
-    const a = Math.min(0.045, over * over * 0.03) * (camMode === 'cab' ? 1 : 0.5);
+    // + 흙을 가르는 동안 약한 떨림 (흙이 버티는 느낌)
+    const dig = Math.min(0.006, s.effortRate * 0.012);
+    const a = Math.min(0.045, over * over * 0.03 + dig) * (camMode === 'cab' ? 1 : 0.5);
     if (a > 0.001) {
       const tt = performance.now() / 1000;
       camera.position.y += Math.sin(tt * 71) * a;
@@ -538,7 +875,11 @@ function updateCamera(dt: number) {
 
 
 // ---------- 배우기: 스테이지 맵 → 미션 → CLEAR ----------
-let tutor: Tutor | null = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let tutor: Tutor<any> | null = null;
+/** 지금 종목의 배우기 미션 */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const curLessons = (): Lesson<any>[] => (kindKey === 'drive' ? DRIVE_LESSONS : LESSONS);
 let lessonIdx = -1;
 const loadCleared = (): string[] => {
   try {
@@ -548,21 +889,70 @@ const loadCleared = (): string[] => {
   }
 };
 function renderLessonMap() {
-  const done = new Set(loadCleared());
-  const next = LESSONS.findIndex((l) => !done.has(l.id));
+  const LS = curLessons();
+  const done = new Set(loadCleared().filter((id) => LS.some((l) => l.id === id)));
+  const next = LS.findIndex((l) => !done.has(l.id));
   const box = $('stage-map');
   box.innerHTML = '';
-  LESSONS.forEach((l, i) => {
+  box.classList.remove('leaving');
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // 누르면 목록이 짧게 빠지고 미션 시작 (0.16초)
+  const pick = (b: HTMLElement, i: number) => () => {
+    if (box.classList.contains('leaving')) return;
+    if (reduced) return startLesson(i);
+    box.classList.add('leaving');
+    b.classList.add('picked');
+    setTimeout(() => startLesson(i), 160);
+  };
+  const tiered = LS.some((l) => l.tier);
+  box.classList.toggle('tiers', tiered);
+  $('stage-count').hidden = tiered;
+  $('stage-count').textContent = `${done.size}/${LS.length}`;
+  if (tiered) {
+    // 두 칸: 기초(한 사이클) | 숙련(매끄럽게). 칸마다 진행도, 깬 건 ✓, 다음은 짙게
+    (['기초', '숙련'] as const).forEach((tier, c) => {
+      const items = LS.map((l, i) => ({ l, i })).filter((x) => x.l.tier === tier);
+      const col = document.createElement('div');
+      col.className = 'tier-col';
+      col.style.setProperty('--c', String(c));
+      const n = items.filter((x) => done.has(x.l.id)).length;
+      col.innerHTML = `<div class="tier-head" style="--p:${n / items.length}"><b>${tier}</b><span>${tier === '기초' ? '한 사이클 익히기' : '시험처럼 매끄럽게'}</span><i>${reduced ? n : 0}/${items.length}</i></div>`;
+      // 진행도 숫자: 막대가 차는 동안 0부터 올라감
+      if (!reduced && n > 0) {
+        const el = col.querySelector('.tier-head i')!;
+        for (let k = 1; k <= n; k++) setTimeout(() => (el.textContent = `${k}/${items.length}`), 140 + c * 70 + (520 * k) / n);
+      }
+      items.forEach(({ l, i }, r) => {
+        const b = document.createElement('button');
+        b.className = 'lrow' + (done.has(l.id) ? ' cleared' : '') + (i === next ? ' next' : '');
+        b.style.setProperty('--r', String(r));
+        const num = done.has(l.id) ? '<svg viewBox="0 0 16 16" aria-label="완료"><path pathLength="1" d="M3.2 8.6l3.1 3L12.9 4.6"/></svg>' : i + 1;
+        b.innerHTML = `<span class="lr-num">${num}</span><span class="lr-icon">${ICON[l.icon]}</span><b>${l.title}</b>${i === next ? '<i class="lr-sweep"></i><em>다음</em>' : ''}`;
+        b.onclick = pick(b, i);
+        col.appendChild(b);
+      });
+      box.appendChild(col);
+    });
+    return;
+  }
+  LS.forEach((l, i) => {
     const b = document.createElement('button');
     b.className = 'stage' + (done.has(l.id) ? ' cleared' : '') + (i === next ? ' next' : '');
+    b.style.setProperty('--r', String(i));
     b.innerHTML = `<span class="st-num">${i + 1}</span><span class="st-icon">${ICON[l.icon]}</span><b>${l.title}</b>`;
-    b.onclick = () => startLesson(i);
+    b.onclick = pick(b, i);
     box.appendChild(b);
   });
-  $('stage-count').textContent = `${done.size}/${LESSONS.length}`;
 }
 function openLessonMap() {
   renderLessonMap();
+  // 뒤 배경: 굴착기 선 그림이 천천히 한 사이클씩 판다 (장식, 한 번만 넣음)
+  if (!document.querySelector('#lessons .lm-deco')) {
+    $('lessons').insertAdjacentHTML(
+      'afterbegin',
+      `<svg class="lm-deco" viewBox="0 0 240 150" aria-hidden="true"><path class="lm-ground" d="M4 143H236"/><rect x="118" y="119" width="104" height="22" rx="11"/><circle cx="131" cy="130" r="5"/><circle cx="209" cy="130" r="5"/><path d="M116 116V93h34V70h26l7 23h41v23z"/><path d="M155 76h17l4 13h-21z"/><g class="lm-boom"><path d="M136 100L82 44l9-6 56 52z"/><circle cx="140" cy="96" r="3"/><g class="lm-arm"><path d="M80 42l-26 66 8 3 25-66z"/><circle cx="82" cy="45" r="3"/><g class="lm-bkt"><path d="M57 110l-15 1q-6 15 6 22l16-9z"/></g></g></g></svg>`,
+    );
+  }
   $('precheck').hidden = true;
   $('lessons').hidden = false;
 }
@@ -570,17 +960,31 @@ $('btn-lessons-back').onclick = () => {
   $('lessons').hidden = true;
   $('precheck').hidden = false;
 };
-function startLesson(i: number) {
+/** 성공하면 잠깐 뒤 같은 미션을 자동으로 다시 (빠져나올 땐 '목록') */
+let againTimer = 0;
+let streak = 0;
+/** 안내 단계: 0 레버까지 안내 · 1 목표 문구만 · 2 안내 없음 (같은 미션을 성공할 때마다 줄여 감) */
+let guideLv = 0;
+const GUIDE_TAG = ['', '목표만', '안내 없이'];
+function startLesson(i: number, again = false, lv = 0) {
+  clearTimeout(againTimer);
+  guideLv = lv;
+  if (!again || i !== lessonIdx) streak = 0;
   lessonIdx = i;
-  const L = LESSONS[i];
+  const L = curLessons()[i];
   newSession(L.autoEnd);
   $('precheck').hidden = true;
   $('lessons').hidden = true;
   $('clear').hidden = true;
   if (matchMedia('(pointer: coarse)').matches) goFullscreen();
   sound.start();
-  session.ready();
-  tutor = new Tutor(L, session);
+  if (drive) {
+    drive.s.ready();
+    tutor = new Tutor(L, drive.s);
+  } else {
+    session.ready();
+    tutor = new Tutor(L, session);
+  }
   introduced.clear();
   introStep = -1;
   renderMission(true);
@@ -595,16 +999,32 @@ const LAB_AXIS: Record<string, [keyof Sticks, 1 | -1]> = Object.fromEntries(
   KEY_ACTIONS.map((a) => [a.label, [a.id.slice(0, 2) as keyof Sticks, a.id.endsWith('+') ? 1 : -1]]),
 );
 let sayState = '';
+let sayKind = '';
+let sayCoach = '';
 /** 단계가 바뀔 때 이미 잡고 있던 레버: 한 번 놓기 전까지는 '틀림'으로 안 봄 */
 const heldAtStep = new Set<keyof Sticks>();
 let sayStep = -1;
 function updateSay() {
   const el = $('m-say');
+  if (guideLv >= 1) {
+    // 안내 줄임: 레버 깜빡임·맞음/틀림 말풍선 없음
+    setHints([]);
+    if (sayState !== 'off') {
+      sayState = 'off';
+      el.textContent = '';
+      el.className = 'm-say';
+      for (const c of ['good', 'bad', 'next', 'coach']) $('mission').classList.remove(c);
+    }
+    return;
+  }
   const st = tutor && !tutor.cleared ? tutor.current : null;
+  const coach = tutor && !tutor.cleared ? tutor.coach : null;
+  const labels = coach?.labels ?? st?.labels;
+  setHints(labels ?? []);
   let state = '';
   let text = '';
-  if (st?.labels?.length) {
-    const want = st.labels.map((l) => LAB_AXIS[l]).filter(Boolean);
+  if (labels?.length) {
+    const want = labels.map((l) => LAB_AXIS[l]).filter(Boolean);
     const inp = session.input;
     const TH = 0.25;
     if (tutor!.step !== sayStep) {
@@ -617,24 +1037,45 @@ function updateSay() {
     const wrong = (['lx', 'ly', 'rx', 'ry'] as const).some((ax) => Math.abs(inp[ax]) > TH && !heldAtStep.has(ax) && !want.some(([a, sg]) => a === ax && inp[ax] * sg > 0));
     // 앞 단계 레버를 아직 잡고 있음: 단계가 바뀌었으니 다른 레버로 (틀림은 아님)
     const stale = [...heldAtStep].some((ax) => !want.some(([a, sg]) => a === ax && inp[ax] * sg > 0));
-    if (wrong) {
+    if (coach) {
+      // 바로잡을 것: 원인 → 지금 할 레버 (맞는 레버를 쓰면 '좋아요')
+      state = good ? 'good' : 'coach';
+      text = good ? `${coach.msg} · 좋아요` : coach.msg;
+    } else if (wrong) {
       state = 'bad';
-      text = `그 레버 아니에요 → ${st.labels.join(' · ')}`;
+      text = `그 레버 아니에요 → ${labels.join(' · ')}`;
     } else if (stale && !good) {
       state = 'next';
-      text = `다음! 손 떼고 → ${st.labels.join(' · ')}`;
+      text = `다음! 손 떼고 → ${labels.join(' · ')}`;
     } else if (good) {
       state = 'good';
       text = '좋아요, 계속';
     }
   }
-  if (state === sayState) return;
-  sayState = state;
+  if (state + text === sayState) return;
+  // 틀린 레버를 처음 잡은 순간 / 새 바로잡기 안내가 뜬 순간만 소리 (계속 잡고 있어도 반복 안 함)
+  if (state === 'bad' && sayKind !== 'bad') {
+    sound.wrong();
+    if (navigator.vibrate) navigator.vibrate(15);
+  } else if (state === 'coach' && text !== sayCoach) sound.cue();
+  sayKind = state;
+  if (state === 'coach') sayCoach = text;
+  sayState = state + text;
   el.textContent = text;
   el.className = 'm-say ' + state;
   $('mission').classList.toggle('good', state === 'good');
   $('mission').classList.toggle('bad', state === 'bad');
   $('mission').classList.toggle('next', state === 'next');
+  $('mission').classList.toggle('coach', state === 'coach');
+}
+/** 깜빡여 줄 레버 라벨 (바로잡을 것이 있으면 그 레버) */
+let hintKey = '';
+function setHints(labels: string[]) {
+  const key = labels.join('|');
+  if (key === hintKey) return;
+  hintKey = key;
+  const want = new Set(labels);
+  for (const el of document.querySelectorAll('.lab')) el.classList.toggle('hint', want.has((el.textContent ?? '').replace(/ /g, ' ')));
 }
 /** 처음 배우는 레버: 그 부위를 깜빡 강조하고 조이스틱 위까지 선으로 이어 줌 (2초) */
 type Part = 'boom' | 'arm' | 'bucket';
@@ -659,7 +1100,7 @@ function updateIntro() {
       introUntil = now + 2200;
     }
   }
-  const on = !!tutor && now < introUntil && $('fail').hidden && $('clear').hidden;
+  const on = !!tutor && guideLv === 0 && now < introUntil && $('fail').hidden && $('clear').hidden;
   if (!on) {
     if (intro.length) {
       intro = [];
@@ -672,7 +1113,7 @@ function updateIntro() {
 function updateMeter() {
   updateSay();
   updateIntro();
-  const m = tutor?.meter() ?? null;
+  const m = guideLv >= 1 ? null : (tutor?.meter() ?? null);
   meterEl.hidden = !m;
   if (!m) return;
   const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
@@ -688,6 +1129,7 @@ function updateMeter() {
     meterEl.classList.toggle('ok', m.v >= 1);
   }
 }
+let missionStep = -1;
 function renderMission(intro = false) {
   const m = $('mission');
   if (!tutor) {
@@ -698,9 +1140,20 @@ function renderMission(intro = false) {
   const st = tutor.current;
   const n = tutor.lesson.steps.length;
   m.hidden = false;
-  $('m-head').innerHTML = `${ICON[tutor.lesson.icon]}${tutor.lesson.title}<span class="m-n">${Math.min(tutor.step + 1, n)}/${n}</span>`;
-  $('m-text').textContent = st ? st.text : '';
-  $('m-pips').innerHTML = Array.from({ length: n }, (_, k) => `<i class="${k < tutor!.step ? 'ok' : k === tutor!.step ? 'now' : ''}"></i>`).join('');
+  $('m-head').innerHTML = `${ICON[tutor.lesson.icon]}${tutor.lesson.title}${guideLv ? `<span class="m-lv">${GUIDE_TAG[guideLv]}</span>` : ''}<span class="m-n">${Math.min(tutor.step + 1, n)}/${n}</span>`;
+  // 안내 없음: 단계 문구도 숨기고 '혼자 해 보기'만 (되돌림 안내는 보임)
+  const stText = guideLv >= 2 ? '안내 없이 끝까지 해 보세요' : (st?.text ?? '');
+  $('m-text').textContent = st ? (tutor.notice ? `${tutor.notice} → ${stText}` : stText) : '';
+  m.classList.toggle('retry', !!tutor.notice);
+  // ----- 단계 넘어감 연출: 방금 채운 칸 터짐(.just) + 미션 판 통통(.adv) -----
+  const adv = !intro && tutor.step > 0 && tutor.step !== missionStep;
+  missionStep = tutor.step;
+  $('m-pips').innerHTML = Array.from({ length: n }, (_, k) => `<i class="${k < tutor!.step ? 'ok' : k === tutor!.step ? 'now' : ''}${adv && k === tutor!.step - 1 ? ' just' : ''}"></i>`).join('');
+  if (adv) {
+    m.classList.remove('adv');
+    void m.offsetWidth;
+    m.classList.add('adv');
+  }
   // 다음 단계 문구가 튀어 들어오게
   const t = $('m-text');
   t.classList.remove('pop');
@@ -711,8 +1164,19 @@ function renderMission(intro = false) {
     void m.offsetWidth;
     m.classList.add('intro');
   }
-  const want = new Set(st?.labels ?? []);
-  for (const el of document.querySelectorAll('.lab')) el.classList.toggle('hint', want.has((el.textContent ?? '').replace(/ /g, ' ')));
+  setHints(guideLv >= 1 ? [] : (tutor.coach?.labels ?? st?.labels ?? []));
+}
+/** 되돌릴 수 없는 실수로 앞 단계로 돌아감: 낮은 소리 + 진동, 여러 번이면 미션 처음 상태로 */
+function onRewind() {
+  if (!tutor) return;
+  sound.thump(0.5);
+  if (navigator.vibrate) navigator.vibrate(40);
+  if (tutor.wantReset) {
+    const msg = tutor.notice;
+    startLesson(lessonIdx, true, guideLv);
+    tutor!.notice = `${msg ?? ''} (흙·자세를 처음으로)`.trim();
+  }
+  renderMission();
 }
 function onLessonClear() {
   const L = tutor!.lesson;
@@ -723,17 +1187,25 @@ function onLessonClear() {
   $('mission').hidden = true;
   for (const el of document.querySelectorAll('.lab')) el.classList.remove('hint');
   $('clear-title').innerHTML = `${ICON[L.icon]}${L.title}`;
-  const last = lessonIdx >= LESSONS.length - 1;
+  const last = lessonIdx >= curLessons().length - 1;
   $('btn-clear-next').hidden = last;
   $('btn-clear-exam').hidden = !last;
+  // 성공하면 안내를 한 단계 줄여 같은 미션 다시 (레버 안내 → 목표만 → 안내 없이)
+  const less = $('btn-clear-less');
+  less.hidden = guideLv >= 2;
+  less.textContent = guideLv === 0 ? '목표만 보고 다시' : '안내 없이 다시';
+  streak++;
+  const big = last && streak === 1;
+  installPatterns();
   const c = $('clear');
-  // 중간 단계는 이어서 배우는 흐름이라 조용히, 마지막만 크게 축하
-  c.classList.toggle('quiet', !last);
-  c.querySelector('.cl-word')!.textContent = last ? 'CLEAR!' : '성공';
+  // 반복 연습 흐름이라 조용히, 마지막 미션 첫 성공만 크게 축하
+  c.classList.toggle('quiet', !big);
+  c.querySelector('.cl-word')!.textContent = guideLv >= 2 ? '안내 없이 성공' : big ? 'CLEAR!' : streak > 1 ? `성공 ${streak}회` : '성공';
   c.hidden = true;
   void c.offsetWidth;
   c.hidden = false;
-  if (last) {
+  // 자동으로 다시 시작하지 않음: '반복'·'다음'·'목록' 중 사용자가 고름
+  if (big) {
     sound.jingle();
     if (navigator.vibrate) navigator.vibrate([30, 40, 30, 40, 80]);
   } else {
@@ -748,6 +1220,14 @@ function onLessonFail(v: Violation) {
   $('fail').hidden = false;
 }
 $('btn-clear-next').onclick = () => startLesson(lessonIdx + 1);
+$('btn-clear-again').onclick = () => startLesson(lessonIdx, true, guideLv);
+$('btn-clear-less').onclick = () => startLesson(lessonIdx, true, Math.min(2, guideLv + 1));
+// 배우기 중 '다시': 흙·자세까지 이 미션 처음 상태로
+$('btn-restart').onclick = () => {
+  if (lessonIdx < 0 || !tutor) return;
+  sound.select();
+  startLesson(lessonIdx, false, guideLv);
+};
 $('btn-clear-map').onclick = () => {
   $('clear').hidden = true;
   tutor = null;
@@ -763,7 +1243,7 @@ $('btn-clear-exam').onclick = () => {
 };
 $('btn-fail-retry').onclick = () => {
   $('fail').hidden = true;
-  startLesson(lessonIdx);
+  startLesson(lessonIdx, false, guideLv);
 };
 $('btn-fail-map').onclick = () => {
   $('fail').hidden = true;
@@ -780,9 +1260,33 @@ try {
   /* 무시 */
 }
 sound.setLevels(levels);
+const wheelCtl = new SteeringWheel($('wheel-ctl'));
+// 바퀴 보기: 누르면 왼쪽 앞바퀴를 내려다보고, 다시 누르면 앞을 봄
+// 바퀴 보기·미러 보기는 하나만 (다시 누르면 앞을 봄)
+function setLook(which: 'wheel' | 'mirror' | null) {
+  if (!drive) return;
+  drive.lookWheel = which === 'wheel';
+  drive.lookMirror = which === 'mirror';
+  $('btn-lookwheel').classList.toggle('on', drive.lookWheel);
+  $('btn-lookmirror').classList.toggle('on', drive.lookMirror);
+  $('btn-lookfront').classList.toggle('on', !which);
+  sound.select();
+}
+$('btn-lookfront').onclick = () => setLook(null);
+$('btn-lookwheel').onclick = () => setLook(drive?.lookWheel ? null : 'wheel');
+$('btn-lookmirror').onclick = () => setLook(drive?.lookMirror ? null : 'mirror');
+const pedalAccel = new Pedal($('pedal-accel'));
+const pedalBrake = new Pedal($('pedal-brake'));
 const left = new Joystick($('stick-l'));
 const right = new Joystick($('stick-r'));
 const keys = new Keys();
+const pad = new Pad();
+function renderPadUi() {
+  $('pad-state').innerHTML = pad.name
+    ? `<i class="pad-dot on"></i><b>${pad.name}</b> 연결됨`
+    : '<i class="pad-dot"></i>연결된 패드 없음 · 블루투스로 연결하고 아무 버튼이나 누르세요';
+}
+pad.onChange = renderPadUi;
 // 설정 > 조작키: 누르면 다음 키로 바꿈 (겹치면 맞바꿈, Esc 취소)
 function renderKeys(wait?: string) {
   // 화면 조이스틱과 같은 십자 배치: [위, 왼쪽, 오른쪽, 아래]
@@ -828,9 +1332,85 @@ async function goFullscreen() {
 const isIOS = /iP(hone|od|ad)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const standalone = (navigator as Navigator & { standalone?: boolean }).standalone || matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches;
 if (isIOS && !standalone) $('fs-hint').hidden = false;
+// ---------- 실제 시험: 시작 전 점검 → 손 들기 → 감독관 호각 ----------
+/** 굴착: 출발 감독관은 왼쪽(문 창 너머), 장비 최대 반경(약 7.9m) 밖 안전한 곳 (반경 약 10m, B 통과구역 밖) */
+const START_SPOT_DIG: [number, number] = [-4.0, 9.0];
+/** 점검·손 들기 동안 운전석 시선이 감독관을 향함 (손 드는 걸 서로 봐야 하니까) */
+let examLookAt: THREE.Vector3 | null = null;
+const examTarget = () => (drive ? drive.s : session);
+const starterIdx = () => (drive ? 0 : 3);
+function syncExamCheck() {
+  const t = examTarget();
+  const set = (id: string, on: boolean, txt: string) => {
+    $(id).classList.toggle('on', on);
+    $(id).querySelector('small')!.textContent = txt;
+  };
+  set('ec-belt', t.belt, t.belt ? '체결' : '풀림');
+  set('ec-lever', t.leverUnlocked, t.leverUnlocked ? '풀림' : '잠김');
+  set('ec-rpm', t.rpm >= 0.6, t.rpm >= 0.6 ? '작업' : '저속');
+}
+function resetExamCheck() {
+  const p = $('exam-check');
+  p.hidden = true;
+  p.classList.remove('working');
+  $('hand-pop').hidden = true;
+  examLookAt = null;
+}
+function openExamCheck() {
+  const p = $('exam-check');
+  p.classList.remove('working');
+  p.hidden = false;
+  syncExamCheck();
+  // 출발 감독관이 나를 봄 (좌석 높이가 바뀌었을 수 있어 다시)
+  if (examiners) {
+    const eye = new THREE.Vector3();
+    (drive ? drive.exc : exc).eyeWorld(eye, eyeOffset());
+    examiners.face(starterIdx(), eye);
+    examLookAt = examiners.headOf(starterIdx(), new THREE.Vector3());
+  }
+}
+$('ec-belt').onclick = () => {
+  const t = examTarget();
+  t.belt = !t.belt;
+  sound.select();
+  syncExamCheck();
+};
+$('ec-lever').onclick = () => {
+  const t = examTarget();
+  t.leverUnlocked = !t.leverUnlocked;
+  sound.select();
+  syncExamCheck();
+};
+$('ec-rpm').onclick = () => {
+  const t = examTarget();
+  t.rpm = t.rpm >= 0.6 ? 0.3 : 0.8;
+  sound.select();
+  syncExamCheck();
+};
+$('ec-hand').onclick = () => {
+  const p = $('exam-check');
+  if (p.classList.contains('working')) return;
+  p.classList.add('working');
+  const h = $('hand-pop');
+  h.hidden = true;
+  void h.offsetWidth;
+  h.hidden = false;
+  setTimeout(() => (h.hidden = true), 1500);
+  // 감독관: 손 든 것을 보고 팔을 들며 호각 → 시작. 그다음 선회 반경 밖으로 물러남
+  const i = starterIdx();
+  setTimeout(() => examiners?.signal(i), 450);
+  setTimeout(beginWork, 650);
+  // 호각을 듣고 시선을 작업 쪽으로
+  setTimeout(() => (examLookAt = null), 1100);
+  setTimeout(() => {
+    examiners?.lower(i);
+    examiners?.watchPoint(i, null);
+  }, 1900);
+};
 function beginWork() {
   setTimeout(() => sound.whistle('start'), 300);
-  session.ready();
+  if (drive) drive.s.ready();
+  else session.ready();
   const f = $('ready-flash');
   f.hidden = false;
   setTimeout(() => (f.hidden = true), 1100);
@@ -849,7 +1429,8 @@ function startMode() {
   bi.className = boss ? 'boss' : 'mid';
   $('bi-tag').hidden = true; // 작은 부제 없이 모드 이름만
   $('bi-title').textContent = MODE_INFO[k].label;
-  $('bi-sub').textContent = boss ? '4:00 · 실격하면 끝' : '4:00';
+  const lim = drive ? '2:00' : '4:00';
+  $('bi-sub').textContent = boss ? `${lim} · 실격하면 끝` : lim;
   // 애니메이션을 처음부터 다시 재생
   bi.hidden = true;
   void bi.offsetWidth;
@@ -858,7 +1439,8 @@ function startMode() {
   if (boss && navigator.vibrate) navigator.vibrate([60, 120, 200]);
   setTimeout(() => {
     bi.hidden = true;
-    beginWork();
+    if (boss) openExamCheck();
+    else beginWork();
   }, boss ? 2400 : 1600);
 }
 $('btn-engine').onclick = () => session.restartEngine();
@@ -881,12 +1463,13 @@ $('btn-engine').onclick = () => session.restartEngine();
   end.onpointerdown = (e) => {
     e.preventDefault();
     // 배우기 '목록'은 이동 버튼: 바로
-    if (session.flags.key === 'tutorial') return session.abandon();
+    if (session.flags.key === 'tutorial') return drive ? drive.s.abandon() : session.abandon();
     end.parentElement!.classList.remove('end-tip');
     end.classList.add('holding');
     holdT = window.setTimeout(() => {
       end.classList.remove('holding');
-      session.abandon();
+      if (drive) drive.s.abandon();
+      else session.abandon();
     }, 600);
   };
   end.onpointerup = end.onpointerleave = end.onpointercancel = cancel;
@@ -908,13 +1491,37 @@ $('btn-labels').onclick = () => {
 };
 syncLabels();
 $('btn-paywall-close').innerHTML = ICON.close;
-// 시작 페이지 종목 탭: 굴착만 열림, 주행·필기는 준비 중
+// 시작 페이지 종목 탭: 굴착 · 주행
 {
-  const KIND: Record<string, [keyof typeof ICON, string]> = { dig: ['stScoop', '굴착'], drive: ['kDrive', '주행'], written: ['kWritten', '필기'] };
+  const KIND: Record<string, [keyof typeof ICON, string]> = { dig: ['stScoop', '굴착 작업'], drive: ['kDrive', '코스 주행'] };
+  // 첫 방문 1회: 고르지 않은 과목에 살짝 빛 지나감 (다른 과목도 있다는 힌트)
+  const hintKind = !load('exc-kind-hint') && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (hintKind) save('exc-kind-hint', '1');
   for (const b of document.querySelectorAll<HTMLButtonElement>('#sp-kind [data-kind]')) {
     const [ic, name] = KIND[b.dataset.kind!];
-    b.innerHTML = `${ICON[ic]}${name}`;
-    if (b.classList.contains('soon'))
+    b.innerHTML = `${ICON[ic]}<span>${name}</span>`;
+    const k = b.dataset.kind;
+    if (k === 'dig' || k === 'drive') {
+      b.classList.toggle('on', k === kindKey);
+      b.setAttribute('aria-pressed', String(k === kindKey));
+      if (hintKind && k !== kindKey) {
+        b.classList.add('hint');
+        b.addEventListener('animationend', () => b.classList.remove('hint'), { once: true });
+      }
+      b.onclick = () => {
+        document.querySelector('#sp-kind .hint')?.classList.remove('hint');
+        if (kindKey === k) return;
+        kindKey = k;
+        save('exc-kind', k);
+        for (const o of document.querySelectorAll<HTMLElement>('#sp-kind [data-kind]')) {
+          o.classList.toggle('on', o.dataset.kind === k);
+          o.setAttribute('aria-pressed', String(o.dataset.kind === k));
+        }
+        sound.start();
+        sound.select();
+        newSession();
+      };
+    } else if (b.classList.contains('soon'))
       b.onclick = () => {
         b.classList.remove('say');
         void b.offsetWidth;
@@ -962,19 +1569,14 @@ $('btn-retry').onclick = () => {
   startMode();
 };
 $('btn-home').onclick = () => newSession();
-$('btn-cam').onclick = () => {
-  const order: CamMode[] = ['cab', 'chase', 'overview'];
-  camMode = order[(order.indexOf(camMode) + 1) % order.length];
-  $('btn-cam').title = CAM_LABEL[camMode];
-};
-$('btn-cam').title = CAM_LABEL[camMode];
-$('btn-cam').innerHTML = ICON.camera;
 
 function showToast(v: Violation) {
   // 레버 익히기: 실격으로 끝내지 않고 주의로만 알림
   const soft = !!tutor?.lesson.noFail;
   if (v.kind === 'disqualify' && session.flags.key === 'exam') return; // 실제 시험: 감독관 연출이 알림
   if (v.kind === 'disqualify' && !soft) sound.whistle('fail');
+  // 레버 익히기: 실격 대신 주의지만 소리는 냄 (낮은 쿵)
+  else if (v.kind === 'disqualify') sound.thump(0.5);
   if (v.id === 'W-JOLT' || v.id === 'W-IMPACT') sound.thump(0.8);
   if (v.kind === 'warning' && !session.flags.feedback) return; // 실제 시험: 경고 알림 없음
   const el = document.createElement('div');
@@ -992,6 +1594,73 @@ function showToast(v: Violation) {
       navigator.vibrate([40, 30, 25]); // 덜컹
     }
   }
+}
+
+/**
+ * 알림을 처음 띄울 때만 굵은 글씨·흔들림 효과·대체 글꼴(ⓓ 같은 기호) 준비로 한 프레임이 크게 끊긴다 (CPU 6배 저속에서 90~150ms, 두 번째부터 20ms).
+ * 흙을 싣고 처음 선회할 때 '끝까지 담김' 알림과 겹쳐 끊겨 보였음 → 시작 화면(조작 전)에서 안 보이게 한 번 그려 둔다
+ */
+/**
+ * 셰이더 미리 컴파일: 처음엔 숨겨져 있던 물체(버킷 속 흙, 날 앞 흙더미 등)의 셰이더 프로그램을 시작 때 만들어 둠.
+ * three의 compile은 보이는 물체만 다루므로 잠깐 다 보이게 해서 컴파일.
+ * (그래픽 드라이버 쪽 마무리 준비는 실제로 픽셀을 칠할 때라, 첫 흙 끊김의 원인이던 흙덩이는 ExcavatorView.warmClumps로 따로 예열)
+ */
+/** 예열할 시각 (performance.now 기준, 0 = 끝남) */
+let warmPending = 0;
+/** 흙 알갱이·먼지 예열 시각: 흙덩이와 같은 프레임에 그리면 흙덩이 예열이 실패해서(측정 3/3) 0.4초 늦춤 */
+let warmFxPending = 0;
+const warmV = new THREE.Vector3();
+const warmSide = new THREE.Vector3();
+/**
+ * 흙덩이·흙 알갱이·먼지를 카메라 바로 앞에 몇 프레임 실제로 그려 그래픽 드라이버 준비를 미리 끝냄
+ * (처음 흙이 들어오는·쏟는 순간 끊기던 것: 트레이스상 GPU 쪽 화면 내보내기 70~100ms. 화면에 실제로 칠해져야 준비되므로 카메라 앞 2.5m)
+ */
+function warmEffects() {
+  const now = performance.now();
+  const clumps = warmPending > 0 && now >= warmPending;
+  const fxs = warmFxPending > 0 && now >= warmFxPending;
+  if (!clumps && !fxs) return;
+  camera.getWorldDirection(warmV);
+  warmV.multiplyScalar(2.5).add(camera.position);
+  // 서로 가리지 않게 좌우로 떼어 놓음
+  warmSide.setFromMatrixColumn(camera.matrixWorld, 0).multiplyScalar(0.4);
+  if (clumps) {
+    warmPending = 0;
+    exc.warmClumps(warmV.clone().add(warmSide));
+  }
+  if (fxs) {
+    warmFxPending = 0;
+    fx.warm(warmV.sub(warmSide));
+  }
+}
+function warmShaders() {
+  const hidden: THREE.Object3D[] = [];
+  scene.traverse((o) => {
+    if (!o.visible) {
+      hidden.push(o);
+      o.visible = true;
+    }
+  });
+  renderer.compile(scene, camera);
+  for (const o of hidden) o.visible = false;
+}
+
+let toastsWarm = false;
+function warmToasts() {
+  if (toastsWarm) return;
+  toastsWarm = true;
+  const box = $('toasts');
+  const els = ['toast', 'toast warn', 'toast entry good', 'toast entry ok', 'toast entry bad'].map((c) => {
+    const el = document.createElement('div');
+    el.className = c;
+    el.style.opacity = '0.01';
+    // 기본 글꼴에 없는 기호(ⓐ~ⓕ·①~④·㎥ 등)는 처음 쓸 때 대체 글꼴을 찾느라 더 오래 걸려 같이 그려 둠
+    el.innerHTML = '<b>실격 · 주의 · 끝까지 담김 85% 👍 Q11</b>위치 앞뒤 좌우 정확 · 장비 쪽 12cm · 흙을 흘림 ⓐⓑⓒⓓⓔⓕ ①②③④ ㎥ ° ± × … ← ↑ → ↓ ▶ ◀ ○ ◎ ✓ ✗ △';
+    box.append(el);
+    return el;
+  });
+  // 두 프레임 그린 뒤 지움 (그려져야 글자·효과가 준비됨)
+  requestAnimationFrame(() => requestAnimationFrame(() => els.forEach((el) => el.remove())));
 }
 
 /** 첫 삽 위치 피드백: 목표(ⓑ선 안쪽 30cm, 중심) 대비 앞뒤·좌우 */
@@ -1048,6 +1717,9 @@ function updateHud() {
   }
   $('dump').textContent = String(s.dumpCount);
   $('loadbar').style.width = `${Math.min(100, (s.load / s.heapedCap) * 100)}%`;
+  // 숫자는 평적 기준 (게이지 눈금 = 평적 100%, 끝 = 고봉)
+  const pct = `평적 ${Math.round((s.load / s.m.struckCapacity) * 100)}%`;
+  if (loadPct.textContent !== pct) loadPct.textContent = pct;
   const gd = $('guide');
   gd.textContent = s.flags.guide ? s.guide() : '';
   gd.hidden = !gd.textContent;
@@ -1096,11 +1768,23 @@ function playDq(v: Violation, done: () => void) {
   }, wait);
 }
 
+/** 결과 '다음엔 이렇게': 가장 큰 문제 하나를 고칠 행동으로 */
+function renderTip(dq: { id: string; title: string }[], verdict: Score | null, abandoned: boolean, mode: ModeKey) {
+  const box = $('res-tip');
+  // 실제 시험은 기록을 알려주지 않으니 합격이면 실격 이유만, 감점으로 떨어졌을 땐 가장 큰 감점 하나만
+  const t = abandoned ? null : fixTip(kindKey, dq, mode === 'exam' && verdict?.pass ? null : verdict);
+  box.hidden = !t;
+  if (!t) return;
+  box.innerHTML = `<div class="rt-text"><small>다음엔 이렇게</small><b></b></div>`;
+  box.querySelector('b')!.textContent = t.tip;
+}
 function showResult() {
   const s = session;
   if (s.flags.key === 'tutorial') {
     // 배우기: 결과표 대신 미션 판정(마무리 미션은 종료가 곧 성공), 그만하기는 스테이지 맵으로
     if (tutor && !s.abandoned) return;
+    clearTimeout(againTimer);
+    $('clear').hidden = true;
     tutor = null;
     newSession();
     openLessonMap();
@@ -1125,21 +1809,34 @@ function showResult() {
   const stamp = $('stamp');
   stamp.className = 'stamp ' + (dq.length || s.abandoned ? 'fail' : 'pass');
   const mode = s.flags.key;
-  stamp.textContent = s.abandoned ? (mode === 'exam' ? '기권' : '종료') : dq.length ? (mode === 'exam' ? '실격' : `실격 사유 ${dq.length}`) : '실격 없음';
+  // ----- 도장: 합격 / 불합격 (자유 연습은 실격) · 기권 -----
+  stamp.textContent = s.abandoned ? (mode === 'exam' ? '기권' : '종료') : dq.length ? (mode === 'free' ? '실격' : '불합격') : '합격';
   stamp.hidden = mode === 'free' && !dq.length;
   // 제목은 모드, 판정은 도장 (같은 말 두 번 안 함)
   $('res-title').textContent = MODE_INFO[mode].label;
+  installPatterns();
   const clean = mode !== 'free' && !s.abandoned && !dq.length;
   const card = $('result').querySelector('.card')!;
   card.className = `card wide res ${MODE_INFO[mode].cls}${clean ? ' clean' : ''}`;
+  // ----- 등급·합격 판정 (src/sim/score.ts): 화면엔 등급 S·A·B·C·F와 ◎○△✗만 -----
+  const verdict: Score | null = mode === 'free' ? null : scoreDig(r, { dq: dq.length > 0, abandoned: s.abandoned, mode });
+  const passed = mode !== 'free' && !s.abandoned && (verdict ? verdict.pass : !dq.length);
+  if (mode !== 'free' && !s.abandoned) {
+    stamp.textContent = passed ? '합격' : '불합격';
+    stamp.className = 'stamp ' + (passed ? 'pass' : 'fail');
+  }
+  card.classList.toggle('clean', passed);
+  renderScore($('res-score'), mode === 'free' ? null : verdict);
+  renderTip(dq, verdict, s.abandoned, mode);
   const dqList = $('res-dq');
   dqList.innerHTML =
     (dq.length
       ? dq.slice(0, 2).map((d) => `<li class="dq"><b>${d.basis} ${d.title}</b>${d.count > 1 ? `<small>${d.count}회</small>` : ''}</li>`).join('') + (dq.length > 2 ? `<li class="dq"><b>외 ${dq.length - 2}건</b></li>` : '')
       : s.abandoned && mode === 'exam'
         ? '' // 기권은 도장으로 이미 알림
-        : '<li class="ok"><b>실격 항목 없음</b></li>') +
+        : '<li class="ok"><b>모든 과정 통과</b></li>') +
     '';
+  if (mode === 'exam') dqList.innerHTML += precheckLi(s.precheck);
   const pct = (v: number) => `${Math.round(v * 100)}%`;
   const avg = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
   const cmOf = (v: number) => `${Math.round(v * 100)}cm`;
@@ -1176,9 +1873,106 @@ function showResult() {
   $('res-checks').innerHTML = chips.map(([k, v]) => `<span>${k} <b>${v}</b></span>`).join('');
   $('res-cols').classList.toggle('single', mode !== 'exam' && !dq.length);
   $('res-cols').hidden = mode === 'exam' && !dq.length && s.abandoned;
-  setTimeout(() => ($('result').hidden = false), 600);
+  // ----- 합격이면 합격 연출 뒤 결과표가 밀려 들어옴 (src/ui/passFx.ts) -----
+  $('result').classList.toggle('after-pass', passed);
+  if (passed)
+    playPass(
+      { perfect: !!verdict && verdict.items.every((it) => it.got >= it.max), exam: mode === 'exam' },
+      () => {
+        sound.stamp();
+        sound.jingle();
+        if (navigator.vibrate) navigator.vibrate([40, 60, 80]);
+      },
+      () => ($('result').hidden = false),
+    );
+  else setTimeout(() => ($('result').hidden = false), 600);
   // 도장이 쾅 찍히는 순간 (CSS 지연과 맞춤)
-  if (!stamp.hidden)
+  if (!stamp.hidden && !passed)
+    setTimeout(() => {
+      sound.stamp();
+      if (clean) sound.jingle();
+      if (navigator.vibrate) navigator.vibrate(40);
+    }, 600 + 350);
+}
+
+/** 실제 시험 시작 전 점검 결과 한 줄 (안 한 것은 빨갛게) */
+function precheckLi(pc: { belt: boolean; lever: boolean; rpm: boolean }) {
+  const it = (ok: boolean, t: string) => `<span class="${ok ? 'pc-ok' : 'pc-bad'}">${ok ? '✓' : '✗'} ${t}</span>`;
+  return `<li class="pc">${it(pc.belt, '안전벨트')}${it(pc.lever, '안전레버')}${it(pc.rpm, 'RPM')}</li>`;
+}
+/** 주행 결과: 실격 판정 + 과제 시간 · 정지 · 주차 */
+function showDriveResult() {
+  const d = drive;
+  if (!d) return;
+  const s = d.s;
+  const mode = s.flags.key;
+  if (testPass === mode) testPass = null;
+  if (mode === 'tutorial') {
+    // 배우기: 미션 판정이 맡음. 그만하기(목록)면 스테이지 맵으로
+    if (s.abandoned) {
+      clearTimeout(againTimer);
+      $('clear').hidden = true;
+      tutor = null;
+      newSession();
+      openLessonMap();
+    }
+    return;
+  }
+  const sum = s.engine.summary();
+  const dq = sum.filter((x) => x.kind === 'disqualify');
+  const warn = sum.filter((x) => x.kind === 'warning');
+  const stamp = $('stamp');
+  stamp.className = 'stamp ' + (dq.length || s.abandoned ? 'fail' : 'pass');
+  // ----- 도장: 합격 / 불합격 (자유 연습은 실격) · 기권 -----
+  stamp.textContent = s.abandoned ? (mode === 'exam' ? '기권' : '종료') : dq.length ? (mode === 'free' ? '실격' : '불합격') : '합격';
+  stamp.hidden = mode === 'free' && !dq.length;
+  $('res-title').textContent = `코스운전 · ${MODE_INFO[mode].label}`;
+  installPatterns();
+  const clean = mode !== 'free' && !s.abandoned && !dq.length;
+  const card = $('result').querySelector('.card')!;
+  card.className = `card wide res ${MODE_INFO[mode].cls}${clean ? ' clean' : ''}`;
+  // ----- 등급·합격 판정 (src/sim/score.ts): 화면엔 등급 S·A·B·C·F와 ◎○△✗만 -----
+  const verdict: Score | null = mode === 'free' ? null : scoreDrive(s);
+  const passed = mode !== 'free' && !s.abandoned && (verdict ? verdict.pass : !dq.length);
+  if (mode !== 'free' && !s.abandoned) {
+    stamp.textContent = passed ? '합격' : '불합격';
+    stamp.className = 'stamp ' + (passed ? 'pass' : 'fail');
+  }
+  card.classList.toggle('clean', passed);
+  renderScore($('res-score'), mode === 'free' ? null : verdict);
+  renderTip(dq, verdict, s.abandoned, mode);
+  $('res-dq').innerHTML = dq.length
+    ? dq.slice(0, 2).map((x) => `<li class="dq"><b>${x.basis} ${x.title}</b>${x.count > 1 ? `<small>${x.count}회</small>` : ''}</li>`).join('') + (dq.length > 2 ? `<li class="dq"><b>외 ${dq.length - 2}건</b></li>` : '')
+    : s.abandoned && mode === 'exam'
+      ? ''
+      : '<li class="ok"><b>모든 과정 통과</b></li>';
+  if (mode === 'exam') $('res-dq').innerHTML += precheckLi(s.precheck);
+  const mmss = (t: number) => `${Math.floor(t / 60)}:${String(Math.round(t % 60)).padStart(2, '0')}`;
+  const hero: [string, string, boolean][] = [
+    ['시간', s.stage === 'READY' ? '-' : mmss(s.taskT), s.taskT > s.p.timeLimit],
+    ['정지선', s.stopped ? '정지' : '-', !s.stopped],
+    ['주차', s.parkedOk === null ? '-' : s.parkedOk ? '구역 안' : '구역 밖', s.parkedOk === false],
+  ];
+  $('res-hero').innerHTML = hero.filter(([, v]) => v !== '-').map(([k, v, bad]) => `<div class="hero-tile${bad ? ' bad' : ''}"><span>${k}</span><b>${v}</b></div>`).join('');
+  $('res-cols').classList.toggle('dq-only', mode === 'exam');
+  $('res-checks').innerHTML = mode === 'practice' ? warn.map((w) => `<span>${w.title} <b>${w.count}회</b></span>`).join('') : '';
+  $('res-cols').classList.toggle('single', mode !== 'exam' && !dq.length);
+  $('res-cols').hidden = mode === 'exam' && !dq.length && s.abandoned;
+  // ----- 합격이면 합격 연출 뒤 결과표가 밀려 들어옴 (src/ui/passFx.ts) -----
+  $('result').classList.toggle('after-pass', passed);
+  if (passed)
+    playPass(
+      { perfect: !!verdict && verdict.items.every((it) => it.got >= it.max), exam: mode === 'exam' },
+      () => {
+        sound.stamp();
+        sound.jingle();
+        if (navigator.vibrate) navigator.vibrate([40, 60, 80]);
+      },
+      () => ($('result').hidden = false),
+    );
+  else setTimeout(() => ($('result').hidden = false), 600);
+  // 도장이 쾅 찍히는 순간 (CSS 지연과 맞춤)
+  if (!stamp.hidden && !passed)
     setTimeout(() => {
       sound.stamp();
       if (clean) sound.jingle();
@@ -1195,22 +1989,48 @@ let slowT = 0;
 const perf = $('perf');
 perf.hidden = !debug;
 
+/** 운전하지 않는 화면은 덜 자주 그림 (발열·배터리): 시작 무대 30fps, 결과·목록 등 창이 떠 있으면 20fps */
+let lastDraw = 0;
 function frame(now: number) {
+  const cap = opening ? 0 : !$('precheck').hidden ? 30 : operating() ? 0 : 20;
+  if (cap && now - lastDraw < 1000 / cap - 3) {
+    requestAnimationFrame(frame);
+    return;
+  }
+  lastDraw = now;
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
-  frameAvg = frameAvg * 0.95 + dt * 1000 * 0.05;
+  // 해상도 자동 낮춤은 운전 화면 속도로만 판단 (일부러 덜 그리는 화면은 빼고)
+  if (!cap) frameAvg = frameAvg * 0.95 + dt * 1000 * 0.05;
+  // ----- 오프닝 중에는 게임 대신 오프닝만 그림 (src/ui/intro.ts) -----
+  if (opening?.frame(dt)) {
+    sound.rest();
+    requestAnimationFrame(frame);
+    return;
+  }
+  // ----- 시작 페이지가 열려 있으면 3D 무대만 그림 (src/ui/startStage.ts) -----
+  if (startStage.frame(dt, kindKey)) {
+    sound.rest();
+    requestAnimationFrame(frame);
+    return;
+  }
   // 키보드는 켜짐/꺼짐뿐이라 서서히 오르내리게 (초당 4: 갑자기 떼면 약하게 덜컹)
   const ramp = (cur: number, target: number) => cur + Math.max(-dt * 4, Math.min(dt * 4, target - cur));
+  pad.poll();
   kb.lx = ramp(kb.lx, keys.lx);
   kb.ly = ramp(kb.ly, keys.ly);
   kb.rx = ramp(kb.rx, keys.rx);
   kb.ry = ramp(kb.ry, keys.ry);
   session.input = {
-    lx: curveSwing(clamp1(left.x + kb.lx)),
-    ly: curve(clamp1(left.y + kb.ly)),
-    rx: curve(clamp1(right.x + kb.rx)),
-    ry: curve(clamp1(right.y + kb.ry)),
+    lx: curveSwing(clamp1(left.x + kb.lx + pad.lx)),
+    ly: curve(clamp1(left.y + kb.ly + pad.ly)),
+    rx: curve(clamp1(right.x + kb.rx + pad.rx)),
+    ry: curve(clamp1(right.y + kb.ry + pad.ry)),
   };
+  if (drive) {
+    driveFrame(dt, now);
+    return;
+  }
   acc += dt;
   if (!$('settings').hidden) acc = 0; // 설정 중에는 일시정지
   let n = 0;
@@ -1221,17 +2041,22 @@ function frame(now: number) {
     acc -= STEP;
     n++;
   }
-  exc.sync(session);
+  // 평탄 도움 색·긁은 자국: 연습 모드에서 첫 덤프 뒤 (실제 시험 없음)
+  soilView.flatGuide = session.flags.feedback && session.dumpCount >= 1;
+  soilView.now = session.t;
   soilView.sync();
+  exc.sync(session);
   fx.sync(session);
+  sound.active = operating();
   sound.update(session);
+  const rw = tutor?.rewinds ?? 0;
   if (tutor && tutor.update()) {
     if (tutor.cleared) onLessonClear();
     else {
       sound.ding();
       renderMission();
     }
-  }
+  } else if (tutor && tutor.rewinds !== rw) onRewind();
   updateMeter();
   if (examiners) {
     exc.bucketWorld(tmpV);
@@ -1239,6 +2064,7 @@ function frame(now: number) {
   }
   updateCamera(dt);
   updateHud();
+  warmEffects();
   renderer.render(scene, camera);
   // 느리면 해상도를 낮춤
   if (frameAvg > 38) slowT += dt;
@@ -1254,6 +2080,65 @@ function frame(now: number) {
   }
   requestAnimationFrame(frame);
 }
+/** 장비를 실제로 만지는 화면인가: 인트로·모드 선택·배우기 목록·설정·결과 등 창이 하나도 안 떠 있을 때 */
+const MODALS = [...document.querySelectorAll<HTMLElement>('.modal')];
+function operating() {
+  return $('intro').hidden && MODALS.every((m) => m.hidden);
+}
+/** 주행 프레임: 고정 60Hz로 차를 움직이고 코스·미러·카메라·HUD 갱신 */
+function driveFrame(dt: number, _now: number) {
+  const d = drive!;
+  // 화면: 돌리는 핸들 + 브레이크·가속 페달. 키보드: 핸들 좌우(감는 속도)·페달
+  pedalAccel.update(dt);
+  pedalBrake.update(dt);
+  d.setControls(
+    -clamp1(kb.lx + pad.lx),
+    Math.max(pedalAccel.value, curve(Math.max(0, kb.ry)), pad.accel),
+    Math.max(pedalBrake.value, curve(Math.max(0, -kb.ry)), pad.brake),
+    wheelCtl.take(),
+  );
+  const side = Math.abs(d.s.steer) >= d.s.p.maxSteer - 1e-4 ? Math.sign(d.s.steer) : 0;
+  wheelCtl.draw(d.s.wheelAngle, d.s.lockPush, side);
+  d.s.lockPush = 0;
+  if (wheelCtl.hitLock) {
+    // 끝에 '턱' 걸리는 느낌: 짧은 진동 + 둔탁한 소리
+    if (navigator.vibrate) navigator.vibrate(25);
+    sound.thump(0.35);
+  }
+  acc += dt;
+  if (!$('settings').hidden || !$('precheck').hidden) acc = 0;
+  acc = Math.min(acc, 0.5);
+  let n = 0;
+  while (acc >= STEP && n < 30) {
+    d.step(STEP);
+    acc -= STEP;
+    n++;
+  }
+  d.sync(scene);
+  const rw = tutor?.rewinds ?? 0;
+  if (tutor && tutor.update()) {
+    if (tutor.cleared) onLessonClear();
+    else {
+      sound.ding();
+      renderMission();
+    }
+  } else if (tutor && tutor.rewinds !== rw) onRewind();
+  updateMeter();
+  sound.active = operating();
+  sound.update(d.soundState() as unknown as DigSession);
+  d.camera(camera, camMode, eyeOffset(), dt, examLookAt);
+  d.hud();
+  if (examiners) {
+    const c = d.s.center;
+    examiners.update(dt, _now / 1000, tmpV.set(c.x, 1.5, c.z));
+  }
+  renderer.render(scene, camera);
+  if (debug) {
+    const info = renderer.info.render;
+    perf.textContent = `fps ${(1000 / frameAvg).toFixed(0)}  draw ${info.calls}  tri ${info.triangles}`;
+  }
+  requestAnimationFrame(frame);
+}
 const clamp1 = (v: number) => Math.max(-1, Math.min(1, v));
 /** 레버 감도 곡선: 조금 기울이면 아주 천천히 (미세 조작) */
 const curve = (v: number) => Math.sign(v) * Math.abs(v) ** 2.2;
@@ -1265,4 +2150,9 @@ let lastBuzz = 0;
 newSession();
 applySize();
 addEventListener('resize', applySize);
+addEventListener('orientationchange', () => setTimeout(applySize, 300));
+if (typeof ResizeObserver !== 'undefined') new ResizeObserver(applySize).observe(canvas);
+// ----- 오프닝: 앱을 켤 때마다 (탭·키로 건너뜀, ?nointro면 생략) -----
+const startStage = new StartStage(renderer, () => styleKey);
+let opening: Intro | null = new URLSearchParams(location.search).has('nointro') ? null : new Intro(renderer, startStage, () => (opening = null));
 requestAnimationFrame(frame);
