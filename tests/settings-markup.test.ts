@@ -65,3 +65,10 @@ it('저장된 전체 음량이 시작할 때 적용된다', () => {
   const start = main.slice(main.indexOf('const sound = new MachineSound()'));
   expect(start.slice(0, 600)).toMatch(/sound\.setMaster\(/);
 });
+
+it('설정 탭 칸 수가 탭 개수와 맞는다', () => {
+  // 폰(pointer: coarse)에서만 5칸으로 두던 규칙이 남으면 탭 3개가 화면 왼쪽 60%에 몰린다
+  const tabRules = [...css.matchAll(/([^{}]*\.tabs[^{}]*)\{([^}]*grid-template-columns[^}]*)\}/g)];
+  const wrong = tabRules.filter(([, , body]) => !/repeat\(3,/.test(body)).map(([, sel]) => sel.trim());
+  expect(wrong).toEqual([]);
+});

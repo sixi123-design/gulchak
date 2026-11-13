@@ -618,7 +618,10 @@ applyUiSize();
     disarm();
     b.textContent = '지웠어요';
     t = window.setTimeout(disarm, 1500);
+    // 설정 뒤에 떠 있던 배우기 목록·시작 화면 뱃지도 같이 되돌린다
     renderMission();
+    renderLessonMap();
+    renderModePicker();
   };
 }
 
@@ -678,6 +681,7 @@ const openSettings = () => {
   const t = pickTab(load('exc-settab'), SET_TABS, 'keys');
   renderPadUi();
   renderViewPrefs();
+  $('q-note').hidden = !qNow().aaChanged;
   renderPro();
   $('redeem').hidden = true;
   $('redeem-msg').hidden = true;

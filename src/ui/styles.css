@@ -2568,7 +2568,7 @@ body[data-mode='tutorial'] .toasts {
 /* 설정 > 조작키: 조이스틱처럼 십자 2개 */
 .settings-card .tabs {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
 }
 .key-grid {
   display: flex;
@@ -2710,7 +2710,7 @@ body[data-mode='tutorial'] .toasts {
 /* 설정 > 조작키: 조이스틱처럼 십자 2개 */
 .settings-card .tabs {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
 }
 .key-grid {
   display: flex;
@@ -3300,7 +3300,7 @@ body:has(#paywall:not([hidden])) #precheck .card.start {
   padding: 8px 10px;
 }
 #settings.seat .tabs {
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
 }
 #settings.seat .tabs button {
   white-space: nowrap;
@@ -7193,7 +7193,7 @@ body.stage-on #precheck .modebtn:not(:has(.mb-badge)) {
 /* 분류 탭: 내용 버튼(스티커)과 다른 모양 — 회색 바 안의 흰 알약 */
 .settings-card .tabs {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 2px;
   margin: 0;
   padding: 3px;
@@ -7268,7 +7268,7 @@ section[data-pane='keys'] > .set-h {
   display: none;
 }
 #settings.seat .settings-card .tabs {
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
 }
 #settings.seat .settings-card .tabs button {
   font-size: 12.5px;
@@ -7337,7 +7337,7 @@ section[data-pane='keys'] > .set-h {
     display: block;
   }
   #settings .settings-card .tabs {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
   }
   .kb-only {
     display: none;
@@ -7398,7 +7398,7 @@ section[data-pane='keys'] > .set-h {
 }
 @media (pointer: coarse) {
   #settings .settings-card .tabs {
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(3, 1fr);
   }
 }
 .settings-card .tabs button,
