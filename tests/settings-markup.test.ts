@@ -15,22 +15,23 @@ it('main.ts가 찾는 요소가 모두 index.html에 있다', () => {
   expect(missing).toEqual([]);
 });
 
-it('설정 탭은 조작·화면·시험장 셋', () => {
+it('설정 탭은 조작·화면·소리·시험장 넷', () => {
   const tabs = [...html.matchAll(/<button data-tab="([a-z]+)">([^<]+)</g)].map((m) => [m[1], m[2]]);
   expect(tabs).toEqual([
     ['keys', '조작'],
     ['view', '화면'],
+    ['sound', '소리'],
     ['machine', '시험장'],
   ]);
 });
 
 it('탭마다 짝이 되는 칸이 있다 (좌석은 버튼으로 들어가는 숨은 칸)', () => {
   const panes = [...html.matchAll(/data-pane="([a-z]+)"/g)].map((m) => m[1]);
-  expect(new Set(panes)).toEqual(new Set(['keys', 'view', 'machine', 'seat']));
+  expect(new Set(panes)).toEqual(new Set(['keys', 'view', 'sound', 'machine', 'seat']));
 });
 
 it('새 설정 항목이 모두 있다', () => {
-  for (const id of ['z-edge', 'z-labels', 'buzz-row', 'q-row', 'vol-all', 'btn-seat-go', 'btn-reset-tut', 'pro-state', 'btn-restore'])
+  for (const id of ['z-edge', 'z-labels', 'buzz-row', 'q-row', 'vol-all', 'btn-seat-go', 'btn-reset-tut', 'btn-restore', 'redeem-input'])
     expect(ids.has(id), id).toBe(true);
 });
 
@@ -69,6 +70,6 @@ it('저장된 전체 음량이 시작할 때 적용된다', () => {
 it('설정 탭 칸 수가 탭 개수와 맞는다', () => {
   // 폰(pointer: coarse)에서만 5칸으로 두던 규칙이 남으면 탭 3개가 화면 왼쪽 60%에 몰린다
   const tabRules = [...css.matchAll(/([^{}]*\.tabs[^{}]*)\{([^}]*grid-template-columns[^}]*)\}/g)];
-  const wrong = tabRules.filter(([, , body]) => !/repeat\(3,/.test(body)).map(([, sel]) => sel.trim());
+  const wrong = tabRules.filter(([, , body]) => !/repeat\(4,/.test(body)).map(([, sel]) => sel.trim());
   expect(wrong).toEqual([]);
 });

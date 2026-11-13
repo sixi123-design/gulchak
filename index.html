@@ -135,9 +135,19 @@
           <div class="tabs">
             <button data-tab="keys">조작</button>
             <button data-tab="view">화면</button>
+            <button data-tab="sound">소리</button>
             <button data-tab="machine">시험장</button>
           </div>
         </div>
+        <section data-pane="sound" hidden>
+          <div class="set-group">
+            <p class="set-h">음량</p>
+            <div class="vol-row all"><span>전체</span><button class="mute" id="mute-all"></button><input type="range" id="vol-all" min="0" max="100" /></div>
+            <div class="vol-row"><span>엔진음</span><button class="mute" id="mute-eng">🔊</button><input type="range" id="vol-eng" min="0" max="100" /></div>
+            <div class="vol-row"><span>환경음</span><button class="mute" id="mute-amb">🔊</button><input type="range" id="vol-amb" min="0" max="100" /></div>
+            <div class="vol-row"><span>효과음</span><button class="mute" id="mute-sfx">🔊</button><input type="range" id="vol-sfx" min="0" max="100" /></div>
+          </div>
+        </section>
         <section data-pane="machine" hidden>
           <div class="set-group">
             <p class="set-h">내 시험장</p>
@@ -186,13 +196,6 @@
             <p class="set-h">좌석 높이 <small>눈높이가 바뀌어요</small></p>
             <button class="btn small" id="btn-seat-go">좌석 높이 맞추기</button>
           </div>
-          <div class="set-group">
-            <p class="set-h">음량</p>
-            <div class="vol-row all"><span>전체</span><button class="mute" id="mute-all"></button><input type="range" id="vol-all" min="0" max="100" /></div>
-            <div class="vol-row"><span>엔진음</span><button class="mute" id="mute-eng">🔊</button><input type="range" id="vol-eng" min="0" max="100" /></div>
-            <div class="vol-row"><span>환경음</span><button class="mute" id="mute-amb">🔊</button><input type="range" id="vol-amb" min="0" max="100" /></div>
-            <div class="vol-row"><span>효과음</span><button class="mute" id="mute-sfx">🔊</button><input type="range" id="vol-sfx" min="0" max="100" /></div>
-          </div>
         </section>
         <section data-pane="keys" hidden>
           <div class="set-group">
@@ -225,15 +228,6 @@
             <div class="key-grid" id="key-grid"></div>
           </div>
         </section>
-        <div class="pro-row" id="pro-row">
-          <span>이용권 <b id="pro-state">무료</b></span>
-          <button class="btn small" id="btn-pro-restore">구매 복원</button>
-        </div>
-        <div class="redeem" id="redeem" hidden>
-          <input id="redeem-input" type="text" inputmode="text" autocomplete="off" placeholder="구매 코드" />
-          <button class="btn small" id="btn-redeem">코드 확인</button>
-          <p class="set-note" id="redeem-msg" hidden></p>
-        </div>
         <div class="set-foot">
           <button class="btn" id="btn-keys-reset" hidden>키 기본값</button>
           <button class="btn" id="btn-seat-cancel" hidden>취소</button>
@@ -301,6 +295,11 @@
           <ul class="pw-perks" id="pw-perks"></ul>
           <button class="btn big pw-buy" id="btn-buy"></button>
           <button class="pw-restore" id="btn-restore">구매 복원</button>
+          <div class="redeem" id="redeem" hidden>
+            <input id="redeem-input" type="text" inputmode="text" autocomplete="off" placeholder="구매 코드" />
+            <button class="btn small" id="btn-redeem">코드 확인</button>
+            <p class="set-note" id="redeem-msg" hidden></p>
+          </div>
         </div>
       </div>
     </div>

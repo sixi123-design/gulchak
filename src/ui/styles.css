@@ -532,7 +532,7 @@ input[type='range'] {
 }
 .tabs {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 6px;
   margin-bottom: 12px;
 }
@@ -2568,7 +2568,7 @@ body[data-mode='tutorial'] .toasts {
 /* 설정 > 조작키: 조이스틱처럼 십자 2개 */
 .settings-card .tabs {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
 }
 .key-grid {
   display: flex;
@@ -2710,7 +2710,7 @@ body[data-mode='tutorial'] .toasts {
 /* 설정 > 조작키: 조이스틱처럼 십자 2개 */
 .settings-card .tabs {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
 }
 .key-grid {
   display: flex;
@@ -3201,7 +3201,7 @@ body:has(#paywall:not([hidden])) #precheck .card.start {
     display: none;
   }
   #settings .settings-card .tabs {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
   }
 }
 /* 준비 중 종목: 더 흐리고 점선, 말풍선 크게 */
@@ -3300,7 +3300,7 @@ body:has(#paywall:not([hidden])) #precheck .card.start {
   padding: 8px 10px;
 }
 #settings.seat .tabs {
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
 }
 #settings.seat .tabs button {
   white-space: nowrap;
@@ -7193,7 +7193,7 @@ body.stage-on #precheck .modebtn:not(:has(.mb-badge)) {
 /* 분류 탭: 내용 버튼(스티커)과 다른 모양 — 회색 바 안의 흰 알약 */
 .settings-card .tabs {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 2px;
   margin: 0;
   padding: 3px;
@@ -7219,7 +7219,7 @@ body.stage-on #precheck .modebtn:not(:has(.mb-badge)) {
 }
 @media (pointer: coarse) {
   #settings .settings-card .tabs {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
   }
 }
 /* 내용: 묶음마다 작은 제목, 묶음 사이 구분선. 길면 이 부분만 스크롤 */
@@ -7268,7 +7268,7 @@ section[data-pane='keys'] > .set-h {
   display: none;
 }
 #settings.seat .settings-card .tabs {
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
 }
 #settings.seat .settings-card .tabs button {
   font-size: 12.5px;
@@ -7279,7 +7279,7 @@ section[data-pane='keys'] > .set-h {
   margin: 2px 0 0;
 }
 #settings.seat .settings-card .tabs {
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
 }
 #settings.seat .settings-card .tabs button {
   font-size: 12px;
@@ -7337,7 +7337,7 @@ section[data-pane='keys'] > .set-h {
     display: block;
   }
   #settings .settings-card .tabs {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
   }
   .kb-only {
     display: none;
@@ -7386,7 +7386,7 @@ section[data-pane='keys'] > .set-h {
   grid-column: 1 / -1;
 }
 #settings.seat .settings-card .tabs {
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
 }
 /* 설정 > 화면: 크기 */
 .lk-row.s3 {
@@ -7394,11 +7394,11 @@ section[data-pane='keys'] > .set-h {
 }
 #settings .settings-card .tabs,
 #settings.seat .settings-card .tabs {
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
 }
 @media (pointer: coarse) {
   #settings .settings-card .tabs {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
   }
 }
 .settings-card .tabs button,
@@ -7467,4 +7467,40 @@ section[data-pane='keys'] > .set-h {
 }
 .redeem .set-note {
   flex-basis: 100%;
+}
+
+/* ---------- 설정: 큰 화면에서는 넓게, 묶음을 두 줄로 ---------- */
+#settings:not(.seat) .card {
+  width: min(680px, 100%);
+}
+@media (min-width: 760px) {
+  #settings:not(.seat) .settings-card section:not([hidden]) {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 20px;
+    align-content: start;
+  }
+  #settings:not(.seat) .settings-card section[data-pane='sound'] {
+    grid-template-columns: 1fr;
+  }
+  #settings:not(.seat) .settings-card .set-group {
+    margin: 0;
+  }
+  /* 한 줄을 다 쓰는 것들 (가로로 길어야 읽힌다) */
+  #settings:not(.seat) .settings-card .set-group:has(.key-grid),
+  #settings:not(.seat) .settings-card .set-group:has(.pad-map),
+  #settings:not(.seat) .settings-card .set-group:has(.site-tools),
+  #settings:not(.seat) .settings-card .set-group:has(.machine-shot) {
+    grid-column: 1 / -1;
+  }
+}
+/* ---------- 시작 무대: 모드 카드를 노란 판 가운데로, 크게 ---------- */
+body.stage-on #precheck .mode-pick {
+  width: min(720px, 56vw);
+  margin-right: min(40px, 2.5vw);
+  max-height: min(62vh, 420px);
+}
+/* 결제 벽 안의 구매 코드 칸: 가로로 꽉 차게 */
+#paywall .redeem {
+  align-self: stretch;
 }

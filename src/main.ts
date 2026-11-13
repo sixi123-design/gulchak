@@ -3,7 +3,7 @@ import { MACHINE } from './config/machine';
 import rulesJson from './config/rules.json';
 import sitesJson from './config/sites.json';
 import { MODES, type ModeKey, type Violation } from './core/ruleEngine';
-import { hasPro, isLocked, redeem } from './core/entitlement';
+import { isLocked, redeem } from './core/entitlement';
 import { ExcavatorView, type MachineStyleKey } from './render/excavatorView';
 import { FxView, SiteView, SoilView } from './render/siteView';
 import { DigSession, type DigEntry, type RulesFile, type Sticks } from './sim/session';
@@ -625,26 +625,11 @@ applyUiSize();
   };
 }
 
-// 설정 아래 이용권 한 줄 (계정 없음: 코드로 되살린다)
-function renderPro() {
-  $('pro-state').textContent = hasPro() ? '이용 중' : '무료';
-}
-$('btn-pro-restore').onclick = () => {
-  const box = $('redeem');
-  box.hidden = !box.hidden;
-  if (!box.hidden) $<HTMLInputElement>('redeem-input').focus();
-};
-$('btn-redeem').onclick = () => {
-  const code = $<HTMLInputElement>('redeem-input').value.trim();
-  const msg = $('redeem-msg');
-  msg.hidden = false;
-  msg.textContent = redeem(code) ? '이용권이 살아났어요' : '코드를 확인할 수 없어요';
-  renderPro();
-};
+
 
 // 탭 · 열기/닫기
 /** 지금 있는 탭 (옛 버전이 저장한 'sound'·'seat'가 남아 있을 수 있다) */
-const SET_TABS = ['keys', 'view', 'machine'] as const;
+const SET_TABS = ['keys', 'view', 'sound', 'machine'] as const;
 let camBeforeSeat: CamMode | null = null;
 // 좌석 높이는 따로 들어가는 화면: 들어올 때의 탭·키를 기억 → [취소]는 되돌리고 나감
 let seatFrom = 'view';
@@ -682,9 +667,6 @@ const openSettings = () => {
   renderPadUi();
   renderViewPrefs();
   $('q-note').hidden = !qNow().aaChanged;
-  renderPro();
-  $('redeem').hidden = true;
-  $('redeem-msg').hidden = true;
   showTab(t);
 };
 $('btn-paywall-close').onclick = () => ($('paywall').hidden = true);
@@ -1628,11 +1610,16 @@ $('btn-buy').onclick = () => {
     startMode();
   }, 900);
 };
-// TODO: 실제 결제 연동 시 스토어 구매 내역 조회. 지금은 테스트라 복원할 것이 없음
-$('btn-restore').onclick = (e) => {
-  const b = e.currentTarget as HTMLButtonElement;
-  b.textContent = '복원할 구매 없음';
-  setTimeout(() => (b.textContent = '구매 복원'), 1500);
+// 구매 복원: 계정 없이 구매 코드로. (TODO: redeem()에 서명 키 검증 붙이기)
+$('btn-restore').onclick = () => {
+  const box = $('redeem');
+  box.hidden = !box.hidden;
+  if (!box.hidden) $<HTMLInputElement>('redeem-input').focus();
+};
+$('btn-redeem').onclick = () => {
+  const msg = $('redeem-msg');
+  msg.hidden = false;
+  msg.textContent = redeem($<HTMLInputElement>('redeem-input').value.trim()) ? '이용권이 살아났어요' : '코드를 확인할 수 없어요';
 };
 $('paid-ico').innerHTML = ICON.check;
 $('fail-retry-ico').innerHTML = ICON.retry;
