@@ -14,6 +14,7 @@ import { Pedal, SteeringWheel } from './ui/driveControls';
 import { MachineSound, type SoundLevels } from './ui/audio';
 import { loadNum, saveRaw } from './ui/prefs';
 import { buzz } from './ui/buzz';
+import { Q, autoLevel, levelOf, loadQuality, saveQuality, type QLevel } from './ui/quality';
 import { ICON } from './ui/icons';
 import { ExaminerView } from './render/examinerView';
 import { EXAM_SKY, paintExamSite } from './render/examSite';
@@ -39,9 +40,13 @@ const debug = new URLSearchParams(location.search).has('debug');
 
 // ---------- 렌더러 ----------
 const canvas = $<HTMLCanvasElement>('view');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: true, powerPreference: 'default' });
+/** 화질: 자동이면 '보통'에서 시작해 프레임을 보고 오르내리고, 고른 값이 있으면 고정 */
+let qPref = loadQuality();
+let qLevel: QLevel = levelOf(qPref);
+// 안티에일리어싱은 WebGL 컨텍스트 생성 옵션이라 켜고 끄면 다음에 켤 때부터 적용된다
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: Q[qLevel].aa, alpha: true, powerPreference: 'default' });
 if (debug) (window as unknown as { __r: unknown }).__r = renderer;
-let dprCap = 1.25;
+let dprCap = Q[qLevel].dprCap;
 let sizeW = 0;
 let sizeH = 0;
 let sizeDpr = 0;
@@ -62,6 +67,19 @@ const applySize = () => {
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
 };
+/** 화질 적용. byUser면 그 단계로 고정하고 자동을 끈다. 안티에일리어싱 변화는 다음 실행부터 */
+function setQuality(lv: QLevel, byUser: boolean) {
+  const aaBefore = Q[qLevel].aa;
+  qLevel = lv;
+  dprCap = Q[lv].dprCap;
+  applySize();
+  if (byUser) {
+    qPref = lv;
+    saveQuality(lv);
+  }
+  return Q[lv].aa !== aaBefore; // true면 "다음에 켤 때 적용" 안내가 필요
+}
+
 const scene = new THREE.Scene();
 scene.fog = new THREE.Fog(0xcfeeff, 28, 70);
 const camera = new THREE.PerspectiveCamera(62, 1, 0.05, 150);
@@ -2065,13 +2083,15 @@ function frame(now: number) {
   updateHud();
   warmEffects();
   renderer.render(scene, camera);
-  // 느리면 해상도를 낮춤
-  if (frameAvg > 38) slowT += dt;
-  else slowT = Math.max(0, slowT - dt);
-  if (slowT > 2 && dprCap > 0.75) {
-    dprCap = Math.max(0.75, dprCap - 0.25);
-    applySize();
-    slowT = 0;
+  // 자동일 때만: 느리면 화질을 낮추고, 넉넉하면 올린다 (손으로 고른 값은 건드리지 않는다)
+  if (qPref === 'auto') {
+    if (frameAvg > 38 || frameAvg < 20) slowT += dt;
+    else slowT = Math.max(0, slowT - dt);
+    if (slowT > 2) {
+      const next = autoLevel(frameAvg, qLevel);
+      if (next !== qLevel) setQuality(next, false);
+      slowT = 0;
+    }
   }
   if (debug) {
     const info = renderer.info.render;
