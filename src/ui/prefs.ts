@@ -66,3 +66,8 @@ export function cssVars(): Record<string, string> {
   vars['--stick-edge'] = `${STEPS.edge.v[loadStep('edge')]}px`;
   return vars;
 }
+
+/** 저장해 둔 탭 이름이 지금도 있는 탭일 때만 쓴다 (옛 버전의 'sound'·'seat'가 남아 있을 수 있다) */
+export function pickTab(saved: string | null, tabs: readonly string[], def: string): string {
+  return saved !== null && tabs.includes(saved) ? saved : def;
+}

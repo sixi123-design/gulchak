@@ -44,3 +44,24 @@ it('레버 여백은 CSS 변수로 움직인다', () => {
 it('진동은 buzz()로만 쓴다', () => {
   expect(main).not.toMatch(/navigator\.vibrate/);
 });
+
+it('id는 문서에서 겹치지 않는다', () => {
+  const all = [...html.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]);
+  const dup = all.filter((id, i) => all.indexOf(id) !== i);
+  expect(dup).toEqual([]);
+});
+
+it('레버 글자 토글의 가장자리 값이 모두 CSS 변수를 쓴다', () => {
+  // .lab-toggle 규칙이 여러 번 덮어써서, 뒤쪽 규칙에 고정 px가 남아 있으면 레버와 따로 논다
+  const blocks = [...css.matchAll(/([^{}]*\.lab-toggle[^{}]*)\{([^}]*)\}/g)];
+  const stuck = blocks
+    .filter(([, , body]) => /safe-area-inset-(left|bottom)/.test(body) && /max\(\s*\d+px/.test(body))
+    .map(([, sel]) => sel.trim());
+  expect(stuck).toEqual([]);
+});
+
+it('저장된 전체 음량이 시작할 때 적용된다', () => {
+  // 슬라이더를 건드려야만 적용되면 새로고침 뒤 소리가 예전 크기로 난다
+  const start = main.slice(main.indexOf('const sound = new MachineSound()'));
+  expect(start.slice(0, 600)).toMatch(/sound\.setMaster\(/);
+});

@@ -1,6 +1,6 @@
 import { beforeEach, expect, it } from 'vitest';
 import { installFakeStorage } from './fakeStorage';
-import { STEPS, loadStep, saveStep, cssVars, loadNum, loadFlag, loadRaw, saveRaw } from '../src/ui/prefs';
+import { STEPS, loadStep, saveStep, cssVars, loadNum, loadFlag, loadRaw, saveRaw, pickTab } from '../src/ui/prefs';
 
 installFakeStorage();
 beforeEach(() => localStorage.clear());
@@ -72,4 +72,12 @@ it('저장소가 막혀 있어도 기본값으로 동작한다', () => {
   } finally {
     Object.defineProperty(globalThis, 'localStorage', { configurable: true, writable: true, value: real });
   }
+});
+
+it('저장된 탭이 지금 없는 탭이면 기본 탭으로', () => {
+  // 옛 버전은 'sound'·'seat'도 저장했다. 그대로 열면 빈 설정창이 뜨거나 좌석 화면에 갇힌다
+  expect(pickTab('sound', ['keys', 'view', 'machine'], 'keys')).toBe('keys');
+  expect(pickTab('seat', ['keys', 'view', 'machine'], 'keys')).toBe('keys');
+  expect(pickTab(null, ['keys', 'view', 'machine'], 'keys')).toBe('keys');
+  expect(pickTab('view', ['keys', 'view', 'machine'], 'keys')).toBe('view');
 });

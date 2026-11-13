@@ -31,9 +31,48 @@ export function levelOf(q: QLevel | 'auto'): QLevel {
   return q === 'auto' ? 1 : q;
 }
 
+/**
+ * 자동이 올릴 수 있는 최고 단계. '선명하게'는 사람이 고르는 것이지 기계가 올려주는 것이 아니다.
+ * (60Hz 화면은 아무리 여유가 있어도 한 프레임이 16.7ms 밑으로 안 내려가서, 여유를 프레임 시간으로는 알 수 없다.
+ *  그래서 자동은 자기가 내린 만큼만 되돌린다.)
+ */
+export const AUTO_MAX: QLevel = 1;
+
 /** 한 프레임 평균(ms)을 보고 다음 단계. 38ms(=26fps) 넘으면 내리고, 20ms(=50fps) 밑이면 올린다 */
 export function autoLevel(frameAvgMs: number, cur: QLevel): QLevel {
   if (frameAvgMs > 38) return Math.max(0, cur - 1) as QLevel;
-  if (frameAvgMs < 20) return Math.min(2, cur + 1) as QLevel;
+  if (frameAvgMs < 20) return (cur >= AUTO_MAX ? cur : cur + 1) as QLevel;
   return cur;
+}
+
+// ---- 지금 상태 (화면이 쓰는 값은 여기 하나뿐) ----
+let pref: QLevel | 'auto' = loadQuality();
+let level: QLevel = levelOf(pref);
+/** 지금 켜져 있는 렌더러가 어떤 안티에일리어싱으로 만들어졌는지 (바뀌면 다음에 켤 때 적용된다) */
+let aaNow = Q[level].aa;
+
+export function current(): { pref: QLevel | 'auto'; level: QLevel; aaChanged: boolean } {
+  return { pref, level, aaChanged: Q[level].aa !== aaNow };
+}
+
+/** 설정 칩: 0 = 자동, 1~3 = 부드럽게·보통·선명하게 */
+export function pick(choice: number): QLevel {
+  pref = choice === 0 ? 'auto' : ((choice - 1) as QLevel);
+  level = levelOf(pref);
+  saveQuality(pref);
+  return level;
+}
+
+/** 자동일 때만 프레임을 보고 단계를 바꾼다. 바뀌면 새 단계, 아니면 null */
+export function tick(frameAvgMs: number): QLevel | null {
+  if (pref !== 'auto') return null;
+  const next = autoLevel(frameAvgMs, level);
+  if (next === level) return null;
+  level = next;
+  return level;
+}
+
+/** 렌더러를 새로 만들었을 때 (지금 켜진 안티에일리어싱을 다시 기준으로 삼는다) */
+export function markRendererAa(aa: boolean): void {
+  aaNow = aa;
 }

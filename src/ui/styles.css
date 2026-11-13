@@ -2175,7 +2175,7 @@ body.labels-off .stick .lab:not(.hint) {
 }
 @media (max-height: 460px) {
   .lab-toggle {
-    bottom: calc(max(18px, env(safe-area-inset-bottom)) + min(46vh, 200px) + 4px);
+    bottom: calc(max(var(--stick-edge), env(safe-area-inset-bottom)) + min(46vh, 200px) + 4px);
   }
 }
 /* ---------- 모드별 화면 ----------
@@ -2380,8 +2380,8 @@ body:has(#dq-banner:not([hidden])) #hud {
 /* 레버 이름 토글: 이름표 아이콘, 반투명, 왼쪽 조이스틱 오른쪽 아래 (위쪽 미션 카드와 겹치지 않게) */
 .lab-toggle {
   /* 왼쪽 조이스틱 영역의 오른쪽 위 모서리 (원 밖 빈자리) */
-  left: calc(max(18px, env(safe-area-inset-left)) + min(40vw, 240px) - 30px);
-  bottom: calc(max(18px, env(safe-area-inset-bottom)) + min(40vw, 240px) - 30px);
+  left: calc(max(var(--stick-edge), env(safe-area-inset-left)) + min(40vw, 240px) - 30px);
+  bottom: calc(max(var(--stick-edge), env(safe-area-inset-bottom)) + min(40vw, 240px) - 30px);
   width: 36px;
   height: 36px;
   color: #fff;
@@ -2410,8 +2410,8 @@ body:has(#dq-banner:not([hidden])) #hud {
 }
 @media (max-height: 460px) {
   .lab-toggle {
-    left: calc(max(18px, env(safe-area-inset-left)) + min(46vh, 200px) - 30px);
-    bottom: calc(max(18px, env(safe-area-inset-bottom)) + min(46vh, 200px) - 30px);
+    left: calc(max(var(--stick-edge), env(safe-area-inset-left)) + min(46vh, 200px) - 30px);
+    bottom: calc(max(var(--stick-edge), env(safe-area-inset-bottom)) + min(46vh, 200px) - 30px);
   }
 }
 
@@ -3766,20 +3766,20 @@ body:has(#fail:not([hidden])) .lab-toggle {
 }
 .lab-toggle,
 .lab-toggle.tip {
-  left: max(12px, env(safe-area-inset-left));
+  left: max(var(--stick-edge), env(safe-area-inset-left));
 }
 @media (max-height: 460px) {
   .lab-toggle {
-    left: max(12px, env(safe-area-inset-left));
+    left: max(var(--stick-edge), env(safe-area-inset-left));
   }
 }
 /* '암 펴기' 글자와 붙지 않게 조금 위로 */
 .lab-toggle {
-  bottom: calc(max(18px, env(safe-area-inset-bottom)) + min(40vw, 240px) + 4px);
+  bottom: calc(max(var(--stick-edge), env(safe-area-inset-bottom)) + min(40vw, 240px) + 4px);
 }
 @media (max-height: 460px) {
   .lab-toggle {
-    bottom: calc(max(18px, env(safe-area-inset-bottom)) + min(46vh, 200px) + 4px);
+    bottom: calc(max(var(--stick-edge), env(safe-area-inset-bottom)) + min(46vh, 200px) + 4px);
   }
 }
 

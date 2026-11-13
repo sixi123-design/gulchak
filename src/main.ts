@@ -12,9 +12,9 @@ import { ik } from './sim/kinematics';
 import { Joystick, KEY_ACTIONS, keyName, Keys } from './ui/joystick';
 import { Pedal, SteeringWheel } from './ui/driveControls';
 import { MachineSound, type SoundLevels } from './ui/audio';
-import { cssVars, loadNum, loadStep, saveRaw, saveStep, STEPS } from './ui/prefs';
+import { cssVars, loadNum, loadStep, pickTab, saveRaw, saveStep, STEPS } from './ui/prefs';
 import { buzz, buzzOn, setBuzz } from './ui/buzz';
-import { Q, autoLevel, levelOf, loadQuality, saveQuality, type QLevel } from './ui/quality';
+import { Q, current as qNow, markRendererAa, pick as qPick, tick as qTick, type QLevel } from './ui/quality';
 import { ICON } from './ui/icons';
 import { ExaminerView } from './render/examinerView';
 import { EXAM_SKY, paintExamSite } from './render/examSite';
@@ -40,13 +40,12 @@ const debug = new URLSearchParams(location.search).has('debug');
 
 // ---------- 렌더러 ----------
 const canvas = $<HTMLCanvasElement>('view');
-/** 화질: 자동이면 '보통'에서 시작해 프레임을 보고 오르내리고, 고른 값이 있으면 고정 */
-let qPref = loadQuality();
-let qLevel: QLevel = levelOf(qPref);
+/** 화질: 자동이면 '보통'에서 시작해 프레임을 보고 오르내리고, 고른 값이 있으면 고정 (상태는 ui/quality) */
 // 안티에일리어싱은 WebGL 컨텍스트 생성 옵션이라 켜고 끄면 다음에 켤 때부터 적용된다
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: Q[qLevel].aa, alpha: true, powerPreference: 'default' });
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: Q[qNow().level].aa, alpha: true, powerPreference: 'default' });
+markRendererAa(Q[qNow().level].aa);
 if (debug) (window as unknown as { __r: unknown }).__r = renderer;
-let dprCap = Q[qLevel].dprCap;
+let dprCap = Q[qNow().level].dprCap;
 let sizeW = 0;
 let sizeH = 0;
 let sizeDpr = 0;
@@ -67,17 +66,10 @@ const applySize = () => {
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
 };
-/** 화질 적용. byUser면 그 단계로 고정하고 자동을 끈다. 안티에일리어싱 변화는 다음 실행부터 */
-function setQuality(lv: QLevel, byUser: boolean) {
-  const aaBefore = Q[qLevel].aa;
-  qLevel = lv;
+/** 화질 단계가 바뀌면 해상도를 다시 맞춘다 */
+function applyQuality(lv: QLevel) {
   dprCap = Q[lv].dprCap;
   applySize();
-  if (byUser) {
-    qPref = lv;
-    saveQuality(lv);
-  }
-  return Q[lv].aa !== aaBefore; // true면 "다음에 켤 때 적용" 안내가 필요
 }
 
 const scene = new THREE.Scene();
@@ -354,7 +346,6 @@ function syncSoundUi() {
 }
 const applySound = () => {
   sound.setLevels(levels);
-sound.setMaster(volAll);
   save('exc-audio', JSON.stringify(levels));
   syncSoundUi();
 };
@@ -583,10 +574,10 @@ function renderViewPrefs() {
       renderViewPrefs();
     });
   // 화질: 자동 + 3단
-  const qCur = loadQuality();
-  chipRow('q-row', ['자동', Q[0].label, Q[1].label, Q[2].label], qCur === 'auto' ? 0 : qCur + 1, (i) => {
-    const needRestart = i === 0 ? (saveQuality('auto'), false) : setQuality((i - 1) as QLevel, true);
-    $('q-note').hidden = !needRestart;
+  const q = qNow();
+  chipRow('q-row', ['자동', Q[0].label, Q[1].label, Q[2].label], q.pref === 'auto' ? 0 : q.pref + 1, (i) => {
+    applyQuality(qPick(i));
+    $('q-note').hidden = !qNow().aaChanged;
     renderViewPrefs();
   });
   chipRow('z-labels', ['켜기', '끄기'], labelsOn ? 0 : 1, (i) => {
@@ -635,7 +626,7 @@ applyUiSize();
 function renderPro() {
   $('pro-state').textContent = hasPro() ? '이용 중' : '무료';
 }
-$('btn-restore').onclick = () => {
+$('btn-pro-restore').onclick = () => {
   const box = $('redeem');
   box.hidden = !box.hidden;
   if (!box.hidden) $<HTMLInputElement>('redeem-input').focus();
@@ -649,13 +640,15 @@ $('btn-redeem').onclick = () => {
 };
 
 // 탭 · 열기/닫기
+/** 지금 있는 탭 (옛 버전이 저장한 'sound'·'seat'가 남아 있을 수 있다) */
+const SET_TABS = ['keys', 'view', 'machine'] as const;
 let camBeforeSeat: CamMode | null = null;
 // 좌석 높이는 따로 들어가는 화면: 들어올 때의 탭·키를 기억 → [취소]는 되돌리고 나감
 let seatFrom = 'view';
 let heightBefore = 170;
 function showTab(tab: string) {
   if (tab === 'seat' && !$('settings').classList.contains('seat')) {
-    seatFrom = load('exc-settab') ?? 'view';
+    seatFrom = pickTab(load('exc-settab'), SET_TABS, 'view');
     heightBefore = heightCm;
   }
   for (const b of document.querySelectorAll<HTMLElement>('#settings [data-tab]')) b.classList.toggle('on', b.dataset.tab === tab);
@@ -682,7 +675,7 @@ const openSettings = () => {
   renderExamLookUi();
   syncRuler();
   $('settings').hidden = false;
-  const t = load('exc-settab') ?? 'keys';
+  const t = pickTab(load('exc-settab'), SET_TABS, 'keys');
   renderPadUi();
   renderViewPrefs();
   renderPro();
@@ -1337,6 +1330,7 @@ try {
   /* 무시 */
 }
 sound.setLevels(levels);
+sound.setMaster(volAll);
 const wheelCtl = new SteeringWheel($('wheel-ctl'));
 // 바퀴 보기: 누르면 왼쪽 앞바퀴를 내려다보고, 다시 누르면 앞을 봄
 // 바퀴 보기·미러 보기는 하나만 (다시 누르면 앞을 봄)
@@ -2142,14 +2136,14 @@ function frame(now: number) {
   warmEffects();
   renderer.render(scene, camera);
   // 자동일 때만: 느리면 화질을 낮추고, 넉넉하면 올린다 (손으로 고른 값은 건드리지 않는다)
-  if (qPref === 'auto') {
-    if (frameAvg > 38 || frameAvg < 20) slowT += dt;
-    else slowT = Math.max(0, slowT - dt);
-    if (slowT > 2) {
-      const next = autoLevel(frameAvg, qLevel);
-      if (next !== qLevel) setQuality(next, false);
-      slowT = 0;
-    }
+  // 일부러 덜 그리는 화면(메뉴·결과)에서는 프레임 평균이 멈춘 값이라 판단하지 않는다
+  if (cap) slowT = 0;
+  else if (frameAvg > 38 || frameAvg < 20) slowT += dt;
+  else slowT = Math.max(0, slowT - dt);
+  if (slowT > 2) {
+    const next = qTick(frameAvg);
+    if (next !== null) applyQuality(next);
+    slowT = 0;
   }
   if (debug) {
     const info = renderer.info.render;
