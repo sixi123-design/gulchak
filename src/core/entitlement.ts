@@ -26,4 +26,12 @@ export function hasPro(): boolean {
   }
 }
 
+/**
+ * 구매 코드로 이용권 되살리기. 계정·로그인 없이 코드 하나로 복원한다.
+ * TODO: 서명 키 검증 (결제처에서 발급한 서명을 공개키로 확인). 지금은 받아줄 코드가 없다.
+ */
+export function redeem(_code: string): boolean {
+  return false;
+}
+
 export const isLocked = (m: ModeKey) => PAID_MODES.includes(m) && !hasPro();

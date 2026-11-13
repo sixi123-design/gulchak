@@ -3,7 +3,7 @@ import { MACHINE } from './config/machine';
 import rulesJson from './config/rules.json';
 import sitesJson from './config/sites.json';
 import { MODES, type ModeKey, type Violation } from './core/ruleEngine';
-import { isLocked } from './core/entitlement';
+import { hasPro, isLocked, redeem } from './core/entitlement';
 import { ExcavatorView, type MachineStyleKey } from './render/excavatorView';
 import { FxView, SiteView, SoilView } from './render/siteView';
 import { DigSession, type DigEntry, type RulesFile, type Sticks } from './sim/session';
@@ -12,8 +12,8 @@ import { ik } from './sim/kinematics';
 import { Joystick, KEY_ACTIONS, keyName, Keys } from './ui/joystick';
 import { Pedal, SteeringWheel } from './ui/driveControls';
 import { MachineSound, type SoundLevels } from './ui/audio';
-import { loadNum, saveRaw } from './ui/prefs';
-import { buzz } from './ui/buzz';
+import { cssVars, loadNum, loadStep, saveRaw, saveStep, STEPS } from './ui/prefs';
+import { buzz, buzzOn, setBuzz } from './ui/buzz';
 import { Q, autoLevel, levelOf, loadQuality, saveQuality, type QLevel } from './ui/quality';
 import { ICON } from './ui/icons';
 import { ExaminerView } from './render/examinerView';
@@ -565,43 +565,97 @@ $('btn-near').onclick = () => {
   );
 };
 
-// 설정 > 화면: 버튼·글자·레버 크기 (CSS 변수 → zoom / scale)
-const UI_SIZES = {
-  btn: { label: ['작게', '보통', '크게'], v: [0.88, 1, 1.15] },
-  txt: { label: ['보통', '크게', '아주 크게'], v: [1, 1.18, 1.36] },
-  stick: { label: ['작게', '보통', '크게'], v: [0.85, 1, 1.18] },
-} as const;
-type UiSizeKey = keyof typeof UI_SIZES;
-const uiSize: Record<UiSizeKey, number> = { btn: 1, txt: 0, stick: 1 };
-for (const k of Object.keys(UI_SIZES) as UiSizeKey[]) {
-  const v = Number(load(`exc-z-${k}`));
-  if (load(`exc-z-${k}`) !== null && v >= 0 && v <= 2) uiSize[k] = v;
-}
+// 설정 > 화면·조작: 크기 · 레버 여백 · 화질 · 레버 글자 · 진동 (값은 prefs 한 곳)
 function applyUiSize() {
-  for (const k of Object.keys(UI_SIZES) as UiSizeKey[]) document.documentElement.style.setProperty(`--z-${k}`, String(UI_SIZES[k].v[uiSize[k]]));
+  for (const [k, v] of Object.entries(cssVars())) document.documentElement.style.setProperty(k, v);
 }
-function renderUiSize() {
-  for (const k of Object.keys(UI_SIZES) as UiSizeKey[]) {
-    const el = $(`z-${k}`);
-    el.innerHTML = UI_SIZES[k].label.map((l, i) => `<button class="lk-chip${i === uiSize[k] ? ' on' : ''}" data-i="${i}">${l}</button>`).join('');
-    el.querySelectorAll<HTMLElement>('[data-i]').forEach((b) => (b.onclick = () => {
-      uiSize[k] = Number(b.dataset.i);
-      save(`exc-z-${k}`, String(uiSize[k]));
+/** 칩 한 줄 그리기 */
+function chipRow(id: string, labels: readonly string[], cur: number, pick: (i: number) => void) {
+  const el = $(id);
+  el.innerHTML = labels.map((l, i) => `<button class="lk-chip${i === cur ? ' on' : ''}" data-i="${i}">${l}</button>`).join('');
+  el.querySelectorAll<HTMLElement>('[data-i]').forEach((b) => (b.onclick = () => pick(Number(b.dataset.i))));
+}
+function renderViewPrefs() {
+  for (const k of ['btn', 'txt', 'stick', 'edge'] as const)
+    chipRow(`z-${k}`, STEPS[k].label, loadStep(k), (i) => {
+      saveStep(k, i);
       applyUiSize();
-      renderUiSize();
-    }));
-  }
+      renderViewPrefs();
+    });
+  // 화질: 자동 + 3단
+  const qCur = loadQuality();
+  chipRow('q-row', ['자동', Q[0].label, Q[1].label, Q[2].label], qCur === 'auto' ? 0 : qCur + 1, (i) => {
+    const needRestart = i === 0 ? (saveQuality('auto'), false) : setQuality((i - 1) as QLevel, true);
+    $('q-note').hidden = !needRestart;
+    renderViewPrefs();
+  });
+  chipRow('z-labels', ['켜기', '끄기'], labelsOn ? 0 : 1, (i) => {
+    labelsOn = i === 0;
+    save('exc-labels', labelsOn ? '1' : '0');
+    syncLabels();
+    renderViewPrefs();
+  });
+  chipRow('buzz-row', ['켜기', '끄기'], buzzOn() ? 0 : 1, (i) => {
+    setBuzz(i === 0);
+    if (i === 0) buzz(20);
+    renderViewPrefs();
+  });
 }
 applyUiSize();
+
+// 설정 > 시험장: 배운 내용 초기화 (한 번 더 눌러야 지워진다)
+{
+  const b = $('btn-reset-tut');
+  const label = '배운 내용 초기화';
+  let armed = false;
+  let t = 0;
+  const disarm = () => {
+    armed = false;
+    b.textContent = label;
+    b.classList.remove('danger');
+  };
+  b.onclick = () => {
+    clearTimeout(t);
+    if (!armed) {
+      armed = true;
+      b.textContent = '정말 지울까요?';
+      b.classList.add('danger');
+      t = window.setTimeout(disarm, 4000);
+      return;
+    }
+    save('exc-tut', '[]');
+    disarm();
+    b.textContent = '지웠어요';
+    t = window.setTimeout(disarm, 1500);
+    renderMission();
+  };
+}
+
+// 설정 아래 이용권 한 줄 (계정 없음: 코드로 되살린다)
+function renderPro() {
+  $('pro-state').textContent = hasPro() ? '이용 중' : '무료';
+}
+$('btn-restore').onclick = () => {
+  const box = $('redeem');
+  box.hidden = !box.hidden;
+  if (!box.hidden) $<HTMLInputElement>('redeem-input').focus();
+};
+$('btn-redeem').onclick = () => {
+  const code = $<HTMLInputElement>('redeem-input').value.trim();
+  const msg = $('redeem-msg');
+  msg.hidden = false;
+  msg.textContent = redeem(code) ? '이용권이 살아났어요' : '코드를 확인할 수 없어요';
+  renderPro();
+};
 
 // 탭 · 열기/닫기
 let camBeforeSeat: CamMode | null = null;
 // 좌석 높이는 따로 들어가는 화면: 들어올 때의 탭·키를 기억 → [취소]는 되돌리고 나감
-let seatFrom = 'machine';
+let seatFrom = 'view';
 let heightBefore = 170;
 function showTab(tab: string) {
   if (tab === 'seat' && !$('settings').classList.contains('seat')) {
-    seatFrom = load('exc-settab') ?? 'machine';
+    seatFrom = load('exc-settab') ?? 'view';
     heightBefore = heightCm;
   }
   for (const b of document.querySelectorAll<HTMLElement>('#settings [data-tab]')) b.classList.toggle('on', b.dataset.tab === tab);
@@ -621,15 +675,19 @@ function showTab(tab: string) {
   if (tab !== 'seat') save('exc-settab', tab);
 }
 for (const b of document.querySelectorAll<HTMLElement>('#settings [data-tab]')) b.onclick = () => showTab(b.dataset.tab!);
+$('btn-seat-go').onclick = () => showTab('seat');
 const openSettings = () => {
   syncSoundUi();
   renderMachineUi();
   renderExamLookUi();
   syncRuler();
   $('settings').hidden = false;
-  const t = load('exc-settab') ?? 'machine';
+  const t = load('exc-settab') ?? 'keys';
   renderPadUi();
-  renderUiSize();
+  renderViewPrefs();
+  renderPro();
+  $('redeem').hidden = true;
+  $('redeem-msg').hidden = true;
   showTab(t);
 };
 $('btn-paywall-close').onclick = () => ($('paywall').hidden = true);
@@ -644,7 +702,7 @@ $('btn-seat-cancel').onclick = () => {
 $('btn-settings-ok').onclick = () => {
   if ($('settings').classList.contains('seat')) return showTab(seatFrom);
   keys.cancelRebind();
-  showTab('machine');
+  showTab('keys');
   $('settings').hidden = true;
 };
 
