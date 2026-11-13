@@ -7570,3 +7570,9 @@ body.stage-on #precheck .mode-pick {
   border: 2px solid var(--ink);
   border-radius: 999px;
 }
+/* 결제 벽: 한 번 내면 끝이라는 것 (바깥 가격과 비교하지 않는다) */
+.pw-once {
+  margin: 2px 0 0;
+  font: 800 12px var(--font);
+  color: #1d1b2e99;
+}

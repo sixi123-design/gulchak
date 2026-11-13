@@ -99,3 +99,9 @@ it('결제 벽 문구가 파는 것을 말한다 (판정이 아니라 시험 기
   expect(perks).toMatch(/주행 2분/);
   expect(perks).not.toMatch(/합격(할지|인지|여부)/);
 });
+
+it('결제 벽은 바깥 가격과 비교하지 않고, 한 번 내면 끝이라는 것만 말한다', () => {
+  const pw = html.slice(html.indexOf('id="paywall"'), html.indexOf('id="paywall"') + 1400);
+  expect(pw).toMatch(/한 번만 결제/);
+  expect(pw).not.toMatch(/학원|만원 아/);
+});
