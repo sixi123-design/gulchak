@@ -1246,6 +1246,7 @@ function onLessonClear() {
   const last = lessonIdx >= curLessons().length - 1;
   $('btn-clear-next').hidden = last;
   $('btn-clear-exam').hidden = !last;
+  $('btn-clear-free').hidden = !last;
   // 성공하면 안내를 한 단계 줄여 같은 미션 다시 (레버 안내 → 목표만 → 안내 없이)
   const less = $('btn-clear-less');
   less.hidden = guideLv >= 2;
@@ -1291,6 +1292,15 @@ $('btn-clear-map').onclick = () => {
   openLessonMap();
 };
 $('btn-clear-exam').onclick = () => {
+  $('clear').hidden = true;
+  tutor = null;
+  // 시험 기준이 걸린 판으로. 잠겨 있으면 결제 벽이 뜬다
+  if (needPay('practice')) return openPaywall('practice');
+  modeKey = 'practice';
+  save('exc-mode', modeKey);
+  newSession();
+};
+$('btn-clear-free').onclick = () => {
   $('clear').hidden = true;
   tutor = null;
   modeKey = 'free';
@@ -1623,7 +1633,7 @@ $('btn-redeem').onclick = () => {
 };
 $('paid-ico').innerHTML = ICON.check;
 $('fail-retry-ico').innerHTML = ICON.retry;
-$('pw-perks').innerHTML = ['실제처럼 4분 재기', '실격하면 바로 알려줌', '왜 떨어졌는지 정리'].map((t) => `<li>${ICON.check}${t}</li>`).join('');
+$('pw-perks').innerHTML = ['큐넷 공개문제 그대로 — 굴착 4분 · 주행 2분', '실격 규칙을 그대로 걸고 판', '끝나면 채점표 — 뭘 고쳐야 하는지'].map((t) => `<li>${ICON.check}${t}</li>`).join('');
 $('btn-settings2').innerHTML = ICON.gear;
 $('btn-near').innerHTML = `${ICON.pin} 가까운 곳`;
 $('btn-retry').onclick = () => {
@@ -1886,7 +1896,7 @@ function showResult() {
     stamp.className = 'stamp ' + (passed ? 'pass' : 'fail');
   }
   card.classList.toggle('clean', passed);
-  renderScore($('res-score'), mode === 'free' ? null : verdict);
+  renderScore($('res-score'), mode === 'free' ? null : verdict, mode === 'free');
   renderTip(dq, verdict, s.abandoned, mode);
   const dqList = $('res-dq');
   dqList.innerHTML =
@@ -1894,7 +1904,9 @@ function showResult() {
       ? dq.slice(0, 2).map((d) => `<li class="dq"><b>${d.basis} ${d.title}</b>${d.count > 1 ? `<small>${d.count}회</small>` : ''}</li>`).join('') + (dq.length > 2 ? `<li class="dq"><b>외 ${dq.length - 2}건</b></li>` : '')
       : s.abandoned && mode === 'exam'
         ? '' // 기권은 도장으로 이미 알림
-        : '<li class="ok"><b>모든 과정 통과</b></li>') +
+        : mode === 'free'
+          ? '<li class="ok"><b>연습 끝 — 채점은 안 했어요</b></li>'
+          : '<li class="ok"><b>실격 없음</b></li>') +
     '';
   if (mode === 'exam') dqList.innerHTML += precheckLi(s.precheck);
   const pct = (v: number) => `${Math.round(v * 100)}%`;
@@ -1999,13 +2011,15 @@ function showDriveResult() {
     stamp.className = 'stamp ' + (passed ? 'pass' : 'fail');
   }
   card.classList.toggle('clean', passed);
-  renderScore($('res-score'), mode === 'free' ? null : verdict);
+  renderScore($('res-score'), mode === 'free' ? null : verdict, mode === 'free');
   renderTip(dq, verdict, s.abandoned, mode);
   $('res-dq').innerHTML = dq.length
     ? dq.slice(0, 2).map((x) => `<li class="dq"><b>${x.basis} ${x.title}</b>${x.count > 1 ? `<small>${x.count}회</small>` : ''}</li>`).join('') + (dq.length > 2 ? `<li class="dq"><b>외 ${dq.length - 2}건</b></li>` : '')
     : s.abandoned && mode === 'exam'
       ? ''
-      : '<li class="ok"><b>모든 과정 통과</b></li>';
+      : mode === 'free'
+        ? '<li class="ok"><b>연습 끝 — 채점은 안 했어요</b></li>'
+        : '<li class="ok"><b>실격 없음</b></li>';
   if (mode === 'exam') $('res-dq').innerHTML += precheckLi(s.precheck);
   const mmss = (t: number) => `${Math.floor(t / 60)}:${String(Math.round(t % 60)).padStart(2, '0')}`;
   const hero: [string, string, boolean][] = [

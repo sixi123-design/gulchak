@@ -7517,3 +7517,41 @@ body.stage-on #precheck .mode-pick {
     grid-template-columns: repeat(2, 1fr);
   }
 }
+/* ---------- 무료 결과의 잠긴 채점표: 숫자는 없고, 채점표가 있다는 것만 ---------- */
+.res-score.locked {
+  position: relative;
+  padding: 12px 14px;
+  text-align: left;
+  background: #1d1b2e0d;
+  border: 2px dashed #1d1b2e33;
+  border-radius: 14px;
+}
+.res-score.locked .sc-lock-h {
+  margin: 0 0 8px;
+  font: 900 14px var(--font);
+  color: #1d1b2e88;
+}
+.res-score.locked .sc-lock {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.res-score.locked .sc-lock li {
+  height: 12px;
+  background: linear-gradient(90deg, #1d1b2e2b, #1d1b2e14);
+  border-radius: 999px;
+  filter: blur(1.5px);
+}
+.res-score.locked .sc-lock li:nth-child(2) {
+  width: 78%;
+}
+.res-score.locked .sc-lock li:nth-child(3) {
+  width: 56%;
+}
+.res-score.locked .sc-lock-f {
+  margin: 10px 0 0;
+  font: 800 13px var(--font);
+  color: var(--ink);
+}

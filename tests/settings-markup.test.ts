@@ -87,3 +87,15 @@ it('누르는 것들은 손가락 크기만큼 높다', () => {
     expect(blocks.some(([, , body]) => /min-height:\s*4[4-9]px|min-height:\s*5\dpx/.test(body)), sel).toBe(true);
   }
 });
+
+it('채점하지 않은 판에 통과라고 쓰지 않는다', () => {
+  // 자유 연습은 시간도 채점도 안 걸린다. 여기서 '통과'라고 쓰면 진짜 시험에서 떨어졌을 때 거짓말이 된다
+  expect(main).not.toMatch(/모든 과정 통과/);
+});
+
+it('결제 벽 문구가 파는 것을 말한다 (판정이 아니라 시험 기준이 걸린 판)', () => {
+  const perks = main.slice(main.indexOf("$('pw-perks')"), main.indexOf("$('pw-perks')") + 400);
+  expect(perks).toMatch(/굴착 4분/);
+  expect(perks).toMatch(/주행 2분/);
+  expect(perks).not.toMatch(/합격(할지|인지|여부)/);
+});
