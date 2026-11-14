@@ -58,6 +58,21 @@ export class SiteView {
   readonly group = new THREE.Group();
   /** A·B·C 글자 표지 (운전석 시점에서는 숨김: 실제 시험장에는 없음) */
   readonly labels: THREE.Sprite[] = [];
+  /**
+   * 레버 익히기용 '튜토리얼 공간': 펜스·건물·폴·줄·표시선을 다 비우고 바닥만 한 색으로.
+   * 바닥 재질은 SiteView마다 새로 만드니(공유 캐시가 아니다) 색을 바꿔도 다른 화면에
+   * 영향이 없다. 세션이 바뀌면 SiteView가 새로 만들어지므로 되돌릴 일도 없다.
+   */
+  bare(color: number) {
+    for (const c of this.group.children) {
+      const isFloor = c.name === 'floor';
+      c.visible = isFloor;
+      if (!isFloor) continue;
+      const m = (c as THREE.Mesh).material as THREE.MeshLambertMaterial;
+      m.color.setHex(color);
+    }
+    for (const s of this.labels) s.visible = false;
+  }
   /** exam: 실제 시험 모드 배경(시험장)으로 */
   constructor(site: Site, grids: SoilGrid[], exam = false) {
     // 바닥: 넓은 잔디(작업장 자리는 구멍) + 작업장 흙마당(흙 격자 자리는 구멍)
@@ -76,6 +91,7 @@ export class SiteView {
     // 시험 경기장은 잔디 대신 밝은 단색 바닥
     const grass = new THREE.Mesh(grassG, exam ? toon(EXAM_FLOOR) : new THREE.MeshLambertMaterial({ color: PALETTE.grass }));
     grass.position.y = -0.01;
+    grass.name = 'floor';
     this.group.add(grass);
     const yard = new THREE.Shape(yardPts);
     for (const g of grids) {
@@ -91,6 +107,7 @@ export class SiteView {
     const yardG = new THREE.ShapeGeometry(yard);
     yardG.rotateX(-Math.PI / 2);
     const yardM = new THREE.Mesh(yardG, new THREE.MeshLambertMaterial({ color: PALETTE.yard }));
+    yardM.name = 'floor';
     this.group.add(yardM);
 
     // 바닥 표시선 (구덩이·굴착구역·가상선)

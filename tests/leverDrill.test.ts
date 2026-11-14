@@ -76,8 +76,8 @@ it('1단계: 반응을 보여 준 뒤에 넘어간다', () => {
     if (t.hud()) break;
   }
   expect(t.hud()).toBe('붐이 올라갑니다');
-  expect(t.step).toBe(0);
-  run(t, {}, 60);
+  expect(t.step, '잘했다는 연출을 보여 주는 동안은 넘어가지 않는다').toBe(0);
+  run(t, {}, DRILL.cheer + 10);
   expect(t.step).toBe(1);
 });
 
@@ -184,3 +184,32 @@ it('끝까지 오면 별 3개 (익히는 자리라 깎지 않는다)', () => {
   expect(g.note).toMatch(/붐|버킷|암/);
 });
 
+
+it('잘하면 잘했다는 신호를 올린다 (연출 재생용)', () => {
+  const t = drill();
+  expect(t.bag.okN ?? 0).toBe(0);
+  until(t, { ry: -1 }); // 1단계 성공
+  expect(t.bag.okN).toBe(1);
+  expect(t.bag.badN ?? 0).toBe(0);
+});
+
+it('붐이 많이 섞이면 잘못했다는 신호를 올린다 (프레임마다 울리지 않는다)', () => {
+  const t = drill();
+  until(t, { ry: -1 });
+  until(t, { ry: 1 });
+  until(t, {}, 900); // 3단계까지 (살살)
+  const bad0 = t.bag.badN ?? 0;
+  run(t, { ry: -1 }, 45); // 버킷 단계인데 붐만 크게
+  // 한 번의 잘못에 한 번만 (45프레임을 돌렸는데 45번 울리면 안 된다)
+  expect((t.bag.badN ?? 0) - bad0).toBe(1);
+  expect(t.hud() ?? '', '되돌리는 중').toMatch(/처음 자세/);
+});
+
+it('차체가 들리면 잘못했다는 신호를 올린다', () => {
+  const t = drill();
+  until(t, { ry: -1 });
+  until(t, { ry: 1 });
+  const bad0 = t.bag.badN ?? 0;
+  run(t, { ry: 1 }, 200); // 계속 누른다
+  expect(t.bag.badN).toBe(bad0 + 1);
+});

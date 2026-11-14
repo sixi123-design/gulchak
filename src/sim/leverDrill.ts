@@ -19,6 +19,10 @@ const SWING_A = Math.PI;
 /** 시작 자세 (A 구덩이 위, 버킷은 양쪽으로 움직일 여유를 두고 조금만 오므림) */
 export const DRILL_START = { swing: SWING_A, boom: 28 * deg, arm: -70 * deg, bucket: -20 * deg } as const;
 
+/** 잘했다·잘못했다를 화면에 알리는 신호. 화면이 늘어난 값만 보고 연출을 재생한다 */
+const cheer = (bag: Mem) => (bag.okN = (bag.okN ?? 0) + 1);
+const scold = (bag: Mem) => (bag.badN = (bag.badN ?? 0) + 1);
+
 export const DRILL = {
   /** 한 방향을 '움직였다'고 볼 각도 */
   move: 15 * deg,
@@ -34,6 +38,8 @@ export const DRILL = {
   pressGiveUp: 150,
   /** 되돌아오는 속도 (매 프레임 남은 각의 비율) */
   homeRate: 0.12,
+  /** 잘했다는 연출을 보여 주는 시간 (프레임) — 끝나면 다음 지시 */
+  cheer: 72,
 } as const;
 
 type J = 'boom' | 'arm' | 'bucket';
@@ -114,21 +120,25 @@ function dir(o: {
       mem.say = 0;
       for (const k of o.keep ?? []) mem['k_' + k] = s.pose[k];
     },
-    done: (s, mem) => {
+    done: (s, mem, bag) => {
       if (mem.say) {
-        // 반응을 0.8초 보여 준 뒤 다음 지시로
+        // 잘했다는 연출을 보여 준 뒤 다음 지시로
         mem.say++;
-        return mem.say > 48;
+        return mem.say > DRILL.cheer;
       }
       // 섞임: 많이 벗어나면 되돌려 다시
       for (const k of o.keep ?? []) {
         if (Math.abs(s.pose[k] - mem['k_' + k]) > DRILL.mixBack) {
+          if (!mem.back) scold(bag);
           mem.back = 1;
           return false;
         }
       }
       mem.p = o.way > 0 ? Math.min(mem.p, s.pose[o.j]) : Math.max(mem.p, s.pose[o.j]);
-      if ((s.pose[o.j] - mem.p) * o.way >= amount) mem.say = 1;
+      if ((s.pose[o.j] - mem.p) * o.way >= amount) {
+        mem.say = 1;
+        cheer(bag);
+      }
       return false;
     },
     hud: (_s, mem) => (mem.say ? o.said : null),
@@ -147,12 +157,15 @@ const toGround = (): Step =>
     text: '오른쪽 레버를 위로 — 바닥에 닿을 때까지',
     labels: ['붐 내림'],
     begin: (_s, mem) => (mem.say = 0),
-    done: (s, mem) => {
+    done: (s, mem, bag) => {
       if (mem.say) {
         mem.say++;
-        return mem.say > 42;
+        return mem.say > DRILL.cheer;
       }
-      if (s.groundGap() <= 0.02) mem.say = 1;
+      if (s.groundGap() <= 0.02) {
+        mem.say = 1;
+        cheer(bag);
+      }
       return false;
     },
     hud: (_s, mem) => (mem.say ? '바닥에 닿았습니다' : null),
@@ -170,7 +183,10 @@ const pressDown = (): Step =>
     done: (s, mem, bag) => {
       mem.t++;
       const warn = (s.params.liftWarnDeg * Math.PI) / 180;
-      if (s.lift > warn * DRILL.liftShare) mem.lifted = 1;
+      if (s.lift > warn * DRILL.liftShare && !mem.lifted) {
+        mem.lifted = 1;
+        scold(bag);
+      }
       // 들렸거나, 살살 해서 시간이 지났으면 손을 떼는 단계로
       if (!mem.lifted && mem.t < DRILL.pressGiveUp) return false;
       mem.ask = 1;
@@ -195,12 +211,15 @@ const letGo = (): Step =>
       mem.p = s.pose.boom;
       mem.say = 0;
     },
-    done: (s, mem) => {
+    done: (s, mem, bag) => {
       if (mem.say) {
         mem.say++;
-        return mem.say > 48;
+        return mem.say > DRILL.cheer;
       }
-      if (s.pose.boom - mem.p >= 10 * deg && Math.abs(leverOf(s, 'boom')) < 0.08 && Math.abs(s.vel.boom) < 0.01 * s.m.speeds.boom) mem.say = 1;
+      if (s.pose.boom - mem.p >= 10 * deg && Math.abs(leverOf(s, 'boom')) < 0.08 && Math.abs(s.vel.boom) < 0.01 * s.m.speeds.boom) {
+        mem.say = 1;
+        cheer(bag);
+      }
       return false;
     },
     hud: (_s, mem) => (mem.say ? '레버를 놓으면 멈춥니다' : null),

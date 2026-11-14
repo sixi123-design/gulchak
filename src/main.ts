@@ -92,6 +92,36 @@ let siteView: SiteView;
 let fx: FxView;
 let world = new THREE.Group();
 let trail: TipTrail | null = null;
+/** 레버 익히기의 튜토리얼 공간 색 (바닥·먼 안개). 회색이 아니라 한 톤 */
+const TUTOR_FLOOR = 0xd7e3ec;
+const TUTOR_SKY = 0xeaf3f8;
+/** 잘했다·잘못했다 연출: 미션이 센 값이 늘어난 만큼만 재생한다 */
+let fxOk = 0;
+let fxBad = 0;
+function playDrillFx(kind: 'ok' | 'bad') {
+  const box = $('drill');
+  box.classList.remove('ok', 'bad');
+  void box.offsetWidth; // 같은 연출을 다시 재생
+  box.classList.add(kind);
+  const fxEl = $('drill-fx');
+  // 원형으로 퍼지는 띠 + (잘했으면) 꽃가루. DOM·CSS만 쓴다 (새 렌더 패스 없음)
+  // 흩어질 자리는 여기서 계산한다 (CSS cos()·sin()은 낡은 크롬에 없어 가만히 있게 된다)
+  const bits =
+    kind === 'ok'
+      ? Array.from({ length: 14 }, (_, i) => {
+          const a = (i / 14) * Math.PI * 2;
+          return `<i class="dr-bit" style="--dx:${(Math.cos(a) * 42).toFixed(1)}vmin;--dy:${(Math.sin(a) * 34 + 12).toFixed(1)}vmin;--i:${i}"></i>`;
+        }).join('')
+      : '';
+  fxEl.innerHTML = `<i class="dr-ring ${kind}"></i>${bits}`;
+  if (kind === 'ok') {
+    sound.ding();
+    buzz(30);
+  } else {
+    sound.thump(0.5);
+    buzz([25, 40, 25]);
+  }
+}
 scene.add(world);
 
 function disposeTree(o: THREE.Object3D) {
@@ -1111,8 +1141,15 @@ function beginLesson(i: number, again = false, lv = 0) {
   $('clear').hidden = true;
   if (matchMedia('(pointer: coarse)').matches) goFullscreen();
   sound.start();
-  // 한 톤 배경 (가장 낮은 화질에서는 걸지 않는다 — 색보다 프레임이 낫다)
-  document.body.classList.toggle('flat-bg', !!L.flat && qNow().level > 0);
+  // 튜토리얼 공간: 펜스·건물·폴·줄·표시선을 비우고 바닥·하늘을 한 색으로.
+  // 화면 전체에 필터를 걸어 회색으로 만들던 것을 버렸다 (장비·흙까지 탈색되고 비용도 든다)
+  document.body.classList.toggle('flat-bg', !!L.flat);
+  if (L.flat) {
+    siteView.bare(TUTOR_FLOOR);
+    (scene.fog as THREE.Fog).color.setHex(TUTOR_SKY);
+  }
+  fxOk = 0;
+  fxBad = 0;
   if (drive) {
     drive.s.ready();
     tutor = new Tutor(L, drive.s);
@@ -1253,6 +1290,16 @@ function updateMeter() {
   if (tutor?.lesson.big) {
     $('dr-say').textContent = h ?? tutor.coach?.msg ?? '';
     $('m-hold').hidden = true;
+    const ok = tutor.bag.okN ?? 0;
+    const bad = tutor.bag.badN ?? 0;
+    if (ok > fxOk) {
+      fxOk = ok;
+      playDrillFx('ok');
+    }
+    if (bad > fxBad) {
+      fxBad = bad;
+      playDrillFx('bad');
+    }
   } else {
     $('m-hold').hidden = !h;
     if (h) $('m-hold').textContent = h;
@@ -1279,6 +1326,7 @@ function renderMission(intro = false) {
   if (!tutor) {
     m.hidden = true;
     $('drill').hidden = true;
+    $('drill-fx').innerHTML = '';
     $('btn-why').hidden = true;
     for (const el of document.querySelectorAll('.lab')) el.classList.remove('hint');
     return;
@@ -1288,6 +1336,8 @@ function renderMission(intro = false) {
   $('drill').hidden = !big;
   if (big) {
     m.hidden = true;
+    $('drill').classList.remove('ok', 'bad');
+    $('drill-fx').innerHTML = '';
     $('dr-text').textContent = tutor.notice ?? tutor.current?.text ?? '';
     for (const el of document.querySelectorAll('.lab')) el.classList.toggle('hint', new Set(tutor.current?.labels ?? []).has((el.textContent ?? '').replace(/ /g, ' ')));
     return;

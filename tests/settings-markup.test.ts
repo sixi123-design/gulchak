@@ -161,15 +161,11 @@ it('이빨 경로 선은 쓰는 미션에서만 남고, 떠나면 지워진다',
   expect(main.slice(i, i + 320)).toMatch(/trail\.clear\(\)/);
 });
 
-it('배경 지시문이 위쪽 줄과 겹치지 않고 캔버스 터치를 먹지 않는다', () => {
-  // #hud > * 가 pointer-events: auto 라서 .drill 만으로는 못 끈다
+it('배경 지시문이 캔버스 터치를 먹지 않는다', () => {
+  // #hud > * 가 pointer-events: auto 라서 .drill 만으로는 못 끈다 (글자 띠가 터치를 삼켰다)
   const blocks = [...css.matchAll(/([^{}]*)\{([^}]*)\}/g)];
   const drill = blocks.find(([, sel]) => sel.includes('#hud > .drill'));
   expect(drill, '#hud > .drill 규칙이 있어야 한다').toBeTruthy();
   expect(drill![2]).toMatch(/pointer-events:\s*none/);
-  // 위쪽 줄(타이머·버튼) 아래로 내려야 한다
-  const top = /top:\s*(\d+)px/.exec(drill![2]);
-  expect(top, 'top 값이 px로 있어야 한다').toBeTruthy();
-  expect(Number(top![1])).toBeGreaterThanOrEqual(36);
 });
 

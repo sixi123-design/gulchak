@@ -7678,8 +7678,8 @@ body.stage-on #precheck .mode-pick {
 #hud > .drill {
   position: absolute;
   left: 50%;
-  top: 42px;
-  transform: translateX(-50%);
+  top: 50%;
+  transform: translate(-50%, -50%);
   width: min(560px, calc(100% - 24px));
   text-align: center;
   pointer-events: none;
@@ -7717,7 +7717,111 @@ body.flat-bg #hud .timer {
     font-size: calc(14px * var(--z-txt, 1));
   }
 }
-/* 한 톤 배경: 캔버스만 (레버·글자는 그대로). 가장 낮은 화질에서는 걸지 않는다 */
-body.flat-bg #view {
-  filter: saturate(0.12) contrast(1.04);
+/* 튜토리얼 공간: 하늘을 한 색으로 (장면의 펜스·건물은 siteView.bare가 비운다) */
+body.flat-bg {
+  --sky-a: #eaf3f8;
+  --sky-b: #eaf3f8;
+}
+
+/* ----- 레버 익히기 피드백: 잘했다 / 잘못했다 ----- */
+.drill-fx {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 5;
+}
+/* 원형으로 크게 퍼져나가는 띠 */
+.dr-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 36px;
+  height: 36px;
+  margin: -18px 0 0 -18px;
+  border-radius: 50%;
+  border: 6px solid var(--pass, #2fd27a);
+  opacity: 0.9;
+  animation: drRing 0.72s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+}
+.dr-ring.bad {
+  border-color: #ff4d5e;
+}
+@keyframes drRing {
+  to {
+    width: 150vmax;
+    height: 150vmax;
+    margin: -75vmax 0 0 -75vmax;
+    border-width: 2px;
+    opacity: 0;
+  }
+}
+/* 꽃가루: 가운데서 튀어 흩어진다 */
+.dr-bit {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 9px;
+  height: 14px;
+  margin: -7px 0 0 -4px;
+  border-radius: 2px;
+  background: var(--sun);
+  animation: drBit 1s cubic-bezier(0.1, 0.6, 0.3, 1) forwards;
+  animation-delay: calc(var(--i) * 12ms);
+}
+.dr-bit:nth-child(3n) {
+  background: var(--pass, #2fd27a);
+}
+.dr-bit:nth-child(3n + 1) {
+  background: #8fe3ff;
+}
+@keyframes drBit {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--dx, 0), var(--dy, 30vmin)) rotate(540deg);
+    opacity: 0;
+  }
+}
+/* 지시문: 잘했으면 앞에 체크, 잘못했으면 빨갛게 흔들린다 */
+.drill.ok .dr-text {
+  color: #1c7a4a;
+}
+.drill.ok .dr-text::before {
+  content: '✓ ';
+  font-weight: 900;
+}
+.drill.ok .dr-say {
+  color: #1c7a4a;
+}
+.drill.bad .dr-text,
+.drill.bad .dr-say {
+  color: #c2283a;
+}
+.drill.bad {
+  animation: drShake 0.36s ease-in-out;
+}
+@keyframes drShake {
+  0%,
+  100% {
+    transform: translate(-50%, -50%);
+  }
+  25% {
+    transform: translate(calc(-50% - 7px), -50%);
+  }
+  75% {
+    transform: translate(calc(-50% + 7px), -50%);
+  }
+}
+/* 움직임 줄이기: 퍼짐·꽃가루 없이 색과 체크만 */
+@media (prefers-reduced-motion: reduce) {
+  .dr-ring,
+  .dr-bit {
+    display: none;
+  }
+  .drill.bad {
+    animation: none;
+  }
 }
