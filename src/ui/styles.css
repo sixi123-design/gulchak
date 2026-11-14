@@ -7655,3 +7655,11 @@ body.stage-on #precheck .mode-pick {
   max-width: 30ch;
   text-align: center;
 }
+
+/* 미션 박스의 짧은 한 줄: 멈춤을 세는 중 ●●○, 멈춘 뒤 오차 cm */
+.m-hold {
+  margin-top: 5px;
+  font: 900 calc(15px * var(--z-txt, 1)) / 1.2 var(--font);
+  letter-spacing: 0.06em;
+  color: var(--sun);
+}

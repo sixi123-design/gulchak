@@ -87,6 +87,111 @@ const stopStep = (j: J, text: string): Step => ({
   coach: watched(j, (s) => (moving(s, j) ? co('레버를 중립으로 놓고 서기까지 기다리기') : null)),
 });
 
+/**
+ * 2단계 상수.
+ * 목표는 '이빨을 흙 위 N cm에 세우기' — 꽂기 직전에 멈추는 것이 정석이고, 흙 표면이
+ * 보이니 새 표시가 필요 없다. 회차마다 목표가 낮아지고 허용 오차가 좁아진다.
+ */
+export const AIM = {
+  targets: [0.3, 0.2, 0.1],
+  tol: [0.12, 0.07, 0.04],
+  /** 멈춤으로 볼 관절 속도 (최고속도 대비) */
+  vel: 0.01,
+  /** 멈춘 것으로 인정하기까지 유지할 프레임 (0.3초) */
+  frames: 18,
+} as const;
+
+const JOINTS = ['swing', 'boom', 'arm', 'bucket'] as const;
+/** 네 관절이 다 서 있고 레버도 중립 */
+const allStill = (s: DigSession) =>
+  JOINTS.every((j) => Math.abs(s.vel[j]) < AIM.vel * s.m.speeds[j]) &&
+  Math.abs(s.input.lx) < 0.08 &&
+  Math.abs(s.input.ly) < 0.08 &&
+  Math.abs(s.input.rx) < 0.08 &&
+  Math.abs(s.input.ry) < 0.08;
+const cm = (m: number) => `${Math.round(Math.abs(m) * 100)}cm`;
+/** 오차에 따른 한 마디 */
+const aimWord = (err: number, tol: number) => (err <= tol * 0.4 ? '완벽!' : err <= tol ? '좋음' : '아쉬움');
+
+/** 한 회차: 이빨을 목표 높이에 세운다. 멈추면(맞췄든 못 맞췄든) 오차를 적고 넘어간다 */
+const aimStep = (round: number): Step => {
+  const target = AIM.targets[round];
+  const tol = AIM.tol[round];
+  const key = `err${round + 1}`;
+  return {
+    text: `붐을 내려 이빨을 흙 위 ${Math.round(target * 100)}cm에 세우기 (${round + 1}/${AIM.targets.length})`,
+    labels: ['붐 내림', '붐 올림'],
+    begin: (_s, mem) => (mem.hold = 0),
+    done: (s, mem, bag) => {
+      if (mem.done) {
+        // 오차를 0.75초 보여 준 뒤 다음 회차로 (바로 넘기면 숫자를 못 본다)
+        mem.show = (mem.show ?? 0) + 1;
+        return mem.show >= 45;
+      }
+      mem.hold = allStill(s) ? (mem.hold ?? 0) + 1 : 0;
+      if (mem.hold < AIM.frames) return false;
+      mem.done = 1;
+      mem.err = Math.abs(s.groundGap() - target);
+      bag[key] = mem.err;
+      bag.lastErr = mem.err;
+      bag.lastTol = tol;
+      return false;
+    },
+    // 바늘 + 목표 구간: 목표 높이를 가운데 두고 ±2배 범위
+    meter: (s) => {
+      const lo = target - tol * 3;
+      const hi = target + tol * 3;
+      const v = Math.min(1, Math.max(0, (s.groundGap() - lo) / (hi - lo)));
+      const a = (target - tol - lo) / (hi - lo);
+      const b = (target + tol - lo) / (hi - lo);
+      return { v, band: [a, b] };
+    },
+    hud: (_s, mem, bag) => {
+      if (mem.done) return `${cm(mem.err)} · ${aimWord(mem.err, tol)}`;
+      if ((mem.hold ?? 0) > 0) {
+        const n = Math.min(3, Math.floor(((mem.hold ?? 0) / AIM.frames) * 3 + 0.001));
+        return `멈춤 ${'●'.repeat(n)}${'○'.repeat(3 - n)}`;
+      }
+      // 아직 멈추기 전이면 앞 회차 결과를 남겨 둔다
+      return bag.lastErr === undefined ? null : `지난 회차 ${cm(bag.lastErr)} · ${aimWord(bag.lastErr, bag.lastTol)}`;
+    },
+    coach: (s) => {
+      if (s.groundGap() < 0) return co('이빨이 흙에 닿았어요 → 붐 살짝 올림', '붐 올림');
+      return null;
+    },
+  };
+};
+
+const aimAt: Lesson = {
+  id: 'b-aim',
+  tier: '기본기',
+  icon: 'stAim',
+  title: '원하는 데서 멈추기',
+  noFail: true,
+  why: {
+    title: '왜 미리 줄여야 하나',
+    lines: [
+      '레버를 놓아도 바로 서지 않습니다. 놓은 뒤에도 조금 더 갑니다.',
+      '그래서 목표에 닿기 전에 레버를 미리 줄여야 목표에 섭니다.',
+      '얼마나 미리인지는 머리가 아니라 손이 기억합니다. 세 번 해 보세요.',
+    ],
+  },
+  // 이빨을 A 구덩이 위 1.2m에 둔 자세 (붐만 내리면 목표 높이에 닿는다)
+  setup: (s) => {
+    pose(s, SWING_A, s.digTarget.rho - 0.5, 1.2, -10 * deg);
+    fill(s, 0);
+  },
+  grade: (_s, bag): Grade => {
+    const errs = [bag.err1, bag.err2, bag.err3].filter((x) => typeof x === 'number' && Number.isFinite(x));
+    if (!errs.length) return { stars: 1, note: '세 번 다 해 보세요' };
+    const avg = errs.reduce((a, b) => a + b, 0) / errs.length;
+    if (avg <= 0.04) return { stars: 3, note: `평균 ${cm(avg)} — 손이 기억하고 있어요` };
+    if (avg <= 0.08) return { stars: 2, note: `평균 ${cm(avg)} — 조금 더 미리 줄여 보세요` };
+    return { stars: 1, note: `평균 ${cm(avg)} — 목표 한참 전에 레버를 줄이기 시작하세요` };
+  },
+  steps: AIM.targets.map((_t, i) => aimStep(i)),
+};
+
 const stopFirst: Lesson = {
   id: 'b-stop',
   tier: '기본기',
@@ -127,4 +232,4 @@ const stopFirst: Lesson = {
   ].map(withLoad0),
 };
 
-export const BASIC_LESSONS: Lesson[] = [stopFirst];
+export const BASIC_LESSONS: Lesson[] = [stopFirst, aimAt];

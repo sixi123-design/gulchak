@@ -1239,6 +1239,10 @@ function updateIntro() {
 function updateMeter() {
   updateSay();
   updateIntro();
+  // 미션이 띄우는 짧은 한 줄 (세는 중 ●●○ · 멈춘 뒤 오차 cm)
+  const h = tutor?.hud() ?? null;
+  $('m-hold').hidden = !h;
+  if (h) $('m-hold').textContent = h;
   const m = guideLv >= 1 ? null : (tutor?.meter() ?? null);
   meterEl.hidden = !m;
   if (!m) return;

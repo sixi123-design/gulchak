@@ -171,3 +171,102 @@ it('중립을 거르고 꺾었으면 그렇게 말해 준다', () => {
 it('단계는 다섯 개 (같은 왕복을 네 번 하면 지루하다)', () => {
   expect(stop().steps.length).toBe(5);
 });
+
+// ---------- 2단계: 원하는 데서 멈추기 ----------
+import { AIM } from '../src/sim/leverSchool';
+const aim = () => BASIC_LESSONS.find((l) => l.id === 'b-aim')!;
+function aimTutor() {
+  return new Tutor(aim(), sess());
+}
+
+it('2단계가 있고 기본기 묶음이다', () => {
+  const L = aim();
+  expect(L.tier).toBe('기본기');
+  expect(L.why).toBeTruthy();
+  expect(L.grade).toBeTruthy();
+  expect(L.steps.length).toBe(AIM.targets.length);
+});
+
+it('허용 오차는 회차마다 좁아진다', () => {
+  expect(AIM.tol).toEqual([0.12, 0.07, 0.04]);
+  expect(AIM.targets).toEqual([0.3, 0.2, 0.1]);
+});
+
+it('멈추지 않으면 통과하지 못한다', () => {
+  const t = aimTutor();
+  // 레버를 계속 밀고 있으면 목표 높이를 지나가더라도 통과 안 됨
+  run(t, { ry: 1 }, 300);
+  expect(t.step).toBe(0);
+});
+
+/** 한 회차: 붐을 내리다가 놓고, 멈춤이 인정돼 다음 회차로 넘어갈 때까지 */
+function aimRound(t: Tutor, push = 40) {
+  const from = t.step;
+  run(t, { ry: 1 }, push);
+  for (let i = 0; i < 300; i++) {
+    run(t, {}, 1);
+    if (t.step !== from || t.cleared) return true;
+  }
+  return false;
+}
+
+it('멈추면 통과하고 오차가 기록된다 (맞췄든 못 맞췄든)', () => {
+  const t = aimTutor();
+  expect(aimRound(t)).toBe(true);
+  expect(t.step).toBeGreaterThan(0);
+  expect(typeof t.bag.err1).toBe('number');
+});
+
+it('멈추는 동안은 세는 것을, 멈춘 뒤에는 오차 cm를 보여 준다', () => {
+  const t = aimTutor();
+  const seen: string[] = [];
+  run(t, { ry: 1 }, 40); // 붐 내림
+  for (let i = 0; i < 150; i++) {
+    run(t, {}, 1);
+    const h = t.hud();
+    if (h) seen.push(h);
+    if (t.step > 0) break;
+  }
+  expect(seen.some((h) => /●/.test(h))).toBe(true); // 세는 중
+  expect(seen.some((h) => /cm/.test(h))).toBe(true); // 멈춘 뒤 오차
+});
+
+it('오차를 보여 준 뒤에 다음 회차로 넘어간다', () => {
+  const t = aimTutor();
+  aimRound(t);
+  expect(t.step).toBe(1);
+  expect(t.bag.err1).toBeTypeOf('number');
+  // 다음 회차에서도 앞 회차 결과가 남아 있다
+  expect(t.hud() ?? '').toMatch(/지난 회차/);
+});
+
+it('세 번 다 4cm 안이면 별 3개', () => {
+  const L = aim();
+  expect(L.grade!({} as never, { err1: 0.02, err2: 0.03, err3: 0.01 }).stars).toBe(3);
+});
+
+it('평균 8cm 안이면 별 2개', () => {
+  const L = aim();
+  expect(L.grade!({} as never, { err1: 0.06, err2: 0.07, err3: 0.08 }).stars).toBe(2);
+});
+
+it('많이 벗어나면 별 1개', () => {
+  const L = aim();
+  expect(L.grade!({} as never, { err1: 0.3, err2: 0.25, err3: 0.4 }).stars).toBe(1);
+});
+
+it('2단계도 별은 언제나 1~3', () => {
+  expect([1, 2, 3]).toContain(aim().grade!({} as never, {}).stars);
+});
+
+it('기본기 미션 id가 모두 다르다', () => {
+  const ids = BASIC_LESSONS.map((l) => l.id);
+  expect(new Set(ids).size).toBe(ids.length);
+});
+
+it('세 회차를 다 돌면 끝난다', () => {
+  const t = aimTutor();
+  for (let i = 0; i < 3; i++) if (!t.cleared) aimRound(t, 20);
+  expect(t.cleared).toBe(true);
+  expect(aim().grade!(t.s, t.bag).stars).toBeGreaterThanOrEqual(1);
+});

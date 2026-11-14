@@ -29,6 +29,8 @@ export interface Step<S = DigSession> {
   coach?: (s: S, mem: Mem, bag: Mem) => Coach | null;
   /** 미묘한 단계의 도움 게이지 (0~1). band가 있으면 바늘+목표 구간, 없으면 채워지는 막대 */
   meter?: (s: S, mem: Mem, bag: Mem) => Meter;
+  /** 매 프레임 미션 박스에 띄울 짧은 한 줄 (세는 중 ●●○ · 멈춘 뒤 오차 cm) */
+  hud?: (s: S, mem: Mem, bag: Mem) => string | null;
 }
 
 /** 미션을 끝냈을 때의 평가: 별 개수와 한 줄 평 */
@@ -651,6 +653,11 @@ export class Tutor<S extends { flags: { autoEnd: boolean } } = DigSession> {
   meter(): Meter | null {
     if (this.cleared) return null;
     return this.current?.meter?.(this.s, this.mem, this.bag) ?? null;
+  }
+  /** 지금 단계가 띄울 짧은 한 줄 (없으면 null) */
+  hud(): string | null {
+    if (this.cleared) return null;
+    return this.current?.hud?.(this.s, this.mem, this.bag) ?? null;
   }
   /** 이번 프레임에 단계가 넘어갔으면 true */
   update(): boolean {
