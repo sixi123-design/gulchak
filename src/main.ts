@@ -8,7 +8,7 @@ import { bumpRuns, loadRuns, todayKey } from './core/practiceLog';
 import { ExcavatorView, type MachineStyleKey } from './render/excavatorView';
 import { FxView, SiteView, SoilView } from './render/siteView';
 import { DigSession, type DigEntry, type RulesFile, type Sticks } from './sim/session';
-import { LESSONS, Tutor } from './sim/tutorial';
+import { LESSONS, TIERS, tierProgress, Tutor } from './sim/tutorial';
 import { ik } from './sim/kinematics';
 import { Joystick, KEY_ACTIONS, keyName, Keys } from './ui/joystick';
 import { Pedal, SteeringWheel } from './ui/driveControls';
@@ -970,18 +970,19 @@ function renderLessonMap() {
   $('stage-count').hidden = tiered;
   $('stage-count').textContent = `${done.size}/${LS.length}`;
   if (tiered) {
-    // 두 칸: 기초(한 사이클) | 숙련(매끄럽게). 칸마다 진행도, 깬 건 ✓, 다음은 짙게
-    (['기초', '숙련'] as const).forEach((tier, c) => {
+    // 칸마다 진행도, 깬 건 ✓, 다음은 짙게. 순서·부제·가로 전체 여부는 TIERS가 정한다
+    TIERS.forEach(({ key: tier, sub, wide }, c) => {
       const items = LS.map((l, i) => ({ l, i })).filter((x) => x.l.tier === tier);
+      const { n, of } = tierProgress(LS, done, tier);
+      if (of === 0) return; // 미션이 없는 칸은 그리지 않는다
       const col = document.createElement('div');
-      col.className = 'tier-col';
+      col.className = 'tier-col' + (wide ? ' wide' : '');
       col.style.setProperty('--c', String(c));
-      const n = items.filter((x) => done.has(x.l.id)).length;
-      col.innerHTML = `<div class="tier-head" style="--p:${n / items.length}"><b>${tier}</b><span>${tier === '기초' ? '한 사이클 익히기' : '시험처럼 매끄럽게'}</span><i>${reduced ? n : 0}/${items.length}</i></div>`;
+      col.innerHTML = `<div class="tier-head" style="--p:${n / of}"><b>${tier}</b><span>${sub}</span><i>${reduced ? n : 0}/${of}</i></div>`;
       // 진행도 숫자: 막대가 차는 동안 0부터 올라감
       if (!reduced && n > 0) {
         const el = col.querySelector('.tier-head i')!;
-        for (let k = 1; k <= n; k++) setTimeout(() => (el.textContent = `${k}/${items.length}`), 140 + c * 70 + (520 * k) / n);
+        for (let k = 1; k <= n; k++) setTimeout(() => (el.textContent = `${k}/${of}`), 140 + c * 70 + (520 * k) / n);
       }
       items.forEach(({ l, i }, r) => {
         const b = document.createElement('button');

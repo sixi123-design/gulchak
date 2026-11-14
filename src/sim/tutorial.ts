@@ -57,6 +57,24 @@ const needle = (x: number, lo: number, hi: number, a: number, b: number): Meter 
   band: [(a - lo) / (hi - lo), (b - lo) / (hi - lo)],
 });
 
+export type Tier = '기본기' | '기초' | '숙련';
+
+/**
+ * 배우기 목록의 묶음. 순서가 화면 순서다.
+ * 기본기는 처음 온 사람이 가야 할 곳이라 맨 위 가로 전체(wide)를 쓴다.
+ */
+export const TIERS: readonly { key: Tier; sub: string; wide?: boolean }[] = [
+  { key: '기본기', sub: '레버부터 제대로', wide: true },
+  { key: '기초', sub: '한 사이클 익히기' },
+  { key: '숙련', sub: '시험처럼 매끄럽게' },
+];
+
+/** 한 묶음의 진행도. of가 0이면 화면은 그 칸을 그리지 않는다 (0으로 나누기 방지) */
+export function tierProgress(lessons: readonly Lesson<never>[] | readonly Lesson<any>[], done: ReadonlySet<string>, tier: Tier): { n: number; of: number } {
+  const items = lessons.filter((l) => l.tier === tier);
+  return { n: items.filter((l) => done.has(l.id)).length, of: items.length };
+}
+
 export interface Lesson<S = DigSession> {
   id: string;
   /** 아이콘 이름 (src/ui/icons.ts) */
@@ -64,8 +82,8 @@ export interface Lesson<S = DigSession> {
   title: string;
   /** 마지막 단계에서 '버킷 내려놓기' 종료 판정을 켬 */
   autoEnd?: boolean;
-  /** 배우기 목록 묶음: 기초(한 사이클) · 숙련(매끄럽게·깊어진 구덩이) */
-  tier?: '기초' | '숙련';
+  /** 배우기 목록 묶음 (TIERS 참고) */
+  tier?: Tier;
   /** 레버만 익힘: 시험장 판정(실격·경고)을 안 보여 줌 */
   noFail?: boolean;
   /**

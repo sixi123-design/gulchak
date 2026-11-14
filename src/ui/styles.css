@@ -5808,6 +5808,11 @@ body[data-mode='tutorial'] #btn-restart {
   gap: 10px;
   min-width: 0;
 }
+/* 기본기: 맨 위 가로 전체 (2열 격자는 그대로 두고 이 칸만 양쪽을 다 쓴다) */
+.stage-map.tiers .tier-col.wide {
+  grid-column: 1 / -1;
+  margin-bottom: 4px;
+}
 .stage-map.tiers .tier-head {
   display: flex;
   align-items: baseline;
