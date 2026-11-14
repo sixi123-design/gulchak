@@ -186,3 +186,9 @@ it('#hud 안의 화면 덮는 층은 모두 터치를 통과시킨다', () => {
     expect(guarded, `.${cls} 가 화면을 덮는데 '#hud > .${cls}'의 pointer-events: none 이 없다`).toBe(true);
   }
 });
+
+it('깜빡이는 부품의 이름을 글자로 알려 준다', () => {
+  // 붐이 번쩍거리는데 그게 붐이라는 걸 어디서도 말해 주지 않았다
+  expect(main).toMatch(/PART_NAME/);
+  expect(main).toMatch(/깜빡이는 곳이 \$\{PART_NAME\[part\]\}입니다/);
+});

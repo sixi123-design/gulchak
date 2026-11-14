@@ -1263,6 +1263,10 @@ function setHints(labels: string[]) {
 /** 처음 배우는 레버: 그 부위를 깜빡 강조하고 조이스틱 위까지 선으로 이어 줌 (2초) */
 type Part = 'boom' | 'arm' | 'bucket';
 const PART_OF = (l: string): Part | null => (l.startsWith('붐') ? 'boom' : l.startsWith('암') ? 'arm' : l.startsWith('버킷') ? 'bucket' : null);
+/** 부품 이름. 깜빡이는 곳이 무엇인지 글자로 알려 준다 (깜빡임만으로는 이름을 알 수 없다) */
+const PART_NAME: Record<Part, string> = { boom: '붐', arm: '암', bucket: '버킷' };
+/** 지금 깜빡이고 있는 부품 (없으면 null) */
+const blinking = (): Part | null => (intro.length && performance.now() < introUntil ? intro[0].part : null);
 const introduced = new Set<Part>();
 let intro: { part: Part }[] = [];
 let introUntil = 0;
@@ -1299,7 +1303,8 @@ function updateMeter() {
   // 미션이 띄우는 짧은 한 줄 (세는 중 ●●○ · 멈춘 뒤 오차 cm · 레버 익히기의 반응)
   const h = tutor?.hud() ?? null;
   if (tutor?.lesson.big) {
-    $('dr-say').textContent = h ?? tutor.coach?.msg ?? '';
+    const part = blinking();
+    $('dr-say').textContent = h ?? (part ? `깜빡이는 곳이 ${PART_NAME[part]}입니다` : (tutor.coach?.msg ?? ''));
     $('m-hold').hidden = true;
     const ok = tutor.bag.okN ?? 0;
     const bad = tutor.bag.badN ?? 0;
