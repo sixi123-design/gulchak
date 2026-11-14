@@ -25,10 +25,24 @@ function driver(s: DigSession) {
     if (!q) throw new Error(`도달 불가 r=${r} y=${y}`);
     to(q, steps);
   };
+  /** 날 끝을 직선으로 끌며(암·붐) 버킷 각도도 함께 바꿈: 관절각 보간은 핀이 거의 안 움직이는 '오므림만'이 되어 흙이 날 앞에만 쌓임 */
+  const pull = (r: number, y: number, thK: number, steps: number) => {
+    const f0 = s.frame;
+    const r0 = f0.tip.r;
+    const y0 = f0.tip.y;
+    const k0 = f0.thK;
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps;
+      const q = ik(MACHINE, r0 + (r - r0) * t, y0 + (y - y0) * t, k0 + (thK - k0) * t);
+      if (!q) throw new Error(`도달 불가 r=${r} y=${y}`);
+      s.setPose(q);
+      s.step();
+    }
+  };
   const wait = (n: number) => {
     for (let i = 0; i < n; i++) s.step();
   };
-  return { to, tip, wait };
+  return { to, tip, pull, wait };
 }
 
 function runCycle(s: DigSession, d: ReturnType<typeof driver>, c = 0) {
@@ -39,8 +53,8 @@ function runCycle(s: DigSession, d: ReturnType<typeof driver>, c = 0) {
   const r0 = A.pitOut - 0.1 - 0.35 * c;
   const surf = Math.max(s.soil.surfaceAt(-r0, 0), -1.3);
   d.tip(r0, surf + 0.3, -1.0, 40); // A 구덩이 위 (버킷 날을 앞으로 숙임)
-  d.tip(r0, surf - 0.3, -1.0, 40); // 비스듬히 꽂기
-  d.tip(Math.max(A.pitIn + 0.5, r0 - 1.6), surf - 0.25, -2.6, 100); // 당기며 오므려 쓸어 담기
+  d.tip(r0, surf - 0.2, -1.0, 40); // 비스듬히 꽂기 (20cm: 더 깊이 억지로 밀어 넣으면 차체가 크게 들림)
+  d.pull(Math.max(A.pitIn + 0.5, r0 - 1.6), surf - 0.25, -1.5, 100); // 반쯤 오므린 채 암으로 당겨 쓸어 담기 (끝까지 오므림은 들 때)
   d.tip(A.pitIn + 0.6, 1.2, CURL, 40); // 오므리며 들어 올리기
   d.to({ boom: 1.0, arm: -1.9, bucket: -1.4 }, 40); // B 통과 자세 (붐 높이 들기)
   d.to({ swing: 0 }, 160); // A → B → C (왼쪽 선회)
@@ -52,7 +66,7 @@ function runCycle(s: DigSession, d: ReturnType<typeof driver>, c = 0) {
 }
 
 describe('굴착 작업 한 바퀴 (자동 조작)', () => {
-  it('4회 굴착·덤프 → 평탄 → 종료: 실격 없음, 장부 일치', () => {
+  it('4회 굴착·덤프 → 평탄(당기고 밀기 왕복) → 종료: 실격 없음, 장부 일치', () => {
     const s = new DigSession(MACHINE, R, PRACTICE, () => 0.5);
     s.belt = true;
     s.leverUnlocked = true;
@@ -65,15 +79,23 @@ describe('굴착 작업 한 바퀴 (자동 조작)', () => {
     expect(s.dumpCount).toBe(4);
     for (const r of s.loadRatios) expect(r).toBeGreaterThan(0.5);
 
-    // 평탄: C로 가서 버킷을 세워 구덩이를 밀고 지나감
+    // 평탄: C로 가서 먼 쪽에 버킷을 대고 당겨 온 뒤, 바깥쪽으로 밀고 지나감 (왕복 1회)
     const C = s.site.stations[1];
     d.to({ boom: 1.0, arm: -1.9, bucket: -1.4 }, 40);
     d.to({ swing: 0 }, 160);
-    d.tip(C.pitIn + 0.1, 0.4, -PI / 2, 40);
-    d.tip(C.pitIn + 0.1, -0.02, -PI / 2, 30);
+    d.tip(C.pitOut - 0.5, 0.4, -PI / 2, 40);
+    d.tip(C.pitOut - 0.5, -0.02, -PI / 2, 30);
+    d.tip(C.pitIn + 0.1, -0.02, -PI / 2, 120); // 장비 쪽으로 당겨 오기
     d.tip(C.pitOut - 0.2, -0.02, -1.0, 120); // 바깥쪽으로 밀며 고르기
     d.tip(C.pitOut - 0.4, 0.3, -1.0, 20);
     expect(s.flattenVol).toBeGreaterThan(R.params.flattenMinVolume);
+    expect(s.flattenPullDist).toBeGreaterThan(R.params.flattenMinPass);
+    expect(s.flattenPushDist).toBeGreaterThan(R.params.flattenMinPass);
+    expect(s.flattenDone).toBe(true);
+    // 화면 표시용 긁은 자국: 평탄 중 버킷이 닿은 C 칸에 시각 기록 (흙 높이와 무관)
+    const gC = s.soil.grids.find((g) => g.name === 'C')!;
+    expect(gC.touchLast).toBeGreaterThan(0);
+    expect(gC.touch.filter((t) => t > 0).length).toBeGreaterThan(50);
 
     // 종료: 버킷을 완전히 펴서 구역 안 지면에 내려놓음
     const q = ik(MACHINE, (C.pitIn + C.pitOut) / 2 + 0.3, 0.3, 0)!;
@@ -94,6 +116,38 @@ describe('굴착 작업 한 바퀴 (자동 조작)', () => {
     expect(fl.meanDev).toBeLessThan(0.3);
   });
 
+  it('평탄을 한 방향(밀기)만 하면 평탄 안 한 것: 종료 때 D-NOFLAT (왕복 필요)', () => {
+    const s = new DigSession(MACHINE, R, PRACTICE, () => 0.5);
+    s.belt = true;
+    s.leverUnlocked = true;
+    s.rpm = 0.8;
+    s.ready();
+    for (let i = 0; i < 100; i++) s.step();
+    const d = driver(s);
+    for (let c = 0; c < 4; c++) runCycle(s, d, c);
+    const C = s.site.stations[1];
+    d.to({ boom: 1.0, arm: -1.9, bucket: -1.4 }, 40);
+    d.to({ swing: 0 }, 160);
+    d.tip(C.pitIn + 0.1, 0.4, -PI / 2, 40);
+    d.tip(C.pitIn + 0.1, -0.02, -PI / 2, 30);
+    d.tip(C.pitOut - 0.2, -0.02, -1.0, 120); // 밀기만
+    d.tip(C.pitOut - 0.4, 0.3, -1.0, 20);
+    expect(s.flattenVol).toBeGreaterThan(R.params.flattenMinVolume);
+    expect(s.flattenPullDist).toBeLessThan(R.params.flattenMinPass);
+    expect(s.flattenDone).toBe(false);
+    const q = ik(MACHINE, (C.pitIn + C.pitOut) / 2 + 0.3, 0.3, 0)!;
+    d.to({ ...q }, 30);
+    d.to({ bucket: MACHINE.limits.bucket[1] }, 30);
+    for (let i = 0; i < 800 && s.phase === 'working'; i++) {
+      if (s.groundGap() > 0.02) s.setPose({ boom: s.pose.boom - 0.001 });
+      s.step();
+    }
+    d.wait(90);
+    expect(s.phase).toBe('finished');
+    const dq = s.engine.disqualifications().map((v) => `${v.id}:${v.detail}`);
+    expect(dq).toEqual(['D-NOFLAT:평탄: 밀기만 하고 당겨 오기 없음 (왕복 1회 필요)']);
+  });
+
   it('조금씩 나눠 쏟아도 굴착 1회당 덤프는 1회', () => {
     const s = new DigSession(MACHINE, R, PRACTICE, () => 0.5);
     s.belt = true;
@@ -105,7 +159,7 @@ describe('굴착 작업 한 바퀴 (자동 조작)', () => {
     const [A, C] = s.site.stations;
     d.tip(A.pitOut - 0.1, 0.3, -1.0, 40);
     d.tip(A.pitOut - 0.1, -0.75, -1.0, 40);
-    d.tip(A.pitIn + 0.3, -0.65, -PI, 100);
+    d.pull(A.pitIn + 0.3, -0.65, -1.5, 100); // 반쯤 오므린 채 암으로 당겨 담기
     d.tip(A.pitIn + 0.6, 1.2, -PI - 0.6, 40);
     d.to({ boom: 1.0, arm: -1.9, bucket: -1.4 }, 40);
     d.to({ swing: 0 }, 160);
@@ -133,7 +187,7 @@ describe('굴착 작업 한 바퀴 (자동 조작)', () => {
     const [A, C] = s.site.stations;
     d.tip(A.pitOut - 0.1, 0.3, -1.0, 40);
     d.tip(A.pitOut - 0.1, -0.75, -1.0, 40);
-    d.tip(A.pitIn + 0.3, -0.65, -PI, 100);
+    d.pull(A.pitIn + 0.3, -0.65, -1.5, 100); // 반쯤 오므린 채 암으로 당겨 담기
     d.tip(A.pitIn + 0.6, 1.2, -PI - 0.6, 40);
     d.to({ boom: 1.0, arm: -1.9, bucket: -1.4 }, 40);
     d.to({ swing: 0 }, 160);

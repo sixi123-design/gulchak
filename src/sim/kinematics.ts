@@ -54,6 +54,27 @@ export function bucketUnderside(f: Frame): P2[] {
   return out;
 }
 
+/**
+ * 버킷 바깥 윤곽 (측면 단면, 핀 → 등 → 힐 → 바닥 → 날 끝). 화면 버킷 모양(excavatorView bucketShapes)과 같은 점.
+ * 흙 속에서 버킷이 차지하는 공간을 비울 때 씀
+ */
+export function bucketOutline(m: MachineSpec, f: Frame): P2[] {
+  const hx = Math.cos(m.heelAngle) * m.heelLen;
+  const hy = Math.sin(m.heelAngle) * m.heelLen;
+  const local: [number, number][] = [
+    [0, 0],
+    [-0.07, 0.38],
+    [hx * 0.35, hy],
+    [hx * 0.75, hy * 1.06],
+    [hx, hy],
+    [hx + (m.L3 - hx) * 0.5, hy * 0.52],
+    [m.L3, 0],
+  ];
+  const c = Math.cos(f.thK);
+  const s = Math.sin(f.thK);
+  return local.map(([x, y]) => ({ r: f.P2.r + x * c - y * s, y: f.P2.y + x * s + y * c }));
+}
+
 /** 버킷 꼭짓점 6개 (핀·힐·끝 × 좌우) */
 export function bucketCorners(m: MachineSpec, f: Frame, swing: number): V3[] {
   const h = m.bucketWidth / 2;

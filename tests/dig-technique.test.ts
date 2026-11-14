@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { MACHINE } from '../src/config/machine';
 import rules from '../src/config/rules.json';
-import { PRACTICE } from '../src/core/ruleEngine';
+import { FREE, PRACTICE } from '../src/core/ruleEngine';
 import { ik } from '../src/sim/kinematics';
 import { DigSession, type RulesFile, type Sticks } from '../src/sim/session';
 
@@ -30,6 +30,33 @@ function run(s: DigSession, phases: [number, Partial<Sticks>][]) {
 const SC = MACHINE.struckCapacity;
 
 describe('퍼 담기 요령', () => {
+  it('이빨을 박고 버킷만 오므리면 입구 쪽에만 조금 담기고 나머지는 날 앞에 쌓임 (암을 당겨야 가득 참)', () => {
+    const s = sess();
+    s.setPose(ik(MACHINE, s.digTarget.rho, 0.2, -0.9)!);
+    let maxSur = 0;
+    for (let i = 0; i < 170; i++) {
+      s.input = { lx: 0, ly: 0, ...(i < 35 ? { rx: 0, ry: 1 } : { rx: -0.6, ry: 0 }) }; // 꽂은 뒤 버킷 레버만
+      s.step();
+      maxSur = Math.max(maxSur, s.surcharge);
+    }
+    // 입구 쪽에 조금은 담기고(앞쪽 위주), 가득 차려면 암을 당겨야 함
+    expect(s.load).toBeGreaterThan(0.15 * SC);
+    expect(s.load).toBeLessThan(0.6 * SC);
+    expect(s.load - s.loadBack).toBeGreaterThan(s.loadBack);
+    expect(maxSur).toBeGreaterThan(0.1 * SC);
+    expect(s.loadBack).toBeLessThanOrEqual((R.params.curlBackCapRatio + 0.01) * SC);
+  });
+  it('흙에 닿은 채 암을 당기며 오므리면 입구부터 쌓인 뒤 안쪽으로 밀려 들어가 고봉까지 찬다', () => {
+    const s = sess();
+    s.setPose(ik(MACHINE, s.digTarget.rho, 0.2, -0.9)!);
+    run(s, [[26, { ry: 1 }], [30, { ly: -0.7, rx: -0.6, ry: -0.1 }]]);
+    // 처음 0.5초: 입구 쪽이 먼저
+    expect(s.load - s.loadBack).toBeGreaterThan(s.loadBack);
+    run(s, [[190, { ly: -0.7, rx: -0.6, ry: -0.1 }]]);
+    expect(s.load).toBeGreaterThan(SC);
+    expect(s.loadBack).toBeGreaterThan(0.75 * SC);
+    expect(s.load).toBeLessThanOrEqual(s.heapedCap + 1e-9);
+  });
   it('수직으로 꽂기만 하면 흙이 담기지 않음', () => {
     const s = sess();
     const A = s.site.stations[0];
@@ -43,11 +70,59 @@ describe('퍼 담기 요령', () => {
     run(s, [[26, { ry: 1 }]]); // 흙 표면에서 20~30cm만 물기
     expect(s.load).toBeLessThan(0.25 * SC);
     // 암을 당기며 오므리고, 붐을 살짝 올려 깊이를 유지 (바른 요령)
-    const r = run(s, [[130, { ly: -0.7, rx: -0.6, ry: -0.1 }]]);
+    const r = run(s, [[200, { ly: -0.7, rx: -0.6, ry: -0.1 }]]);
     expect(s.load).toBeGreaterThan(SC);
     expect(s.loadBack / s.load).toBeGreaterThan(0.5); // 안쪽까지 밀려 들어감
     expect(r.ids.has('W-OVERLOAD')).toBe(false);
     expect(r.ids.has('W-LIFT')).toBe(false);
+  });
+  it('버킷을 편 채 암만 당겨 흙을 밀면, 밀린 흙이 벽처럼 솟지 않고 흘러내린다', () => {
+    const s = sess();
+    s.setPose(ik(MACHINE, s.digTarget.rho + 0.3, -0.35, -0.2)!);
+    // 밀고 나서 붐을 들어 버킷을 흙에서 완전히 빼고(버킷 옆판이 받치던 흙·날 앞 흙더미가 풀림) 흘러내리기를 기다림
+    run(s, [[300, { ly: -0.8, ry: 0.15 }], [150, { ry: -1 }], [150, {}]]);
+    expect(s.surcharge).toBe(0);
+    const g = s.soil.grids[0];
+    const phi = (R.params.reposeDeg * Math.PI) / 180;
+    const talus = Math.tan(phi) * g.cell;
+    let peak = -9;
+    let step = 0;
+    let loose = 0;
+    for (let k = 0; k < g.h.length; k++) {
+      peak = Math.max(peak, g.h[k]);
+      loose += Math.max(0, g.h[k] - g.firm[k]) * g.area;
+    }
+    // x·z 두 방향 이웃 모두 (옆으로 밀려 생긴 둑의 경사 포함)
+    const pairStep = (a: number, b: number) => {
+      // 흐트러진 흙끼리의 경사만 (다져진 벽은 버팀)
+      if (Math.max(g.h[a], g.h[b]) > Math.max(g.firm[a], g.firm[b]) + 0.05) step = Math.max(step, Math.abs(g.h[a] - g.h[b]));
+    };
+    for (let j = 0; j < g.nz; j++)
+      for (let i = 0; i < g.nx; i++) {
+        if (i + 1 < g.nx) pairStep(g.idx(i, j), g.idx(i + 1, j));
+        if (j + 1 < g.nz) pairStep(g.idx(i, j), g.idx(i, j + 1));
+      }
+    // 본 기준: 벽처럼 선 흐트러진 흙 없음 — 이웃 칸 높이 차가 안식각(35°) 이내
+    expect(step).toBeLessThan(talus * 1.05);
+    // 높이: 버킷 몸통이 지나간 공간의 흙까지 밀려나므로(측정: 흐트러진 흙 약 1.1m³) 고정 30cm 대신 물리 상한으로 —
+    // 같은 부피를 안식각 원뿔 하나로 쌓은 높이보다 낮아야 함 (한 점에 기둥처럼 솟지 않음)
+    const cone = Math.cbrt((3 * loose * Math.tan(phi) ** 2) / Math.PI);
+    expect(peak).toBeLessThan(cone);
+    expect(loose).toBeGreaterThan(0.3);
+  });
+  it('첫 삽을 너무 깊이 박으면 버킷이 잘 안 오므라지고 과부하, 적당하면 오므라짐', () => {
+    const scoop = (plunge: number) => {
+      const s = sess();
+      s.setPose(ik(MACHINE, s.digTarget.rho, 0.2, -0.9)!);
+      const r = run(s, [[plunge, { ry: 1 }], [180, { ly: -0.5, rx: -1 }]]);
+      return { bucket: s.pose.bucket, ids: r.ids };
+    };
+    const ok = scoop(35);
+    const deep = scoop(70);
+    expect(ok.bucket).toBeLessThan(-0.6);
+    expect(ok.ids.has('W-OVERLOAD')).toBe(false);
+    expect(deep.bucket).toBeGreaterThan(-0.45); // 거의 안 오므라짐
+    expect(deep.ids.has('W-OVERLOAD')).toBe(true);
   });
   it('깊게 욕심내 물면 엔진 과부하', () => {
     const s = sess();
@@ -69,6 +144,29 @@ describe('퍼 담기 요령', () => {
     const r = run(s, [[200, { ry: 1 }]]);
     expect(r.ids.has('W-LIFT')).toBe(true);
     expect(r.liftDeg).toBeGreaterThan(2);
+  });
+  it('시험 순서 모드: 붐으로 계속 눌러 크게 들리면 실격 (D-LIFT), 살짝 들리면 경고만', () => {
+    const s = sess();
+    s.setPose(ik(MACHINE, 3.6, 0.3, -Math.PI / 2)!);
+    const r = run(s, [[400, { ry: 1 }]]);
+    expect(r.liftDeg).toBeGreaterThan(R.params.liftFailDeg);
+    expect(r.ids.has('D-LIFT')).toBe(true);
+    const s2 = sess();
+    s2.setPose(ik(MACHINE, s2.digTarget.rho, 0.2, -0.9)!);
+    const r2 = run(s2, [[26, { ry: 1 }], [220, { ly: -0.7, rx: -0.6, ry: -0.1 }]]);
+    expect(r2.ids.has('D-LIFT')).toBe(false);
+  });
+  it('자유 연습에서는 크게 들려도 실격 없음 (경고만)', () => {
+    const s = new DigSession(MACHINE, R, FREE, () => 0.5);
+    s.belt = true;
+    s.leverUnlocked = true;
+    s.rpm = 0.8;
+    s.ready();
+    for (let i = 0; i < 100; i++) s.step();
+    s.setPose(ik(MACHINE, 3.6, 0.3, -Math.PI / 2)!);
+    const r = run(s, [[400, { ry: 1 }]]);
+    expect(r.ids.has('W-LIFT')).toBe(true);
+    expect(r.ids.has('D-LIFT')).toBe(false);
   });
   it('rpm을 낮춘 채 파면 엔진이 꺼진다 (D-STALL, Q10)', () => {
     const s = sess(0.3);
@@ -108,12 +206,27 @@ describe('퍼 담기 요령 (아스트라 검토 반영)', () => {
     const drag = (curl: number) => {
       const s = sess();
       s.setPose(ik(MACHINE, s.digTarget.rho, 0.2, -0.9)!);
-      run(s, [[40, { ry: 1 }], [130, { ly: -0.7, rx: curl }]]);
-      return s.load;
+      run(s, [[40, { ry: 1 }]]);
+      // 오므림은 반쯤(정석)까지만: 끝까지 오므리면 입구가 좁아져 덜 들어옴 (코치도 '반쯤 펴기')
+      const step = (n: number) => {
+        for (let i = 0; i < n; i++) {
+          s.input = { lx: 0, ly: -0.7, rx: s.pose.bucket > -0.8 ? curl : 0, ry: 0 };
+          s.step();
+        }
+      };
+      step(130);
+      const early = s.load;
+      // 오므림은 흙을 날 앞에 모으고 암 당김이 쓸어 담으므로, 담김 한도까지 갈 만큼 더 당김
+      step(400);
+      return { early, load: s.load };
     };
     const noCurl = drag(0);
     const withCurl = drag(-0.6);
-    expect(withCurl).toBeGreaterThan(noCurl * 1.4);
+    // 원래 시간대(130스텝) 회귀값: 둘 다 평적 40% 이상은 담김
+    expect(noCurl.early).toBeGreaterThan(0.4 * SC);
+    expect(withCurl.early).toBeGreaterThan(0.4 * SC);
+    // 끝까지 당기면: 끌기만 하면 평적 절반 남짓에서 멈추고, 반쯤 오므려 당기면 훨씬 더 담김
+    expect(withCurl.load).toBeGreaterThan(noCurl.load * 1.4);
   });
   it('천천히 내려도 단단한 바닥을 뚫지 않음', () => {
     const s = sess();
@@ -134,6 +247,15 @@ describe('퍼 담기 요령 (아스트라 검토 반영)', () => {
 });
 
 describe('버킷 속 흙 분포·이빨', () => {
+  it('실기 요령: 버킷 오므린 뒤 오므림을 멈추고 암만 당겨도 눌러 담겨 평적 80% 이상', () => {
+    const s = sess();
+    s.setPose(ik(MACHINE, s.digTarget.rho, 0.2, -0.9)!);
+    run(s, [[40, { ry: 1 }], [150, { rx: -0.6, ry: -0.1 }]]);
+    expect(s.load).toBeLessThan(0.8 * SC); // 오므림만으론 덜 참
+    run(s, [[120, { ly: -0.7 }]]); // 무거운 흙: 암 당김 시간 여유
+    expect(s.load).toBeGreaterThan(0.8 * SC);
+    expect(s.loadBack / s.load).toBeGreaterThan(0.5);
+  });
   it('오므리지 않고 끌기만 하면 흙이 앞쪽에 몰리고, 들어 올리면 앞쪽 흙이 쏟아진다', () => {
     const s = sess();
     s.setPose(ik(MACHINE, s.digTarget.rho, 0.2, -0.9)!);
@@ -147,12 +269,13 @@ describe('버킷 속 흙 분포·이빨', () => {
     const s = sess();
     s.setPose(ik(MACHINE, s.digTarget.rho, 0.2, -0.9)!);
     // 당기며 오므린 뒤, 오므리면서 들어 올림 (흙 속에서는 오므림이 무거워 느림)
-    run(s, [[26, { ry: 1 }], [130, { ly: -0.7, rx: -0.6, ry: -0.1 }], [120, { rx: -0.8, ry: -0.3 }]]);
+    run(s, [[26, { ry: 1 }], [200, { ly: -0.7, rx: -0.6, ry: -0.1 }], [200, { rx: -0.8, ry: -0.5 }]]);
     expect(s.pose.bucket).toBeLessThan(-1.3); // 오므리며 들어 올리면 75° 이상 오므려짐
     const before = s.load;
     expect(s.loadBack / before).toBeGreaterThan(0.6);
     run(s, [[90, { ry: -1 }]]);
-    expect(s.load).toBeGreaterThan(before * 0.85); // 고봉 일부만 흘러내림 (앞쪽에만 담은 경우는 20% 넘게 쏟아짐)
+    // 고봉 위의 푸석한 흙(무너진 구덩이 벽 흙 포함)만 흘러내리고, 안쪽까지 다져 담은 흙은 평적 85% 이상 남음
+    expect(s.load).toBeGreaterThan(MACHINE.struckCapacity * 0.85);
   });
   it('버킷을 펴고 이빨로 밀면 이빨 자국(골)이 남는다', () => {
     const s = sess();
@@ -182,7 +305,7 @@ describe('자연스러운 퍼 올리기', () => {
     const s = sess();
     s.setPose(ik(MACHINE, s.digTarget.rho, 0.2, -0.9)!);
     // 꽂고 → 잠깐 멈춤 → 당기며 오므림 → 최대한 오므리며 들어 올림 (자연스러운 손동작)
-    run(s, [[26, { ry: 1 }], [12, {}], [130, { ly: -0.7, rx: -0.6, ry: -0.1 }], [150, { rx: -1, ry: -0.6 }], [60, { ry: -0.6 }]]);
+    run(s, [[26, { ry: 1 }], [12, {}], [200, { ly: -0.7, rx: -0.6, ry: -0.1 }], [240, { rx: -1, ry: -0.6 }], [60, { ry: -0.6 }]]);
     expect(s.pose.bucket).toBeLessThan(MACHINE.limits.bucket[0] + 0.14); // 끝까지 오므려짐 (쿠션 구간에서는 천천히)
     expect(s.engine.violations.filter((v) => v.id === 'W-JOLT')).toEqual([]);
   });
@@ -243,5 +366,32 @@ describe('소리 상태', () => {
     expect(events).toBeGreaterThan(5);
     expect(s.pourRate).toBeLessThan(0.01); // 다 쏟고 나면 조용해짐
     expect(s.landRate).toBeLessThan(0.01);
+  });
+});
+
+describe('깊은 구덩이 벽', () => {
+  it('다져진 벽도 0.6m 넘게 깎아 세우면 무너져 바닥에 쌓이고, 흙 양은 그대로', () => {
+    const s = sess();
+    const g = s.soil.grids.find((x) => x.name === 'A')!;
+    const st = s.site.stations[0];
+    // 구덩이 가운데 한 줄을 1.1m 깊이로 수직으로 깎음 (옆 칸과 0.6m 넘는 단차)
+    const v0 = g.volumeDelta();
+    let cutVol = 0;
+    for (let j = 0; j < g.nz; j++)
+      for (let i = 0; i < g.nx; i++) {
+        const k = g.idx(i, j);
+        const rho = g.xOf(i) * st.axis.x;
+        if (g.pit[k] && Math.abs(rho - (st.pitIn + st.pitOut) / 2) < 0.06) cutVol += g.cut(k, -1.6);
+      }
+    const maxStep = () => {
+      let m = 0;
+      for (let k = 0; k + 1 < g.h.length; k++) if ((k + 1) % g.nx) m = Math.max(m, Math.abs(g.h[k] - g.h[k + 1]));
+      return m;
+    };
+    expect(maxStep()).toBeGreaterThan(0.9);
+    const talus = Math.tan((s.params.reposeDeg * Math.PI) / 180) * s.params.soilCell;
+    for (let n = 0; n < 200; n++) g.relax(talus, 2, s.params.wallStableHeight);
+    expect(maxStep()).toBeLessThan(s.params.wallStableHeight + 0.05);
+    expect(g.volumeDelta()).toBeCloseTo(v0 - cutVol, 6);
   });
 });
