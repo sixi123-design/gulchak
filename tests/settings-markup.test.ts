@@ -178,9 +178,12 @@ it('레버 익히기에서는 굴착 횟수·타이머를 숨긴다', () => {
   expect(css).toMatch(/body\.flat-bg #hud \.timer/);
 });
 
-it('배경 지시문 뒤에 어두운 바탕을 깐다 (밝은 하늘에서 흰 글자가 묻히지 않게)', () => {
+it('배경 지시문은 어두운 글자에 효과 없이', () => {
+  // 그림자·그라데이션을 쓰지 않는다 (한 톤 배경이라 어두운 글자로 충분하다)
   const blocks = [...css.matchAll(/([^{}]*)\{([^}]*)\}/g)];
-  const scrim = blocks.find(([, sel]) => sel.includes('#hud > .drill::before'));
-  expect(scrim, '지시문 뒤 바탕 규칙이 있어야 한다').toBeTruthy();
-  expect(scrim![2]).toMatch(/linear-gradient/);
+  const text = blocks.find(([, sel]) => sel.trim() === '.dr-text');
+  expect(text, '.dr-text 규칙이 있어야 한다').toBeTruthy();
+  expect(text![2]).toMatch(/color:\s*var\(--ink\)/);
+  expect(text![2]).not.toMatch(/text-shadow/);
+  expect(css).not.toMatch(/#hud > \.drill::before/);
 });

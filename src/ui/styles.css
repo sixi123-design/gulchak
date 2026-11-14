@@ -7685,21 +7685,6 @@ body.stage-on #precheck .mode-pick {
   pointer-events: none;
   z-index: 6;
 }
-/*
- * 글자 뒤 어두운 그라데이션. 하늘이 밝아 흰 글자가 묻히는 것을 막는다 —
- * 판(배경 상자)을 두지 않고도 어떤 배경에서나 읽히게. 자막과 같은 처리.
- */
-#hud > .drill::before {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: -34px;
-  transform: translateX(-50%);
-  width: 100vw;
-  height: calc(100% + 54px);
-  background: linear-gradient(to bottom, rgb(29 27 46 / 0.62) 0%, rgb(29 27 46 / 0.5) 55%, rgb(29 27 46 / 0) 100%);
-  z-index: -1;
-}
 /* 레버 익히기에는 굴착 횟수·덤프·남은 시간이 뜻이 없다. 글자 자리를 비운다 */
 body.flat-bg #hud .chips,
 body.flat-bg #hud .timer {
@@ -7707,17 +7692,13 @@ body.flat-bg #hud .timer {
 }
 .dr-text {
   font: 900 calc(26px * var(--z-txt, 1)) / 1.3 var(--font);
-  color: #fff;
-  text-shadow:
-    0 3px 0 var(--ink),
-    0 0 14px rgb(29 27 46 / 0.75);
+  color: var(--ink);
 }
 .dr-say {
   margin-top: 8px;
   min-height: 1.4em;
   font: 800 calc(17px * var(--z-txt, 1)) / 1.4 var(--font);
-  color: var(--sun);
-  text-shadow: 0 2px 0 var(--ink);
+  color: color-mix(in srgb, var(--ink) 78%, transparent);
 }
 .dr-say:empty {
   min-height: 0;
