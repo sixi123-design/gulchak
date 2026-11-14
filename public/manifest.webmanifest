@@ -1,6 +1,6 @@
 {
-  "name": "굴착 연습장",
-  "short_name": "굴착연습",
+  "name": "도전! 굴착기 실기",
+  "short_name": "도전! 굴착기",
   "start_url": "./",
   "scope": "./",
   "display": "fullscreen",

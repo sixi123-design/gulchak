@@ -9,7 +9,7 @@
     "preview": "vite preview --host",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "deploy": "npm run build && node scripts/deploy.mjs"
+    "deploy": "npm test && npm run build && node scripts/deploy.mjs"
   },
   "dependencies": {
     "three": "0.170.0"

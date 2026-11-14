@@ -14,6 +14,19 @@ export class Joystick {
     el.addEventListener('pointerup', (e) => this.up(e));
     el.addEventListener('pointercancel', (e) => this.up(e));
     el.addEventListener('lostpointercapture', (e) => this.up(e));
+    // 손가락을 화면 가장자리 밖으로 빼거나 시스템 제스처가 끼어들면 pointerup이 레버에 안 올 때가 있음 → 레버가 끝에 걸려 안 돌아옴.
+    // 창 전체에서 한 번 더 받고, 터치가 끝났는데 이 레버를 누르는 손가락이 남아 있지 않으면 놓은 것으로 침
+    addEventListener('pointerup', (e) => this.up(e), true);
+    addEventListener('pointercancel', (e) => this.up(e), true);
+    const touchEnd = (e: TouchEvent) => {
+      if (this.id === null) return;
+      for (const t of Array.from(e.touches)) if (t.target instanceof Node && el.contains(t.target)) return;
+      this.release();
+    };
+    addEventListener('touchend', touchEnd, true);
+    addEventListener('touchcancel', touchEnd, true);
+    addEventListener('blur', () => this.release());
+    document.addEventListener('visibilitychange', () => document.hidden && this.release());
   }
   private down(e: PointerEvent) {
     if (this.id !== null) return;
@@ -40,7 +53,9 @@ export class Joystick {
       dx /= l;
       dy /= l;
     }
-    this.knob.style.transform = `translate(${dx * this.radius}px, ${dy * this.radius}px)`;
+    // 레버 크기 설정(scale)으로 키우면 손잡이 이동도 같이 커지므로 화면 px → 레버 안 px
+    const s = this.el.getBoundingClientRect().width / Math.max(1, this.el.offsetWidth);
+    this.knob.style.transform = `translate(${(dx * this.radius) / s}px, ${(dy * this.radius) / s}px)`;
     const dz = 0.15;
     const shape = (v: number) => (Math.abs(v) < dz ? 0 : Math.sign(v) * ((Math.abs(v) - dz) / (1 - dz)));
     this.x = shape(dx);
@@ -49,7 +64,18 @@ export class Joystick {
   }
   private up(e: PointerEvent) {
     if (e.pointerId !== this.id) return;
+    this.release();
+  }
+  /** 레버 놓기 (가운데로) */
+  release() {
+    const id = this.id;
+    if (id === null) return;
     this.id = null;
+    try {
+      this.el.releasePointerCapture(id);
+    } catch {
+      /* 이미 풀림 */
+    }
     this.x = 0;
     this.y = 0;
     this.knob.style.transform = '';
