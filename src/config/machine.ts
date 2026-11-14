@@ -39,7 +39,7 @@ export const MACHINE: MachineSpec = {
   // 최대굴삭높이 8.45m를 우리 링크 치수로 역산한 값. 이전 -35~+60°(폭 95°)는 너무 좁아
   // 깊이 4.12m·높이 7.97m로 실제 어느 구성보다도 모자랐다. 기구학 논문의 실측 113°와도 맞는다.
   // 버킷 205°: 캐터필러 E 시리즈 single-pin 링크가 실제로 205° (일반 설계는 160~180°).
-  limits: { boom: [d(-52), d(67)], arm: [d(-155), d(-30)], bucket: [d(-135), d(88)] },
+  limits: { boom: [d(-52), d(67)], arm: [d(-155), d(-30)], bucket: [d(-135), d(70)] },
   speeds: { swing: d(40), boom: d(28), arm: d(35), bucket: d(55) },
   radii: { boom: 0.22, arm: 0.16, bucket: 0.05 },
   wheelbase: 2.6,
