@@ -337,3 +337,56 @@ it('높이는 지켰어도 한 레버만 썼으면 별 3개는 아니다', () =>
 it('3단계도 별은 언제나 1~3', () => {
   expect([1, 2, 3]).toContain(both().grade!({} as never, {}).stars);
 });
+
+// ---------- 4단계: 합치기 ----------
+const all = () => BASIC_LESSONS.find((l) => l.id === 'b-all')!;
+
+it('4단계가 있고 세 가지를 다 본다', () => {
+  const L = all();
+  expect(L.tier).toBe('기본기');
+  expect(L.trail).toBe(true);
+  expect(L.why).toBeTruthy();
+  expect(L.grade).toBeTruthy();
+});
+
+it('세 항목을 ◎○△로 보여 준다', () => {
+  const L = all();
+  const g = L.grade!({ load: 1, maxJolt: 0 } as never, { load0: 1, err1: 0.02, devSum: 2, devN: 100, multi: 80, frames: 100 });
+  expect(g.note).toMatch(/[◎○△]/);
+  expect((g.note.match(/[◎○△]/g) ?? []).length).toBe(3);
+});
+
+it('세 항목이 모두 좋으면 별 3개 (◎ 세 개)', () => {
+  const L = all();
+  const g = L.grade!({ load: 1, maxJolt: 0 } as never, { load0: 1, err1: 0.02, devSum: 2, devN: 100, multi: 80, frames: 100 });
+  expect(g.stars).toBe(3);
+  expect((g.note.match(/◎/g) ?? []).length).toBe(3);
+});
+
+it('한 항목만 나쁘면 별 2개', () => {
+  const L = all();
+  // 흙을 30% 쏟음, 나머지는 좋음
+  const g = L.grade!({ load: 0.7, maxJolt: 0.5 } as never, { load0: 1, err1: 0.02, devSum: 2, devN: 100, multi: 80, frames: 100 });
+  expect(g.stars).toBe(2);
+});
+
+it('두 항목 이상 나쁘면 별 1개', () => {
+  const L = all();
+  const g = L.grade!({ load: 0.7, maxJolt: 0.5 } as never, { load0: 1, err1: 0.3, devSum: 2, devN: 100, multi: 80, frames: 100 });
+  expect(g.stars).toBe(1);
+});
+
+it('4단계도 별은 언제나 1~3', () => {
+  expect([1, 2, 3]).toContain(all().grade!({} as never, {}).stars);
+});
+
+it('기본기는 네 미션이고 순서대로다', () => {
+  expect(BASIC_LESSONS.map((l) => l.id)).toEqual(['b-stop', 'b-aim', 'b-both', 'b-all']);
+  expect(BASIC_LESSONS.every((l) => l.tier === '기본기')).toBe(true);
+  expect(BASIC_LESSONS.every((l) => l.why && l.grade)).toBe(true);
+});
+
+it('기본기 네 미션의 아이콘이 모두 다르다', () => {
+  const icons = BASIC_LESSONS.map((l) => l.icon);
+  expect(new Set(icons).size).toBe(icons.length);
+});

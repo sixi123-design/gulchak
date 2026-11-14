@@ -322,4 +322,54 @@ const stopFirst: Lesson = {
   ].map(withLoad0),
 };
 
-export const BASIC_LESSONS: Lesson[] = [stopFirst, aimAt, bothLevers];
+/** 항목 평가 표시 (채점표와 같은 기호) */
+const mark = (good: boolean, ok: boolean) => (good ? '◎' : ok ? '○' : '△');
+
+/**
+ * 4단계: 셋을 한 번에. 고봉으로 담은 흙을 들고, 두 레버를 같이 써서 목표 높이로
+ * 옮긴 다음, 목표 높이에 멈춘다. 세 항목을 각각 ◎○△로 보여 준다.
+ */
+const allTogether: Lesson = {
+  id: 'b-all',
+  tier: '기본기',
+  icon: 'stAll',
+  title: '셋을 한 번에',
+  noFail: true,
+  trail: true,
+  why: {
+    title: '셋을 한 번에',
+    lines: [
+      '흙을 흘리지 않게 멈춘 뒤에 바꾸고, 두 레버를 같이 쓰고, 원하는 데서 멈춥니다.',
+      '실제 작업이 이 셋을 동시에 합니다. 하나씩은 됐으니 이제 합쳐 보세요.',
+      '끝나면 세 항목을 따로 보여 드립니다. 약한 쪽을 다시 연습하면 됩니다.',
+    ],
+  },
+  setup: (s) => {
+    pose(s, SWING_A, s.digTarget.rho - 2.2, LINE.height + 0.6, 95 * deg, s.m.limits.bucket[0] + 2 * deg);
+    fill(s, 1.25);
+    s.maxJolt = 0;
+  },
+  grade: (s, bag): Grade => {
+    const lost = lostOf(s, bag);
+    const jolt = s.maxJolt ?? 0;
+    const err = typeof bag.err1 === 'number' ? bag.err1 : Infinity;
+    const dev = devOf(bag);
+    const multi = multiOf(bag);
+    // 흙 지키기 · 동시조작(높이 유지) · 멈추기
+    const soil = mark(lost < 0.01 && jolt < SMOOTH.warn, lost < 0.05);
+    const line = mark(bag.devN > 0 && dev <= LINE.good && multi >= LINE.multi, bag.devN > 0 && dev <= LINE.ok);
+    const stop = mark(err <= 0.04, err <= 0.08);
+    const note = `흙 ${soil} · 직선 ${line} · 멈춤 ${stop}`;
+    const bad = [soil, line, stop].filter((m) => m === '△').length;
+    return { stars: bad === 0 ? 3 : bad === 1 ? 2 : 1, note };
+  },
+  steps: [
+    {
+      ...lineStep(1, '흙을 흘리지 말고, 두 레버를 같이 써서 바깥으로 긋기', '암 펴기'),
+      labels: ['암 펴기', '붐 올림', '붐 내림'],
+    },
+    aimStep(2),
+  ],
+};
+
+export const BASIC_LESSONS: Lesson[] = [stopFirst, aimAt, bothLevers, allTogether];
