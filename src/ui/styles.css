@@ -7676,27 +7676,20 @@ body.stage-on #precheck .mode-pick {
  * #hud > * 가 pointer-events: auto 라 더 구체적인 선택자로 꺼야 캔버스 터치를 안 먹는다.
  */
 /*
- * 지시문은 화면 **위쪽**에 둔다. 가운데에 두면 버킷을 가린다 —
- * 버킷은 이 앱에서 유저가 반드시 봐야 하는 물건이고, 조작에 따라 화면 y 110~600을 오간다.
- * (예전에 상단에서 가운데로 옮겼던 이유는 상단 칩·타이머와 겹쳐서였는데,
- *  레버 익히기에서는 그것들을 감추므로 위가 비어 있다.)
- * 오른쪽 위 버튼 3개(다시·설정·목록)와 안 겹치게 너비를 제한한다.
+ * 지시문은 화면 가운데. **바탕을 깔지 않는다** — 하얀 판을 깔면 그게 버킷을 가린다.
+ * (한때 글자가 묻혀서 바탕을 깔았는데, 그건 장비에 검정 실린더·A필러가 있던 때 이야기다.
+ *  튜토리얼 장비를 밝은 회색으로 바꾼 뒤로는 필요 없다. 글자만 있으면 사이로 장비가 보인다.)
  */
 #hud > .drill {
   position: absolute;
   left: 50%;
-  top: 10px;
-  transform: translateX(-50%);
+  top: 50%;
+  transform: translate(-50%, -50%);
   width: fit-content;
   max-width: min(340px, calc(100% - 152px));
   text-align: center;
   pointer-events: none;
   z-index: 6;
-  /* 장비(실린더·붐)가 글자 뒤로 지나가도 읽히게 하는 바탕.
-     글자 자체에는 효과를 주지 않는다 (흐림 효과는 저가폰에서 비싸서 안 쓴다) */
-  padding: 14px 20px;
-  border-radius: 20px;
-  background: color-mix(in srgb, #eaf3f8 88%, transparent);
 }
 /* 레버 익히기에는 굴착 횟수·덤프·남은 시간이 뜻이 없다. 글자 자리를 비운다 */
 body.flat-bg #hud .chips,
