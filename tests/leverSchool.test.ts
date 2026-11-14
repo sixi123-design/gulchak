@@ -409,7 +409,10 @@ it('네 미션의 시작 자세가 모두 가동범위 안', () => {
   }
 });
 
-/** 목표 높이를 지키며 암을 펴거나 당긴다 (붐으로 높이를 보정하는 간단한 자동 조작) */
+/**
+ * 목표 높이를 지키며 암을 펴거나 당긴다 (붐으로 높이를 보정하는 자동 조작).
+ * 사람보다 정확하다 — 도달 가능성과 막다른 길을 막는 용도다.
+ */
 function holdLine(t: Tutor, armDir: 1 | -1, target: number, frames = 1200) {
   const from = t.step;
   for (let i = 0; i < frames; i++) {
@@ -424,6 +427,10 @@ function holdLine(t: Tutor, armDir: 1 | -1, target: number, frames = 1200) {
 /**
  * 목표 높이로 다가가 멈춘다. 가까워질수록 레버를 줄인다 — 이 단계가 가르치려는 조작.
  * (레버를 끝까지 주고 놓으면 15cm쯤 더 내려가 허용 오차를 넘는다)
+ *
+ * 매 프레임 groundGap을 보고 레버를 보정하므로 사람보다 정확하다. 이 테스트가
+ * 증명하는 것은 '사람이 쉽게 한다'가 아니라 '장비 가동범위 안에서 완주 가능하고
+ * 등급이 제대로 매겨진다'이다 — 도달 불가·막다른 길을 막는 용도.
  */
 function aimAuto(t: Tutor, target: number) {
   const from = t.step;
@@ -472,9 +479,22 @@ it('3단계: 두 레버를 같이 쓰면 별 2개 이상', () => {
 it('4단계: 끝까지 가고 흙도 지킨다', () => {
   const t = new Tutor(all(), sess());
   expect(holdLine(t, 1, LINE.height), '긋기').toBe(true);
-  expect(aimAuto(t, AIM.targets[2]), '멈추기').toBe(true);
+  expect(aimAuto(t, AIM.targets[1]), '멈추기').toBe(true); // 4단계는 aimStep(1) = 20cm
   expect(t.cleared).toBe(true);
   const g = all().grade!(t.s, t.bag);
   expect(g.stars).toBeGreaterThanOrEqual(2);
   expect(g.note).toMatch(/흙 [◎○]/); // 흙을 쏟지 않았다
+});
+
+it('레버를 톡 건드리고 기다리는 것으로는 통과하지 못한다', () => {
+  const t = aimTutor();
+  run(t, { ry: 1 }, 3); // 아주 짧게
+  run(t, {}, 200); // 그리고 기다리기만
+  expect(t.step).toBe(0);
+});
+
+it('아무것도 안 하면 통과하지 못한다', () => {
+  const t = aimTutor();
+  run(t, {}, 300);
+  expect(t.step).toBe(0);
 });

@@ -145,10 +145,11 @@ const aimStep = (round: number, key = `err${round + 1}`, of: number = AIM.target
         mem.show = (mem.show ?? 0) + 1;
         return mem.show >= 45;
       }
-      // 가만히 있어도 '멈췄다'가 되지 않게: 붐 레버를 한 번이라도 쓴 뒤부터 센다.
+      // 가만히 있어도 '멈췄다'가 되지 않게: 붐 레버를 10프레임(약 0.17초) 이상 쓴
+      // 뒤부터 센다. 한 번 톡 건드리는 것으로는 안 된다.
       // (거리로 재면, 앞 회차에서 지나쳐 내려온 사람은 다음 목표가 5cm 위라 길이 막힌다)
-      if (Math.abs(s.input.ry) > 0.03) mem.used = 1;
-      mem.hold = mem.used && allStill(s) ? (mem.hold ?? 0) + 1 : 0;
+      if (Math.abs(s.input.ry) > 0.03) mem.used = (mem.used ?? 0) + 1;
+      mem.hold = (mem.used ?? 0) >= 10 && allStill(s) ? (mem.hold ?? 0) + 1 : 0;
       if (mem.hold < AIM.frames) return false;
       mem.done = 1;
       mem.err = Math.abs(s.groundGap() - target);
@@ -174,7 +175,7 @@ const aimStep = (round: number, key = `err${round + 1}`, of: number = AIM.target
       }
       // 아직 멈추기 전이면 앞 회차 결과를 남겨 둔다
       if (bag.lastErr !== undefined) return `지난 회차 ${cm(bag.lastErr)} · ${aimWord(bag.lastErr, bag.lastTol)}`;
-      if (mem.used) return null;
+      if ((mem.used ?? 0) >= 10) return null;
       return _s.groundGap() > target ? '붐을 내려 보세요' : '붐을 올려 보세요';
     },
     coach: (s) => {
