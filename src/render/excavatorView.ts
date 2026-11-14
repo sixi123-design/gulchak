@@ -12,8 +12,10 @@ import { gradientMap, outlineMat, PALETTE, toon } from './toon';
  * 로고·회사명·모델명은 넣지 않는다 (리서치_시험장_화면.md, 큐넷 시험장별 기종 현황).
  */
 export type MachineStyleKey = 'A' | 'B' | 'C';
+/** 튜토리얼 공간에서 쓰는 겉모습. 시험장 기종 목록(sites.json)에는 없다 */
+export type LookKey = MachineStyleKey | 'T';
 export interface MachineStyle {
-  key: MachineStyleKey;
+  key: LookKey;
   label: string;
   desc: string;
   body: number; // 상부·캐빈
@@ -40,6 +42,26 @@ export interface MachineStyle {
  *  B 두산 DX140W 계열: 주황 상부·붐·암·카운터웨이트, 짙은 회색 하부, 검은 휠, 둥근 앞면
  *  C 볼보 EW145B 계열: 노랑 상부, 짙은 회색 붐·암·하부, 카운터웨이트 아래 회색 면, 노랑 림, 큰 유리
  */
+/**
+ * 레버 익히기(튜토리얼 공간)용 겉모습. A형과 같은 노랑 상부에, 검정·남색이던
+ * 하부·카운터웨이트·림·난간을 밝은 회색으로. 배경이 한 색이라 검정 덩어리가
+ * 있으면 글자와 부딪힌다.
+ */
+export const TUTOR_LOOK: MachineStyle = {
+  key: 'T',
+  label: '배우기용',
+  desc: '검정 없이 밝은 회색 하부',
+  body: 0xf2b51c,
+  boom: 0xf2b51c,
+  lower: 0x9aa4ae,
+  counterweight: 0x9aa4ae,
+  rim: 0xb9c2ca,
+  trim: 0x8e97a1,
+  cabSlope: 0.08,
+  cabRound: false,
+  cwRound: 0.55,
+};
+
 export const MACHINE_STYLES: Record<MachineStyleKey, MachineStyle> = {
   A: {
     key: 'A',
@@ -437,9 +459,9 @@ export class ExcavatorView {
 
   constructor(
     private m: MachineSpec,
-    styleKey: MachineStyleKey = 'A',
+    styleKey: LookKey = 'A',
   ) {
-    const S = (this.style = MACHINE_STYLES[styleKey]);
+    const S = (this.style = styleKey === 'T' ? TUTOR_LOOK : MACHINE_STYLES[styleKey]);
     this.K = [m.L2 - 0.3, 0.06];
 
     // ---------- 하부 주행체 (x축 방향) ----------

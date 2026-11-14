@@ -7724,7 +7724,9 @@ body.flat-bg {
 }
 
 /* ----- 레버 익히기 피드백: 잘했다 / 잘못했다 ----- */
-.drill-fx {
+/* #hud > * 가 pointer-events: auto 라 구체성을 맞춰야 한다 — 안 그러면 화면 전체를
+   덮은 이 띠가 레버 터치를 다 먹는다 (실제로 먹었다) */
+#hud > .drill-fx {
   position: fixed;
   inset: 0;
   pointer-events: none;

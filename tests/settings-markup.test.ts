@@ -169,3 +169,20 @@ it('배경 지시문이 캔버스 터치를 먹지 않는다', () => {
   expect(drill![2]).toMatch(/pointer-events:\s*none/);
 });
 
+
+it('#hud 안의 화면 덮는 층은 모두 터치를 통과시킨다', () => {
+  // #hud > * { pointer-events: auto } 가 걸려 있어서, 화면을 덮는 자식에 클래스만으로
+  // pointer-events: none 을 주면 덮어써진다. 레버가 안 눌리는 버그가 두 번 났다.
+  const hud = html.slice(html.indexOf('<div id="hud">'));
+  const kids = [...hud.slice(0, hud.indexOf('\n    </div>')).matchAll(/^      <div class="([^"]+)"/gm)].map((m) => m[1].split(' ')[0]);
+  expect(kids.length).toBeGreaterThan(2);
+  const blocks = [...css.matchAll(/([^{}]*)\{([^}]*)\}/g)];
+  for (const cls of kids) {
+    // 그 클래스 자체를 가리키는 규칙만 본다 (자손 선택자의 가상요소 따위는 제외)
+    const own = (sel: string) => sel.trim() === `.${cls}` || sel.trim() === `#hud > .${cls}`;
+    const covers = blocks.some(([, sel, body]) => own(sel) && /inset:\s*0/.test(body));
+    if (!covers) continue;
+    const guarded = blocks.some(([, sel, body]) => sel.trim() === `#hud > .${cls}` && /pointer-events:\s*none/.test(body));
+    expect(guarded, `.${cls} 가 화면을 덮는데 '#hud > .${cls}'의 pointer-events: none 이 없다`).toBe(true);
+  }
+});

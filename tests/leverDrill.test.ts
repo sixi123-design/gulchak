@@ -5,6 +5,7 @@ import { MODES } from '../src/core/ruleEngine';
 import { DigSession, type RulesFile } from '../src/sim/session';
 import { Tutor } from '../src/sim/tutorial';
 import { DRILL, DRILL_START, LEVER_DRILL } from '../src/sim/leverDrill';
+import { MACHINE_STYLES, TUTOR_LOOK } from '../src/render/excavatorView';
 
 const R = rules as unknown as RulesFile;
 const deg = Math.PI / 180;
@@ -212,4 +213,23 @@ it('차체가 들리면 잘못했다는 신호를 올린다', () => {
   const bad0 = t.bag.badN ?? 0;
   run(t, { ry: 1 }, 200); // 계속 누른다
   expect(t.bag.badN).toBe(bad0 + 1);
+});
+
+it('배우기용 겉모습에는 검정이 없다', () => {
+  // 배경이 한 색이라 검정 덩어리가 있으면 글자와 부딪힌다
+  const dark = (c: number) => {
+    const r = (c >> 16) & 255;
+    const g = (c >> 8) & 255;
+    const b = c & 255;
+    return 0.299 * r + 0.587 * g + 0.114 * b < 110;
+  };
+  for (const k of ['lower', 'counterweight', 'rim', 'trim'] as const) {
+    expect(dark(TUTOR_LOOK[k]), `${k}=${TUTOR_LOOK[k].toString(16)}`).toBe(false);
+  }
+  // 상부는 A형과 같은 노랑
+  expect(TUTOR_LOOK.body).toBe(MACHINE_STYLES.A.body);
+});
+
+it('시험장 기종 목록에는 배우기용이 섞이지 않는다', () => {
+  expect(Object.keys(MACHINE_STYLES)).toEqual(['A', 'B', 'C']);
 });

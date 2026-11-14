@@ -5,7 +5,7 @@ import sitesJson from './config/sites.json';
 import { MODES, type ModeKey, type Violation } from './core/ruleEngine';
 import { isLocked, redeem } from './core/entitlement';
 import { bumpRuns, loadRuns, todayKey } from './core/practiceLog';
-import { ExcavatorView, type MachineStyleKey } from './render/excavatorView';
+import { ExcavatorView, type LookKey, type MachineStyleKey } from './render/excavatorView';
 import { FxView, SiteView, SoilView } from './render/siteView';
 import { DigSession, type DigEntry, type RulesFile, type Sticks } from './sim/session';
 import { LESSONS, TIERS, tierProgress, Tutor } from './sim/tutorial';
@@ -95,6 +95,8 @@ let trail: TipTrail | null = null;
 /** 레버 익히기의 튜토리얼 공간 색 (바닥·먼 안개). 회색이 아니라 한 톤 */
 const TUTOR_FLOOR = 0xd7e3ec;
 const TUTOR_SKY = 0xeaf3f8;
+/** 흙 주변 다진 바닥 (원래 0x5e5a55 짙은 회갈색 — 글자가 묻힌다) */
+const TUTOR_GROUND = 0xa79c8e;
 /** 잘했다·잘못했다 연출: 미션이 센 값이 늘어난 만큼만 재생한다 */
 let fxOk = 0;
 let fxBad = 0;
@@ -150,6 +152,8 @@ function disposeTree(o: THREE.Object3D) {
 
 // 장비 유형 (시험장 주력 3계열의 색 조합) — 선택은 기억
 let styleKey: MachineStyleKey = 'A';
+/** 다음 세션을 튜토리얼 공간으로 만들까 (레버 익히기) */
+let tutorLook = false;
 try {
   const v = localStorage.getItem('exc-style');
   if (v === 'A' || v === 'B' || v === 'C') styleKey = v;
@@ -740,7 +744,7 @@ function rebuildMachine() {
   world.remove(exc.root);
   exc.disposeCache();
   disposeTree(exc.root);
-  exc = new ExcavatorView(MACHINE, styleKey);
+  exc = new ExcavatorView(MACHINE, look);
   wireSoilShown();
   world.add(exc.root);
   (window as unknown as { __exc: { exc: ExcavatorView } }).__exc.exc = exc;
@@ -772,7 +776,10 @@ function setStickLabels(k: KindKey) {
   put('stick-l', 0);
   put('stick-r', 4);
 }
+/** 이번 세션에 쓸 장비 겉모습. 레버 익히기는 'T'(검정 없는 밝은 버전) */
+let look: LookKey = 'A';
 function newSession(autoEnd?: boolean) {
+  look = tutorLook ? 'T' : styleKey;
   $('btn-lookwheel').classList.remove('on');
   $('btn-lookmirror').classList.remove('on');
   $('btn-lookfront').classList.add('on');
@@ -796,7 +803,7 @@ function newSession(autoEnd?: boolean) {
   }
   tutor = null;
   renderMission();
-  exc = new ExcavatorView(MACHINE, styleKey);
+  exc = new ExcavatorView(MACHINE, look);
   soilView = new SoilView(session.soil.grids);
   wireSoilShown();
   fx = new FxView();
@@ -1131,6 +1138,7 @@ function startLesson(i: number, again = false, lv = 0) {
 }
 function beginLesson(i: number, again = false, lv = 0) {
   clearTimeout(againTimer);
+  tutorLook = !!curLessons()[i]?.flat;
   guideLv = lv;
   if (!again || i !== lessonIdx) streak = 0;
   lessonIdx = i;
@@ -1146,6 +1154,7 @@ function beginLesson(i: number, again = false, lv = 0) {
   document.body.classList.toggle('flat-bg', !!L.flat);
   if (L.flat) {
     siteView.bare(TUTOR_FLOOR);
+    soilView.setGround(TUTOR_GROUND);
     (scene.fog as THREE.Fog).color.setHex(TUTOR_SKY);
   }
   fxOk = 0;
@@ -1640,6 +1649,7 @@ function beginWork() {
   setTimeout(() => (f.hidden = true), 1100);
 }
 function startMode() {
+  tutorLook = false;
   if (session.flags.key === 'tutorial') return openLessonMap();
   if (needPay(session.flags.key)) return openPaywall(session.flags.key);
   if (matchMedia('(pointer: coarse)').matches) goFullscreen();

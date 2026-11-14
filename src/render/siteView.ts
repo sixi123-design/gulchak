@@ -65,9 +65,9 @@ export class SiteView {
    */
   bare(color: number) {
     for (const c of this.group.children) {
-      const isFloor = c.name === 'floor';
-      c.visible = isFloor;
-      if (!isFloor) continue;
+      const keep = c.name === 'floor' || c.name === 'lines';
+      c.visible = keep;
+      if (c.name !== 'floor') continue;
       const m = (c as THREE.Mesh).material as THREE.MeshLambertMaterial;
       m.color.setHex(color);
     }
@@ -136,11 +136,14 @@ export class SiteView {
     }
     const solidG = new THREE.BufferGeometry();
     solidG.setAttribute('position', new THREE.Float32BufferAttribute(solid, 3));
-    this.group.add(new THREE.LineSegments(solidG, new THREE.LineBasicMaterial({ color: 0xffffff })));
+    const solidL = new THREE.LineSegments(solidG, new THREE.LineBasicMaterial({ color: 0xffffff }));
+    solidL.name = 'lines';
+    this.group.add(solidL);
     const dashG = new THREE.BufferGeometry();
     dashG.setAttribute('position', new THREE.Float32BufferAttribute(dashed, 3));
     const dl = new THREE.LineSegments(dashG, new THREE.LineDashedMaterial({ color: 0x1d1b2e, dashSize: 0.25, gapSize: 0.18 }));
     dl.computeLineDistances();
+    dl.name = 'lines';
     this.group.add(dl);
     const labB = label('B', '#2fd27a');
     labB.position.set(0, site.beta + 2.0, (site.B.rE + site.B.rF) / 2);
@@ -320,6 +323,10 @@ export class SoilView {
   readonly meshes: THREE.Mesh[] = [];
   private base = new THREE.Color(PALETTE.dirt);
   private ground = new THREE.Color(PALETTE.sand);
+  /** 흙 주변 다진 바닥색. 튜토리얼 공간에서는 글자가 잘 보이게 밝게 올린다 */
+  setGround(hex: number) {
+    this.ground.setHex(hex);
+  }
   private dark = new THREE.Color(0x24160c);
   private tmp = new THREE.Color();
   /** 평탄 도움(연습 모드, 첫 덤프 뒤): C 흙을 목표면(지면 0) 대비 높으면 밝게·낮으면 어둡게, 버킷이 고른 자리는 몇 초 매끈한 자국 */
