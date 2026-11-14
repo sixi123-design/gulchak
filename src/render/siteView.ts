@@ -4,6 +4,7 @@ import { stationPoint, type Site } from '../sim/site';
 import type { SoilGrid } from '../sim/soil';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { PALETTE, toon } from './toon';
+import { buildExamSurroundings, EXAM_FLOOR } from './examSite';
 
 /** 줄무늬 텍스처 (세로 반복) */
 function stripes(a: string, b: string) {
@@ -57,7 +58,8 @@ export class SiteView {
   readonly group = new THREE.Group();
   /** A·B·C 글자 표지 (운전석 시점에서는 숨김: 실제 시험장에는 없음) */
   readonly labels: THREE.Sprite[] = [];
-  constructor(site: Site, grids: SoilGrid[]) {
+  /** exam: 실제 시험 모드 배경(시험장)으로 */
+  constructor(site: Site, grids: SoilGrid[], exam = false) {
     // 바닥: 넓은 잔디(작업장 자리는 구멍) + 작업장 흙마당(흙 격자 자리는 구멍)
     // 잔디가 구덩이(-0.5)를 위에서 덮지 않도록 잔디에도 구멍을 낸다
     const yardPts = [
@@ -71,7 +73,8 @@ export class SiteView {
     grassShape.holes.push(new THREE.Path([...yardPts].reverse()));
     const grassG = new THREE.ShapeGeometry(grassShape);
     grassG.rotateX(-Math.PI / 2);
-    const grass = new THREE.Mesh(grassG, new THREE.MeshLambertMaterial({ color: PALETTE.grass }));
+    // 시험 경기장은 잔디 대신 밝은 단색 바닥
+    const grass = new THREE.Mesh(grassG, exam ? toon(EXAM_FLOOR) : new THREE.MeshLambertMaterial({ color: PALETTE.grass }));
     grass.position.y = -0.01;
     this.group.add(grass);
     const yard = new THREE.Shape(yardPts);
@@ -167,7 +170,8 @@ export class SiteView {
     });
     this.group.add(new THREE.Mesh(mergeGeometries(ropeGeos), new THREE.MeshLambertMaterial({ map: stripes('#ff3b3b', '#ffffff') })));
 
-    this.addSurroundings(site);
+    if (exam) this.group.add(buildExamSurroundings(site));
+    else this.addSurroundings(site);
   }
 
   /** 연습용 굴착 목표 표시: ⓑ선 안쪽 30cm 가로줄(버킷 폭) + 구덩이 중심선 + 허용 범위 띠 */
@@ -198,6 +202,42 @@ export class SiteView {
     };
     strip(bucketW + 0.3, 0.06, targetRho, 0, false);
     strip(st.zoneOut - st.pitIn, 0.025, (st.zoneOut + st.pitIn) / 2, 0, true);
+    this.group.add(this.guide);
+  }
+
+  /**
+   * 평탄 기준 줄 (연습 모드): C 구덩이 양옆 끝에 말뚝을 박고 목표면(지면 높이)에 노란 줄을 띄움.
+   * 줄보다 흙이 높으면 줄이 흙에 묻히고, 낮으면 줄 아래로 틈이 보임. 그림만 얹으며 판정·충돌 없음
+   */
+  addFlatGuide(site: Site) {
+    const st = site.stations[1];
+    const P = (rho: number, lat: number, y: number) => {
+      const p = stationPoint(st, rho, lat, y);
+      return new THREE.Vector3(p.x, p.y, p.z);
+    };
+    const stakeMat = new THREE.MeshLambertMaterial({ color: 0xf07a2a });
+    const capMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    const lineMat = new THREE.MeshBasicMaterial({ color: 0xffd23a });
+    const r0 = st.pitIn - 0.25;
+    const r1 = st.pitOut + 0.25;
+    for (const side of [-1, 1]) {
+      const lat = side * (st.pitHalfW + 0.04);
+      for (const rho of [r0, r1]) {
+        const stake = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.42, 0.05), stakeMat);
+        stake.position.copy(P(rho, lat, 0.21));
+        const cap = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.06, 0.055), capMat);
+        cap.position.copy(P(rho, lat, 0.39));
+        this.guide.add(stake, cap);
+      }
+      // 줄: 목표면보다 1cm 위 (흙이 딱 맞으면 줄이 흙에 거의 닿음)
+      const a = P(r0, lat, 0.01);
+      const b = P(r1, lat, 0.01);
+      const line = new THREE.Mesh(new THREE.BoxGeometry(a.distanceTo(b), 0.014, 0.014), lineMat);
+      line.position.copy(a).add(b).multiplyScalar(0.5);
+      line.lookAt(b);
+      line.rotateY(Math.PI / 2);
+      this.guide.add(line);
+    }
     this.group.add(this.guide);
   }
 
@@ -263,10 +303,24 @@ export class SoilView {
   readonly meshes: THREE.Mesh[] = [];
   private base = new THREE.Color(PALETTE.dirt);
   private ground = new THREE.Color(PALETTE.sand);
-  private dark = new THREE.Color(0x1f1915);
+  private dark = new THREE.Color(0x24160c);
   private tmp = new THREE.Color();
+  /** 평탄 도움(연습 모드, 첫 덤프 뒤): C 흙을 목표면(지면 0) 대비 높으면 밝게·낮으면 어둡게, 버킷이 고른 자리는 몇 초 매끈한 자국 */
+  flatGuide = false;
+  /** 시뮬 시각 (긁은 자국이 바래는 기준) */
+  now = 0;
+  private flatGuidePrev = false;
+  private high = new THREE.Color(0xe3b479);
+  private low = new THREE.Color(0x3a2414);
+  private smooth = new THREE.Color(0x8a5a32);
+  /** 화면에 올라간 높이 (격자별). 날 앞 흙더미가 같은 높이 위에 놓이도록 */
+  private shown = new Map<SoilGrid, Float32Array>();
+  shownOf(g: SoilGrid): ArrayLike<number> {
+    return this.shown.get(g) ?? g.h;
+  }
   constructor(private grids: SoilGrid[]) {
     for (const g of grids) {
+      this.shown.set(g, Float32Array.from(g.h));
       const n = g.nx * g.nz;
       const pos = new Float32Array(n * 3);
       for (let j = 0; j < g.nz; j++)
@@ -287,26 +341,52 @@ export class SoilView {
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
       geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+      geo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
       geo.setIndex(idx);
       const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
       this.meshes.push(mesh);
       g.dirty = true;
     }
   }
+  /**
+   * 바뀐 흙판만 화면 모양에 반영. 흙 판정·움직임은 시뮬레이션이 초당 60번 하고, 보이는 모양은 초당 약 20번만 갱신 (저가폰 부담 1/3).
+   * 빛 받는 방향(노멀)은 범용 삼각형 계산 대신 격자의 옆 칸 높이 차로 같은 반복문에서 바로 구함.
+   */
+  private lastSync = -1e9;
   sync() {
+    const now = performance.now();
+    if (now - this.lastSync < 45) return;
+    this.lastSync = now;
+    const TRAIL = 6; // 긁은 자국이 남는 시간 (초)
+    if (this.flatGuide !== this.flatGuidePrev) {
+      this.flatGuidePrev = this.flatGuide;
+      for (const g of this.grids) if (g.name === 'C') g.dirty = true;
+    }
     this.grids.forEach((g, gi) => {
+      const guide = this.flatGuide && g.name === 'C';
+      // 자국이 바래는 동안은 계속 다시 칠함
+      if (guide && this.now - g.touchLast < TRAIL + 0.1) g.dirty = true;
       if (!g.dirty) return;
       g.dirty = false;
       const geo = this.meshes[gi].geometry;
       const pos = geo.getAttribute('position') as THREE.BufferAttribute;
       const col = geo.getAttribute('color') as THREE.BufferAttribute;
-      const { h, h0, floor, nx, nz } = g;
+      const nrm = geo.getAttribute('normal') as THREE.BufferAttribute;
+      const { h, h0, nx, nz } = g;
+      const shown = this.shown.get(g)!;
+      const inv2c = 1 / (2 * g.cell);
       for (let j = 0; j < nz; j++)
         for (let i = 0; i < nx; i++) {
           const k = j * nx + i;
           pos.setY(k, h[k]);
-          void floor;
-          if (Math.abs(h[k] - h0[k]) < 0.003 && h0[k] === 0) {
+          shown[k] = h[k];
+          // 노멀: (-dh/dx, 1, -dh/dz) (가장자리는 한쪽 차이)
+          const hx = ((i < nx - 1 ? h[k + 1] : h[k]) - (i > 0 ? h[k - 1] : h[k])) * (i > 0 && i < nx - 1 ? inv2c : 2 * inv2c);
+          const hz = ((j < nz - 1 ? h[k + nx] : h[k]) - (j > 0 ? h[k - nx] : h[k])) * (j > 0 && j < nz - 1 ? inv2c : 2 * inv2c);
+          const il = 1 / Math.sqrt(hx * hx + 1 + hz * hz);
+          nrm.setXYZ(k, -hx * il, il, -hz * il);
+          const inPit = guide && g.pit[k] > 0;
+          if (Math.abs(h[k] - h0[k]) < 0.003 && h0[k] === 0 && !inPit) {
             col.setXYZ(k, this.ground.r, this.ground.g, this.ground.b);
             continue;
           }
@@ -314,14 +394,47 @@ export class SoilView {
           const nb =
             (i > 0 ? h[k - 1] : h[k]) + (i < nx - 1 ? h[k + 1] : h[k]) + (j > 0 ? h[k - nx] : h[k]) + (j < nz - 1 ? h[k + nx] : h[k]);
           const lap = h[k] - nb / 4;
-          const depthShade = Math.min(1, Math.max(0, -h[k] / 1.6));
-          this.tmp.copy(this.base).lerp(this.dark, depthShade * 0.6);
-          const s = THREE.MathUtils.clamp(1 + lap * 8, 0.7, 1.25);
+          // 깊을수록 어둡게, 오목·볼록은 더 또렷하게 (바닥·흙더미·구덩이 구분)
+          const depthShade = Math.min(1, Math.max(0, -h[k] / 1.4));
+          this.tmp.copy(this.base).lerp(this.dark, depthShade * 0.7);
+          // 이빨 골(10cm 안팎) 같은 잔물결은 은은하게: 너무 세면 줄무늬가 솟은 손가락처럼 보임
+          let s = THREE.MathUtils.clamp(1 + lap * 6, 0.8, 1.2);
+          if (inPit) {
+            // 목표면(0) 대비: ±4cm까지는 그대로, 그 위는 밝게(높음), 아래는 어둡게(낮음)
+            const d = h[k];
+            if (d > 0.04) this.tmp.lerp(this.high, Math.min(1, (d - 0.04) / 0.2) * 0.6);
+            else if (d < -0.04) this.tmp.lerp(this.low, Math.min(1, (-d - 0.04) / 0.25) * 0.6);
+            // 방금 버킷이 고른 자리: 매끈하게 다져진 색, 잔물결 없음 → 천천히 원래대로
+            const age = this.now - g.touch[k];
+            if (age >= 0 && age < TRAIL) {
+              const w = 1 - age / TRAIL;
+              this.tmp.lerp(this.smooth, 0.45 * w);
+              s += (1 - s) * w;
+            }
+          }
           col.setXYZ(k, this.tmp.r * s, this.tmp.g * s, this.tmp.b * s);
         }
+      // 칸마다 높이 차가 작은 대각선으로 삼각형을 나눔: 비스듬한 구덩이 벽이 톱니(뾰족한 손가락)처럼 보이지 않게
+      const index = geo.getIndex()!;
+      const ia = index.array as Uint16Array | Uint32Array;
+      let q = 0;
+      for (let j = 0; j < nz - 1; j++)
+        for (let i = 0; i < nx - 1; i++) {
+          const a = j * nx + i;
+          const b = a + 1;
+          const c = a + nx;
+          const d = c + 1;
+          if (Math.abs(h[a] - h[d]) < Math.abs(h[b] - h[c])) {
+            ia[q] = a; ia[q + 1] = c; ia[q + 2] = d; ia[q + 3] = a; ia[q + 4] = d; ia[q + 5] = b;
+          } else {
+            ia[q] = a; ia[q + 1] = c; ia[q + 2] = b; ia[q + 3] = b; ia[q + 4] = c; ia[q + 5] = d;
+          }
+          q += 6;
+        }
+      index.needsUpdate = true;
       pos.needsUpdate = true;
       col.needsUpdate = true;
-      geo.computeVertexNormals();
+      nrm.needsUpdate = true;
     });
   }
 }
@@ -346,15 +459,23 @@ export class FxView {
   private scl = new THREE.Vector3();
   private puffs: { x: number; y: number; z: number; age: number; life: number; size: number }[] = [];
   private lastT = performance.now();
+  /** 흙 알갱이·먼지 예열 남은 프레임 (warm으로 다시 켬) */
+  private warmFrames = 0;
+  private warmAt = new THREE.Vector3();
+  /** at = 화면에 확실히 보이는 월드 위치 (카메라 바로 앞) */
+  warm(at: THREE.Vector3) {
+    this.warmAt.copy(at);
+    this.warmFrames = 3;
+  }
   constructor() {
     this.particles = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(0.06, 0), toon(0xffffff).clone(), MAX_P * CLUMPS);
     this.particles.count = 0;
     this.particles.frustumCulled = false;
     // 흙 덩어리 색: 마른 황토 / 젖은 짙은 흙 / 모래빛 섞기
-    const tones = [new THREE.Color(PALETTE.dirt), new THREE.Color(0x2a221d), new THREE.Color(0x52443a)];
+    const tones = [new THREE.Color(PALETTE.dirt), new THREE.Color(0x5c3a22), new THREE.Color(0xa8763f)];
     for (let i = 0; i < MAX_P * CLUMPS; i++) this.particles.setColorAt(i, tones[Math.floor(hash(i * 3.1) * 3)]);
     // 젖은 흙: 먼지 대신 어두운 흙 튐이 살짝
-    const dustMat = new THREE.MeshBasicMaterial({ color: 0x3a2f28, transparent: true, opacity: 0.25, depthWrite: false });
+    const dustMat = new THREE.MeshBasicMaterial({ color: 0x5a3f2c, transparent: true, opacity: 0.25, depthWrite: false });
     this.dust = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.5, 0), dustMat, MAX_DUST);
     this.dust.count = 0;
     this.dust.frustumCulled = false;
@@ -414,6 +535,26 @@ export class FxView {
       this.q.identity();
       this.mtx.compose(this.pos, this.q, this.scl);
       this.dust.setMatrixAt(d++, this.mtx);
+    }
+    // 예열: 시작 직후 몇 프레임 동안 버킷 끝 근처에 흙 알갱이·먼지 하나씩을 실제 크기로 그려 둠.
+    // 처음 그릴 때 그래픽 드라이버가 셰이더를 마저 준비하느라 처음 흙을 쏟는 순간 한 프레임이 끊겼음
+    if (this.warmFrames > 0 && (k === 0 || d === 0)) {
+      this.warmFrames--;
+      this.pos.copy(this.warmAt);
+      this.q.identity();
+      this.scl.set(1, 1, 1);
+      this.mtx.compose(this.pos, this.q, this.scl);
+      if (k === 0) {
+        this.particles.setMatrixAt(0, this.mtx);
+        this.particles.count = 1;
+      }
+      if (d === 0) {
+        // 먼지는 반지름 0.5m라 그대로면 카메라 앞에 번쩍임 → 작게 (몇 픽셀만 칠해지면 됨)
+        this.scl.set(0.08, 0.08, 0.08);
+        this.mtx.compose(this.pos, this.q, this.scl);
+        this.dust.setMatrixAt(0, this.mtx);
+        d = 1;
+      }
     }
     this.dust.count = d;
     this.dust.instanceMatrix.needsUpdate = true;

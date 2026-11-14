@@ -7,12 +7,12 @@ export const PALETTE = {
   steel: 0x3a3850,
   glass: 0x8fe3ff,
   tire: 0x2b2a3a,
-  dirt: 0x3d322b, // 흙: 시험장은 거의 검은 흙
+  dirt: 0x8c5a32, // 흙: 따뜻한 갈색 (판 흙·흙더미, 바닥보다 밝고 붉게)
   yard: 0xbfbdb6, // 포장 바닥 (콘크리트)
-  sand: 0x5b4d42, // 굴착장 다진 흙 (어두운)
-  rust: 0x6b4a36, // 버킷 몸체
-  rustDark: 0x3b2f2a,
-  metal: 0xc8c2b8,
+  sand: 0x5e5a55, // 굴착장 다진 바닥 (회갈색, 흙보다 어둡고 덜 붉게)
+  rust: 0xb4b8bd, // 버킷 몸체: 밝은 회색 (흙과 구분)
+  rustDark: 0x8d9298,
+  metal: 0xe6e8ea, // 이빨·날
   cabin: 0x24232e, // 운전석 내부 프레임
   grass: 0x9bd36a,
   rope: 0xff7a1a,
@@ -22,7 +22,7 @@ export const PALETTE = {
 };
 
 let gradient: THREE.DataTexture | null = null;
-function gradientMap() {
+export function gradientMap() {
   if (gradient) return gradient;
   const data = new Uint8Array([110, 110, 110, 255, 185, 185, 185, 255, 255, 255, 255, 255]);
   gradient = new THREE.DataTexture(data, 3, 1, THREE.RGBAFormat);
