@@ -10,6 +10,7 @@ import { FxView, SiteView, SoilView } from './render/siteView';
 import { DigSession, type DigEntry, type RulesFile, type Sticks } from './sim/session';
 import { LESSONS, TIERS, tierProgress, Tutor } from './sim/tutorial';
 import { BASIC_LESSONS } from './sim/leverSchool';
+import { SpotMark } from './render/spotMark';
 import { TipTrail } from './render/tipTrail';
 import { ik, toWorld } from './sim/kinematics';
 import { gaugeLevel, Joystick, KEY_ACTIONS, keyName, Keys } from './ui/joystick';
@@ -92,6 +93,8 @@ let siteView: SiteView;
 let fx: FxView;
 let world = new THREE.Group();
 let trail: TipTrail | null = null;
+/** 땅에 놓는 "여기를 파세요" 표식 (단계가 자리를 정해 준다) */
+let spot: SpotMark | null = null;
 /** 레버 익히기의 튜토리얼 공간 색 (바닥·먼 안개). 회색이 아니라 한 톤 */
 const TUTOR_FLOOR = 0xd7e3ec;
 const TUTOR_SKY = 0xeaf3f8;
@@ -788,15 +791,19 @@ function newSession(autoEnd?: boolean) {
   drive?.dispose();
   drive = null;
   exc?.disposeCache();
-  // 이빨 경로 선은 world에 붙어 있으니 world를 버리기 전에 정리한다
+  // 이빨 경로 선·땅 표식은 world에 붙어 있으니 world를 버리기 전에 정리한다
   trail?.dispose();
   trail = null;
+  spot?.dispose();
+  spot = null;
   scene.remove(world);
   disposeTree(world);
   world = new THREE.Group();
   scene.add(world);
   trail = new TipTrail();
   world.add(trail.object);
+  spot = new SpotMark();
+  world.add(spot.object);
   session = new DigSession(MACHINE, RULES, modeKey === 'tutorial' ? { ...MODES.tutorial, autoEnd: !!autoEnd } : MODES[modeKey]);
   // 시험·연습: 마지막 자세(버킷 끝까지 펴서 내려놓기) 그대로 A 흙 위에서 시작 (배우기는 단계마다 자세를 따로 잡음)
   if (modeKey !== 'tutorial') {
@@ -953,6 +960,14 @@ function updateCamera(dt: number) {
     pos.set(0, 15, -9.5);
     look.set(0, 0, 1.2);
   }
+  // 운전석 안에서 **시선만** 내려 땅을 보여 준다 (차 밖으로 나가지 않는다).
+  // 1.5초: 0.2초 내려가고, 1.0초 머물고, 0.3초 올라온다. 화면을 누르면 즉시 끝난다.
+  if (peekT > 0) {
+    peekT = Math.max(0, peekT - dt);
+    const done = PEEK_SEC - peekT;
+    const amt = done < 0.2 ? done / 0.2 : peekT < 0.3 ? peekT / 0.3 : 1;
+    look.y -= PEEK_DROP * amt;
+  }
   exc.setCabView(camMode === 'cab');
   for (const l of siteView.labels) l.visible = camMode !== 'cab';
   // 화각: 운전석은 넓게(가로 약 95°), 세로 화면이면 더 넓힘
@@ -989,6 +1004,16 @@ function updateCamera(dt: number) {
 // ---------- 배우기: 스테이지 맵 → 미션 → CLEAR ----------
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let tutor: Tutor<any> | null = null;
+/** 운전석에서 시선을 내려 땅을 보는 연출 */
+const PEEK_SEC = 1.5;
+const PEEK_DROP = 2.6;
+let peekT = 0;
+/** 땅을 한 번 보여 준다 (운전석 안에서 시선만 내린다) */
+export function peekGround() {
+  peekT = PEEK_SEC;
+}
+/** 화면을 누르면 건너뛴다 */
+addEventListener('pointerdown', () => (peekT = 0), true);
 /** 지금 종목의 배우기 미션 */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 // 굴착 배우기: 기본기 과정이 먼저, 그 뒤가 기존 기초·숙련
