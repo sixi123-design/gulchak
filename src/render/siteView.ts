@@ -3,6 +3,7 @@ import type { DigSession } from '../sim/session';
 import { stationPoint, type Site } from '../sim/site';
 import type { SoilGrid } from '../sim/soil';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { current as qNow, fxPlan } from '../ui/quality';
 import { PALETTE, toon } from './toon';
 import { buildExamSurroundings, EXAM_FLOOR } from './examSite';
 
@@ -470,9 +471,10 @@ export class SoilView {
 }
 
 /** 떨어지는 흙 덩어리 + 떨어진 자리 먼지 + 버킷 그림자 */
-const CLUMPS = 3; // 입자 하나를 덩어리 3개로 그림
-const MAX_P = 160;
-const MAX_DUST = 40;
+// 미리 잡아 두는 자리는 가장 높은 단계 기준. 실제로 그리는 수는 화질 단계가 정한다 (fxPlan)
+const CLUMPS = fxPlan(2).clumps;
+const MAX_P = fxPlan(2).particles;
+const MAX_DUST = fxPlan(2).dust;
 const hash = (n: number) => {
   const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
   return x - Math.floor(x);
@@ -523,12 +525,14 @@ export class FxView {
     this.lastT = now;
     const tsec = now / 1000;
     // 떨어지는 흙: 입자 하나 = 크기·색이 다른 덩어리 3개, 굴러 떨어지며 회전
-    const n = Math.min(s.particles.length, MAX_P);
+    // 저가폰에서는 알갱이를 적게, 덩어리도 하나만 그린다. 흘린 양·문구 판정은 그대로다
+    const plan = fxPlan(qNow().level);
+    const n = Math.min(s.particles.length, plan.particles);
     let k = 0;
     for (let i = 0; i < n; i++) {
       const pt = s.particles[i];
       const big = Math.cbrt(Math.max(pt.vol, 0.0005) / 0.004);
-      for (let j = 0; j < CLUMPS; j++) {
+      for (let j = 0; j < plan.clumps; j++) {
         const h = pt.id * 7 + j;
         const sz = (0.7 + hash(h) * 0.9) * THREE.MathUtils.clamp(big, 0.5, 1.6);
         this.pos.set(
@@ -552,7 +556,7 @@ export class FxView {
       const size = THREE.MathUtils.clamp(0.35 + Math.cbrt(ev.vol) * 2.2, 0.4, 1.3);
       const near = this.puffs.find((p) => p.age < 0.25 && Math.hypot(p.x - ev.p.x, p.z - ev.p.z) < 0.5);
       if (near) near.size = Math.min(1.6, near.size + size * 0.15);
-      else if (this.puffs.length < MAX_DUST) this.puffs.push({ x: ev.p.x, y, z: ev.p.z, age: 0, life: 0.9 + Math.random() * 0.5, size });
+      else if (this.puffs.length < plan.dust) this.puffs.push({ x: ev.p.x, y, z: ev.p.z, age: 0, life: 0.9 + Math.random() * 0.5, size });
     }
     s.landEvents.length = 0;
     let d = 0;

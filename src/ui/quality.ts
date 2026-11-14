@@ -14,6 +14,19 @@ export const Q: Record<QLevel, { label: string; dprCap: number; aa: boolean; fx:
   2: { label: '선명하게', dprCap: 2, aa: true, fx: 1.4 },
 };
 
+/**
+ * 단계별 연출 예산. **판정은 이 값과 무관하다** — 덜컹·흙량 손해·흘림 문구는 어느 기기에서나 같고,
+ * 여기서 줄이는 것은 눈에 보이는 연출뿐이다 (저가폰이 1순위).
+ *
+ * `fx`는 예전에 선언만 해 두고 아무 데서도 쓰지 않았다. 이 함수가 그 자리를 대신한다.
+ */
+export function fxPlan(level: QLevel): { particles: number; clumps: number; dust: number } {
+  // 0단: 흙 알갱이를 덩어리 하나로만, 먼지는 끈다 (그릴 인스턴스 40개)
+  if (level === 0) return { particles: 40, clumps: 1, dust: 0 };
+  if (level === 1) return { particles: 160, clumps: 3, dust: 40 };
+  return { particles: 220, clumps: 3, dust: 60 };
+}
+
 const KEY = 'exc-q';
 
 export function loadQuality(): QLevel | 'auto' {
