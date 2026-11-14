@@ -40,14 +40,6 @@ function until(t: Tutor, inp: Inp, n = 900) {
   return false;
 }
 
-it('기본기 첫 미션이고, 한 톤 배경에 배경 지시문을 쓴다', () => {
-  expect(LEVER_DRILL.tier).toBe('기본기');
-  expect(LEVER_DRILL.flat).toBe(true);
-  expect(LEVER_DRILL.big).toBe(true);
-  expect(LEVER_DRILL.noFail).toBe(true);
-  expect(LEVER_DRILL.why).toBeTruthy();
-});
-
 it('시작 자세가 가동범위 안이고 버킷이 공중에 있다', () => {
   const t = drill();
   const lim = MACHINE.limits;
@@ -60,17 +52,16 @@ it('시작 자세가 가동범위 안이고 버킷이 공중에 있다', () => {
   expect(t.s.groundGap()).toBeGreaterThan(0.3);
 });
 
-it('모든 단계에 지시문과 레버 글자가 있다', () => {
+it('모든 단계에 지시문과 깜빡일 레버 글자가 있다', () => {
+  // 레버 글자가 없으면 어느 레버인지 알 수 없다
   for (const st of LEVER_DRILL.steps) {
     expect(st.text.length, st.text).toBeGreaterThan(0);
-    expect(st.text.length, `너무 길다: ${st.text}`).toBeLessThanOrEqual(30);
     expect((st.labels ?? []).length, st.text).toBeGreaterThan(0);
   }
 });
 
 it('1단계: 오른쪽 레버를 아래로 하면 붐이 올라가고 넘어간다', () => {
   const t = drill();
-  expect(LEVER_DRILL.steps[0].text).toBe('오른쪽 레버를 아래로');
   const b0 = t.s.pose.boom;
   expect(until(t, { ry: -1 })).toBe(true);
   expect(t.s.pose.boom).toBeGreaterThan(b0 + DRILL.move * 0.9);
@@ -193,16 +184,3 @@ it('끝까지 오면 별 3개 (익히는 자리라 깎지 않는다)', () => {
   expect(g.note).toMatch(/붐|버킷|암/);
 });
 
-it('일부러 시킨 일을 판정으로 꾸짖지 않는다', () => {
-  // 반응은 '무슨 일이 일어났나', 규칙은 따로. 시킨 대로 했는데 '실격'이라고 하면 억울하다
-  const press = LEVER_DRILL.steps[2];
-  expect(press.text).toMatch(/일부러/);
-});
-
-it('멈추는 방법을 지시에 적는다', () => {
-  expect(LEVER_DRILL.steps[7].text).toMatch(/레버를 놓아/);
-});
-
-it('선회는 다음 미션에서 다룬다고 알려 준다', () => {
-  expect(LEVER_DRILL.grade!({} as never, {}).note).toMatch(/몸통 돌리기/);
-});

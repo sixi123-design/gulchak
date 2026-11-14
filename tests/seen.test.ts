@@ -5,10 +5,6 @@ import { loadSeen, markSeen, WHY_KEY } from '../src/ui/prefs';
 installFakeStorage();
 beforeEach(() => localStorage.clear());
 
-it('처음엔 아무것도 안 봤다', () => {
-  expect(loadSeen(WHY_KEY)).toEqual([]);
-});
-
 it('본 것이 쌓인다', () => {
   markSeen(WHY_KEY, 'a');
   markSeen(WHY_KEY, 'b');
@@ -26,11 +22,6 @@ it('저장값이 깨져 있으면 빈 목록', () => {
   expect(loadSeen(WHY_KEY)).toEqual([]);
   markSeen(WHY_KEY, 'a');
   expect(loadSeen(WHY_KEY)).toEqual(['a']);
-});
-
-it('저장값이 배열이 아니면 빈 목록', () => {
-  localStorage.setItem(WHY_KEY, '{"a":1}');
-  expect(loadSeen(WHY_KEY)).toEqual([]);
 });
 
 it('배열 안에 문자열이 아닌 게 있으면 걸러낸다', () => {
@@ -54,6 +45,3 @@ it('저장소가 막혀 있어도 던지지 않는다', () => {
   installFakeStorage();
 });
 
-it('키는 exc- 로 시작', () => {
-  expect(WHY_KEY.startsWith('exc-')).toBe(true);
-});

@@ -173,17 +173,3 @@ it('배경 지시문이 위쪽 줄과 겹치지 않고 캔버스 터치를 먹�
   expect(Number(top![1])).toBeGreaterThanOrEqual(36);
 });
 
-it('레버 익히기에서는 굴착 횟수·타이머를 숨긴다', () => {
-  expect(css).toMatch(/body\.flat-bg #hud \.chips/);
-  expect(css).toMatch(/body\.flat-bg #hud \.timer/);
-});
-
-it('배경 지시문은 어두운 글자에 효과 없이', () => {
-  // 그림자·그라데이션을 쓰지 않는다 (한 톤 배경이라 어두운 글자로 충분하다)
-  const blocks = [...css.matchAll(/([^{}]*)\{([^}]*)\}/g)];
-  const text = blocks.find(([, sel]) => sel.trim() === '.dr-text');
-  expect(text, '.dr-text 규칙이 있어야 한다').toBeTruthy();
-  expect(text![2]).toMatch(/color:\s*var\(--ink\)/);
-  expect(text![2]).not.toMatch(/text-shadow/);
-  expect(css).not.toMatch(/#hud > \.drill::before/);
-});

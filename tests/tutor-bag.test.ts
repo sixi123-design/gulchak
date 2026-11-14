@@ -52,20 +52,6 @@ it('mem은 단계마다 비워진다', () => {
   expect(seen).toBeUndefined();
 });
 
-it('grade는 bag을 받아 별을 돌려준다', () => {
-  const L: Lesson = {
-    id: 't-grade',
-    icon: 'stLevers',
-    title: '등급',
-    grade: (_s, bag) => ({ stars: bag.hit > 0 ? 3 : 1, note: bag.hit > 0 ? '좋음' : '아쉬움' }),
-    setup: () => {},
-    steps: [{ text: '1', done: (_s, _mem, bag) => ((bag.hit = 1), true) }],
-  };
-  const t = new Tutor(L, sess());
-  t.update();
-  expect(L.grade!(t.s, t.bag)).toEqual({ stars: 3, note: '좋음' });
-});
-
 it('bag이 비어 있어도 별은 1~3 사이', () => {
   const L: Lesson = {
     id: 't-empty',

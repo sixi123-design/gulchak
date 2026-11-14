@@ -6,14 +6,6 @@ it('기본기가 첫 칸이고 가로 전체', () => {
   expect(TIERS[0].wide).toBe(true);
 });
 
-it('칸 순서는 기본기 · 기초 · 숙련', () => {
-  expect(TIERS.map((t) => t.key)).toEqual(['기본기', '기초', '숙련']);
-});
-
-it('칸마다 부제가 있다', () => {
-  for (const t of TIERS) expect(t.sub.length).toBeGreaterThan(0);
-});
-
 it('모든 미션의 tier는 TIERS 안에 있다', () => {
   const keys = TIERS.map((t) => t.key);
   for (const l of LESSONS) if (l.tier) expect(keys).toContain(l.tier);

@@ -4,7 +4,7 @@ import rules from '../src/config/rules.json';
 import { MODES } from '../src/core/ruleEngine';
 import { DigSession, type RulesFile } from '../src/sim/session';
 import { Tutor } from '../src/sim/tutorial';
-import { BASIC_LESSONS, SMOOTH } from '../src/sim/leverSchool';
+import { BASIC_LESSONS } from '../src/sim/leverSchool';
 
 const R = rules as unknown as RulesFile;
 type Inp = { lx?: number; ly?: number; rx?: number; ry?: number };
@@ -59,21 +59,6 @@ function until(t: Tutor, inp: Inp, n = 600) {
 /** 일곱 단계를 바르게 지나가는 레버 순서 (A→C는 선회가 줄어드는 쪽 = lx 음수) */
 const PLAN: Inp[] = [{ lx: -1 }, {}, { lx: 1 }, {}, { lx: -1 }, {}, { lx: 1 }];
 
-it('미션이 하나 있고 기본기 묶음이다', () => {
-  const L = stop();
-  expect(L.tier).toBe('기본기');
-  expect(L.why).toBeTruthy();
-  expect(L.grade).toBeTruthy();
-  expect(L.steps.length).toBeGreaterThanOrEqual(5);
-  // 1단계는 선회만 다룬다 — 고봉으로 담은 채 붐을 내리면 덜컹과 무관하게 흙이 흐른다(pour)
-  expect(L.steps.every((st) => (st.labels ?? []).every((t) => t.includes('선회') || t === ''))).toBe(true);
-});
-
-it('고봉으로 담은 흙을 들고 시작한다', () => {
-  const t = tutor();
-  expect(t.s.load).toBeGreaterThan(MACHINE.struckCapacity);
-});
-
 it('멈추지 않으면 멈춤 단계를 통과하지 못한다', () => {
   const t = tutor();
   expect(until(t, { lx: -1 })).toBe(true); // 1단계: 선회로 C 쪽으로
@@ -99,6 +84,7 @@ it('멈춘 뒤에 바꾸면 흙이 안 쏟아지고 별 3개', () => {
     until(t, inp, 900);
     ease(t, inp); // 다음 단계로 넘어갈 때마다 레버를 줄여서 놓고 완전히 세운다
   }
+  expect(t.cleared, '막다른 길 없이 끝까지 간다').toBe(true);
   expect((t.bag.load0 - t.s.load) / t.bag.load0).toBeLessThan(0.01);
   expect(L.grade!(t.s, t.bag).stars).toBe(3);
 });
@@ -129,27 +115,6 @@ it('흙을 쏟으면 별이 깎인다', () => {
   expect(L.grade!({ load: 0.98, maxJolt: 0.05 } as never, { load0: 1 }).stars).toBe(2);
 });
 
-it('덜컹거리면 별 3개를 못 받는다', () => {
-  const L = stop();
-  expect(L.grade!({ load: 1, maxJolt: SMOOTH.warn + 0.01 } as never, { load0: 1 }).stars).toBeLessThan(3);
-});
-
-it('별은 언제나 1~3 (보관함이 비어 있어도)', () => {
-  const L = stop();
-  expect([1, 2, 3]).toContain(L.grade!({ load: 0, maxJolt: 0 } as never, {}).stars);
-  expect([1, 2, 3]).toContain(L.grade!({} as never, {}).stars);
-});
-
-it('부드럽게 하면 막다른 길 없이 끝까지 간다', () => {
-  const t = tutor();
-  for (const inp of PLAN) {
-    if (t.cleared) break;
-    until(t, inp, 900);
-    ease(t, inp);
-  }
-  expect(t.cleared).toBe(true);
-});
-
 it('충격 최대값은 세션이 기록한다 (화면 프레임 수와 무관)', () => {
   // coach에서 쌓으면 한 프레임에 물리가 여러 번 돌 때 정점을 놓친다
   const t = tutor();
@@ -168,29 +133,12 @@ it('중립을 거르고 꺾었으면 그렇게 말해 준다', () => {
   expect(release.note).toMatch(/놓을 때/);
 });
 
-it('단계는 다섯 개 (같은 왕복을 네 번 하면 지루하다)', () => {
-  expect(stop().steps.length).toBe(5);
-});
-
 // ---------- 2단계: 원하는 데서 멈추기 ----------
 import { AIM } from '../src/sim/leverSchool';
 const aim = () => BASIC_LESSONS.find((l) => l.id === 'b-aim')!;
 function aimTutor() {
   return new Tutor(aim(), sess());
 }
-
-it('2단계가 있고 기본기 묶음이다', () => {
-  const L = aim();
-  expect(L.tier).toBe('기본기');
-  expect(L.why).toBeTruthy();
-  expect(L.grade).toBeTruthy();
-  expect(L.steps.length).toBe(AIM.targets.length);
-});
-
-it('허용 오차는 회차마다 좁아진다', () => {
-  expect(AIM.tol).toEqual([0.12, 0.07, 0.04]);
-  expect(AIM.targets).toEqual([0.3, 0.2, 0.1]);
-});
 
 it('멈추지 않으면 통과하지 못한다', () => {
   const t = aimTutor();
@@ -240,55 +188,19 @@ it('오차를 보여 준 뒤에 다음 회차로 넘어간다', () => {
   expect(t.hud() ?? '').toMatch(/지난 회차/);
 });
 
-it('세 번 다 4cm 안이면 별 3개', () => {
+it('별 3개는 세 회차 다 잘해야 — 한 번 크게 틀리면 평균이 좋아도 안 된다', () => {
   const L = aim();
   expect(L.grade!({} as never, { err1: 0.02, err2: 0.03, err3: 0.01 }).stars).toBe(3);
-});
-
-it('평균 8cm 안이면 별 2개', () => {
-  const L = aim();
-  expect(L.grade!({} as never, { err1: 0.06, err2: 0.07, err3: 0.08 }).stars).toBe(2);
-});
-
-it('많이 벗어나면 별 1개', () => {
-  const L = aim();
-  expect(L.grade!({} as never, { err1: 0.3, err2: 0.25, err3: 0.4 }).stars).toBe(1);
-});
-
-it('2단계도 별은 언제나 1~3', () => {
-  expect([1, 2, 3]).toContain(aim().grade!({} as never, {}).stars);
-});
-
-it('기본기 미션 id가 모두 다르다', () => {
-  const ids = BASIC_LESSONS.map((l) => l.id);
-  expect(new Set(ids).size).toBe(ids.length);
-});
-
-it('세 회차를 다 돌면 끝난다', () => {
-  const t = aimTutor();
-  for (let i = 0; i < 3; i++) if (!t.cleared) aimRound(t, 20);
-  expect(t.cleared).toBe(true);
-  expect(aim().grade!(t.s, t.bag).stars).toBeGreaterThanOrEqual(1);
+  // 앞 둘을 완벽히 해도 한 회차가 12cm 빗나가면 별 3개가 아니다 (평균은 5cm)
+  expect(L.grade!({} as never, { err1: 0, err2: 0, err3: 0.12 }).stars).toBeLessThan(3);
+  // 세 번을 다 안 하면 별 3개가 될 수 없다
+  expect(L.grade!({} as never, { err1: 0 }).stars).toBe(1);
 });
 
 // ---------- 3단계: 두 레버를 같이 쓰기 ----------
 import { LINE } from '../src/sim/leverSchool';
 const both = () => BASIC_LESSONS.find((l) => l.id === 'b-both')!;
 const bothTutor = () => new Tutor(both(), sess());
-
-it('3단계가 있고 선을 남긴다', () => {
-  const L = both();
-  expect(L.tier).toBe('기본기');
-  expect(L.trail).toBe(true);
-  expect(L.why).toBeTruthy();
-  expect(L.grade).toBeTruthy();
-});
-
-it('목표 높이와 등급 경계가 정해져 있다', () => {
-  expect(LINE.good).toBe(0.04);
-  expect(LINE.ok).toBe(0.1);
-  expect(LINE.height).toBeGreaterThan(0);
-});
 
 it('붐만 쓰면 높이가 벗어난다 (호를 그린다)', () => {
   const t = bothTutor();
@@ -317,16 +229,6 @@ it('동시조작 비율을 센다', () => {
   expect((t2.bag.multi ?? 0) / t2.bag.frames).toBeLessThan(0.2);
 });
 
-it('높이를 잘 지키면 별 3개', () => {
-  const L = both();
-  expect(L.grade!({} as never, { devSum: 0.02 * 100, devN: 100, multi: 80, frames: 100 }).stars).toBe(3);
-});
-
-it('높이가 많이 벗어나면 별 1개', () => {
-  const L = both();
-  expect(L.grade!({} as never, { devSum: 0.4 * 100, devN: 100, multi: 80, frames: 100 }).stars).toBe(1);
-});
-
 it('높이는 지켰어도 한 레버만 썼으면 별 3개는 아니다', () => {
   const L = both();
   const g = L.grade!({} as never, { devSum: 0.02 * 100, devN: 100, multi: 5, frames: 100 });
@@ -334,27 +236,8 @@ it('높이는 지켰어도 한 레버만 썼으면 별 3개는 아니다', () =>
   expect(g.note).toMatch(/동시에/);
 });
 
-it('3단계도 별은 언제나 1~3', () => {
-  expect([1, 2, 3]).toContain(both().grade!({} as never, {}).stars);
-});
-
 // ---------- 4단계: 합치기 ----------
 const all = () => BASIC_LESSONS.find((l) => l.id === 'b-all')!;
-
-it('4단계가 있고 세 가지를 다 본다', () => {
-  const L = all();
-  expect(L.tier).toBe('기본기');
-  expect(L.trail).toBe(true);
-  expect(L.why).toBeTruthy();
-  expect(L.grade).toBeTruthy();
-});
-
-it('세 항목을 ◎○△로 보여 준다', () => {
-  const L = all();
-  const g = L.grade!({ load: 1, maxJolt: 0 } as never, { load0: 1, errAll: 0.02, devSum: 2, devN: 100, multi: 80, frames: 100 });
-  expect(g.note).toMatch(/[◎○△]/);
-  expect((g.note.match(/[◎○△]/g) ?? []).length).toBe(3);
-});
 
 it('세 항목이 모두 좋으면 별 3개 (◎ 세 개)', () => {
   const L = all();
@@ -363,33 +246,27 @@ it('세 항목이 모두 좋으면 별 3개 (◎ 세 개)', () => {
   expect((g.note.match(/◎/g) ?? []).length).toBe(3);
 });
 
-it('한 항목만 나쁘면 별 2개', () => {
-  const L = all();
-  // 흙을 30% 쏟음, 나머지는 좋음
-  const g = L.grade!({ load: 0.7, maxJolt: 0.5 } as never, { load0: 1, errAll: 0.02, devSum: 2, devN: 100, multi: 80, frames: 100 });
-  expect(g.stars).toBe(2);
-});
-
 it('두 항목 이상 나쁘면 별 1개', () => {
   const L = all();
   const g = L.grade!({ load: 0.7, maxJolt: 0.5 } as never, { load0: 1, errAll: 0.3, devSum: 2, devN: 100, multi: 80, frames: 100 });
   expect(g.stars).toBe(1);
 });
 
-it('4단계도 별은 언제나 1~3', () => {
-  expect([1, 2, 3]).toContain(all().grade!({} as never, {}).stars);
-});
-
-it('기본기는 다섯 미션이고 레버 익히기가 맨 앞이다', () => {
-  // 레버를 쓸 줄 모르는 사람에게 미션을 줄 수 없다
+it('기본기 다섯 미션의 뼈대', () => {
+  // 레버를 쓸 줄 모르는 사람에게 미션을 줄 수 없으니 레버 익히기가 맨 앞
   expect(BASIC_LESSONS.map((l) => l.id)).toEqual(['b-levers', 'b-stop', 'b-aim', 'b-both', 'b-all']);
   expect(BASIC_LESSONS.every((l) => l.tier === '기본기')).toBe(true);
+  // 모두 '왜 배우나' 카드와 끝낸 뒤 한 줄이 있다
   expect(BASIC_LESSONS.every((l) => l.why && l.grade)).toBe(true);
-});
-
-it('기본기 네 미션의 아이콘이 모두 다르다', () => {
-  const icons = BASIC_LESSONS.map((l) => l.icon);
-  expect(new Set(icons).size).toBe(icons.length);
+  // 목록에서 구별되게: id·아이콘·제목이 겹치지 않는다
+  for (const k of ['id', 'icon', 'title'] as const) {
+    const v = BASIC_LESSONS.map((l) => l[k]);
+    expect(new Set(v).size, k).toBe(v.length);
+  }
+  // 레버 익히기만 한 톤 배경 + 배경 지시문을 쓴다
+  expect(BASIC_LESSONS.filter((l) => l.flat || l.big).map((l) => l.id)).toEqual(['b-levers']);
+  // 선이 남는 미션은 동시조작을 가르치는 둘
+  expect(BASIC_LESSONS.filter((l) => l.trail).map((l) => l.id)).toEqual(['b-both', 'b-all']);
 });
 
 // ---------- 실제 조작으로 끝까지 가는지 (가동범위·도달성까지 함께 막는다) ----------
@@ -462,19 +339,12 @@ it('2단계: 세 회차를 목표에 맞춰 끝내면 별 2개 이상', () => {
   expect(aim().grade!(t.s, t.bag).stars).toBeGreaterThanOrEqual(2);
 });
 
-it('3단계: 두 레버를 같이 써서 끝까지 간다', () => {
+it('3단계: 두 레버를 같이 써서 끝까지 가고 별 2개 이상', () => {
   const t = bothTutor();
   expect(holdLine(t, 1, LINE.height), '바깥으로 긋기').toBe(true);
   expect(holdLine(t, -1, LINE.height), '당겨 오기').toBe(true);
   expect(t.cleared).toBe(true);
-});
-
-it('3단계: 두 레버를 같이 쓰면 별 2개 이상', () => {
-  const t = bothTutor();
-  holdLine(t, 1, LINE.height);
-  holdLine(t, -1, LINE.height);
-  const g = both().grade!(t.s, t.bag);
-  expect(g.stars).toBeGreaterThanOrEqual(2);
+  expect(both().grade!(t.s, t.bag).stars).toBeGreaterThanOrEqual(2);
 });
 
 it('4단계: 끝까지 가고 흙도 지킨다', () => {

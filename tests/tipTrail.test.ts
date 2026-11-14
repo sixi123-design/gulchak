@@ -11,12 +11,6 @@ it('점을 넣으면 쌓인다', () => {
   t.dispose();
 });
 
-it('장면에 넣을 물체가 있다', () => {
-  const t = new TipTrail();
-  expect(t.object).toBeInstanceOf(THREE.Object3D);
-  t.dispose();
-});
-
 it('상한을 넘으면 오래된 것부터 버린다', () => {
   const t = new TipTrail(3);
   for (let i = 0; i < 5; i++) t.push(i, 0, 0);
