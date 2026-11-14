@@ -1,7 +1,7 @@
 import { shapeOf, staticHits } from './judge';
 import type { Site } from './site';
 import { bucketUnderside, ik, toWorld } from './kinematics';
-import type { DigSession } from './session';
+import type { DigSession, Sticks } from './session';
 
 /**
  * 배우기(튜토리얼): 구간별 짧은 미션. 순수 로직 — 화면은 main.ts가 그린다.
@@ -18,6 +18,11 @@ export interface Step<S = DigSession> {
   labels?: string[];
   /** 레버를 이만큼 밀라고 가르치는 구간이면 목표 칸 수 (1~3). 화면의 3칸 표시에 쓴다 */
   gauge?: 1 | 2 | 3;
+  /**
+   * 앱이 레버를 대신 미는 시범. 단계가 시작된 뒤 지난 프레임 수를 받아 밀 값을 돌려준다.
+   * `null`을 돌려주면 시범이 끝난 것이다 (영상으로 못 배우는 손맛을 먼저 보여 주는 장치).
+   */
+  demo?: (frame: number) => Partial<Sticks> | null;
   /** 이 단계가 시작될 때의 상태 기록 */
   begin?: (s: S, mem: Mem, bag: Mem) => void;
   done: (s: S, mem: Mem, bag: Mem) => boolean;
@@ -138,6 +143,9 @@ const contactTravel = (s: DigSession, mem: Record<string, number>, dir: 1 | -1) 
   mem.r = r;
   return mem.d;
 };
+/** 시범이 끝나고 노브를 가운데에 두고 쉬는 프레임 (0.5초 @60Hz) */
+const DEMO_REST = 30;
+
 export const SC = (s: DigSession) => s.m.struckCapacity;
 /** 버킷 관절이 암에서 오므려진 각(°) */
 const curlDeg = (s: DigSession) => -s.pose.bucket / deg;
@@ -606,6 +614,10 @@ export class Tutor<S extends { flags: { autoEnd: boolean } } = DigSession> {
   /** 지금 바로잡을 것 (잠깐 사라져도 0.5초는 유지해 깜빡이지 않게) */
   coach: Coach | null = null;
   private coachHold = 0;
+  /** 시범이 시작된 뒤 지난 프레임 수 */
+  private demoFrame = 0;
+  /** 시범이 끝난 뒤 노브를 가운데에 두고 쉬는 프레임 (0.5초) */
+  private demoRest = 0;
   private mem: Mem = {};
   /** 미션 보관함: 단계가 넘어가도 지워지지 않는다 (등급 재료를 쌓는 곳) */
   readonly bag: Mem = {};
@@ -620,6 +632,8 @@ export class Tutor<S extends { flags: { autoEnd: boolean } } = DigSession> {
     this.mem = {};
     this.coach = null;
     this.coachHold = 0;
+    this.demoFrame = 0;
+    this.demoRest = DEMO_REST;
     const st = this.lesson.steps[this.step];
     if (this.lesson.autoEnd) this.s.flags.autoEnd = !!st?.armEnd;
     st?.begin?.(this.s, this.mem, this.bag);
@@ -636,6 +650,34 @@ export class Tutor<S extends { flags: { autoEnd: boolean } } = DigSession> {
   hud(): string | null {
     if (this.cleared) return null;
     return this.current?.hud?.(this.s, this.mem, this.bag) ?? null;
+  }
+  /**
+   * 이번 프레임에 기계가 받을 레버값.
+   *
+   * 시범이 도는 동안에는 **유저 입력을 무시한다** — 손가락을 올려 둔 채로 보는 사람이 있고,
+   * 그 입력이 섞이면 "앱이 보여 준 것"과 "기계가 한 것"이 달라져 배울 게 없어진다.
+   * 시범이 끝나면 노브를 가운데로 되돌리고 0.5초 쉰 뒤에 조작을 넘긴다.
+   */
+  drive(user: Sticks): Sticks {
+    const d = this.cleared ? null : (this.current?.demo?.(this.demoFrame) ?? null);
+    if (d) {
+      this.demoFrame++;
+      return { lx: 0, ly: 0, rx: 0, ry: 0, ...d };
+    }
+    if (this.demoFrame > 0 && this.demoRest > 0) {
+      this.demoRest--;
+      return { lx: 0, ly: 0, rx: 0, ry: 0 };
+    }
+    return user;
+  }
+  /** 지금 화면이 무엇을 보여 줘야 하나 (배지·노브 모양) */
+  demoState(): 'demo' | 'rest' | 'user' {
+    if (!this.cleared && this.current?.demo?.(this.demoFrame)) return 'demo';
+    return this.demoFrame > 0 && this.demoRest > 0 ? 'rest' : 'user';
+  }
+  /** 이 단계를 처음부터 다시 (시범도 다시 돈다) */
+  restartStep(): void {
+    this.enter();
   }
   /** 이번 프레임에 단계가 넘어갔으면 true */
   update(): boolean {

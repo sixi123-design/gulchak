@@ -1342,6 +1342,10 @@ function updateMeter() {
     const part = stepPart();
     $('dr-part').textContent = part ? `깜빡이는 곳 = ${PART_NAME[part]}` : '';
     updateGauge(part);
+    const d = tutor.demoState();
+    const badge = $('dr-badge');
+    badge.hidden = d === 'user' && !tutor.current?.demo;
+    badge.textContent = d === 'user' ? '직접 해보기' : '시범 중';
     $('dr-say').textContent = h ?? tutor.coach?.msg ?? '';
     $('m-hold').hidden = true;
     const ok = tutor.bag.okN ?? 0;
@@ -1382,6 +1386,7 @@ function renderMission(intro = false) {
     $('drill').hidden = true;
     $('dr-part').textContent = '';
     $('dr-gauge').hidden = true;
+    $('dr-badge').hidden = true;
     $('drill-fx').innerHTML = '';
     $('btn-why').hidden = true;
     for (const el of document.querySelectorAll('.lab')) el.classList.remove('hint');
@@ -2315,12 +2320,20 @@ function frame(now: number) {
   kb.ly = ramp(kb.ly, keys.ly);
   kb.rx = ramp(kb.rx, keys.rx);
   kb.ry = ramp(kb.ry, keys.ry);
-  session.input = {
+  const userInput = {
     lx: curveSwing(clamp1(left.x + kb.lx + pad.lx)),
     ly: curve(clamp1(left.y + kb.ly + pad.ly)),
     rx: curve(clamp1(right.x + kb.rx + pad.rx)),
     ry: curve(clamp1(right.y + kb.ry + pad.ry)),
   };
+  // 앱이 레버를 대신 미는 시범 중에는 유저 입력을 무시하고, 화면 손잡이도 앱 값으로 움직인다
+  session.input = tutor ? tutor.drive(userInput) : userInput;
+  const demo = tutor?.demoState() ?? 'user';
+  document.body.classList.toggle('demo', demo !== 'user');
+  if (demo !== 'user') {
+    left.show(session.input.lx, session.input.ly);
+    right.show(session.input.rx, session.input.ry);
+  }
   if (drive) {
     driveFrame(dt, now);
     return;

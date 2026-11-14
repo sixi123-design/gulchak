@@ -7,6 +7,16 @@ export class Joystick {
   private cx = 0;
   private cy = 0;
   private radius = 60;
+  /**
+   * 입력은 건드리지 않고 **노브만** 그 자리로 옮긴다 (-1~1).
+   * 앱이 레버를 대신 미는 시범에서, 유저가 보는 손잡이도 같이 움직여야 배울 게 생긴다.
+   */
+  show(x: number, y: number) {
+    if (this.id !== null) return; // 손가락이 올라가 있으면 건드리지 않는다
+    const r = this.el.getBoundingClientRect().width * 0.42;
+    const sc = r / Math.max(1, this.el.offsetWidth * 0.42);
+    this.knob.style.transform = `translate(${(x * r) / Math.max(sc, 1e-6)}px, ${(y * r) / Math.max(sc, 1e-6)}px)`;
+  }
   constructor(readonly el: HTMLElement) {
     this.knob = el.querySelector('.knob') as HTMLElement;
     el.addEventListener('pointerdown', (e) => this.down(e));

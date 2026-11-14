@@ -7882,6 +7882,23 @@ body.flat-bg {
   color: color-mix(in srgb, var(--ink) 62%, transparent);
   letter-spacing: 0.02em;
 }
+/* 시범 중 / 직접 해보기 */
+.dr-badge {
+  margin-top: 6px;
+  display: inline-block;
+  font: 900 calc(14px * var(--z-txt, 1)) / 1 var(--font);
+  color: var(--paper);
+  background: var(--ink);
+  border-radius: 999px;
+  padding: 5px 10px;
+}
+.dr-badge[hidden] {
+  display: none;
+}
+/* 시범 중에는 노브를 속 빈 흰 원으로 — 내가 미는 게 아니라는 표시 */
+body.demo .stick .knob {
+  background: var(--paper);
+}
 .dr-part:empty {
   display: none;
 }
