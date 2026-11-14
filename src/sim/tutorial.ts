@@ -66,7 +66,7 @@ export type Tier = '기본기' | '기초' | '숙련';
  * 기본기는 처음 온 사람이 가야 할 곳이라 맨 위 가로 전체(wide)를 쓴다.
  */
 export const TIERS: readonly { key: Tier; sub: string; wide?: boolean }[] = [
-  { key: '기본기', sub: '레버부터 제대로', wide: true },
+  { key: '기본기', sub: '시험 전에 손에 붙여야 하는 네 가지', wide: true },
   { key: '기초', sub: '한 사이클 익히기' },
   { key: '숙련', sub: '시험처럼 매끄럽게' },
 ];
@@ -100,6 +100,10 @@ export interface Lesson<S = DigSession> {
   why?: { title: string; lines: readonly string[] };
   /** 이빨이 지나간 자리에 선을 남긴다 (동시조작을 눈으로 보여 주는 미션) */
   trail?: boolean;
+  /** 배경을 한 톤으로 (레버 익히기: 지시문과 움직이는 것에 눈이 가게) */
+  flat?: boolean;
+  /** 지시문을 작은 미션 판 대신 화면 가운데 위에 크게 */
+  big?: boolean;
   setup: (s: S) => void;
   steps: Step<S>[];
 }

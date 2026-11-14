@@ -118,7 +118,7 @@ it('반대로 꺾으면 코치가 멈추라고 한다', () => {
   until(t, { lx: -1 });
   run(t, { lx: -1 }, 60);
   run(t, { lx: 1 }, 3);
-  expect(t.coach?.msg ?? '').toMatch(/멈춘 뒤/);
+  expect(t.coach?.msg ?? '').toMatch(/먼저 멈추/);
 });
 
 it('흙을 쏟으면 별이 깎인다', () => {
@@ -163,7 +163,7 @@ it('충격 최대값은 세션이 기록한다 (화면 프레임 수와 무관)'
 it('중립을 거르고 꺾었으면 그렇게 말해 준다', () => {
   const L = stop();
   const flick = L.grade!({ load: 1, maxJolt: 0.3 } as never, { load0: 1, flick: 1 });
-  expect(flick.note).toMatch(/중립을 거르/);
+  expect(flick.note).toMatch(/멈추기 전에/);
   const release = L.grade!({ load: 1, maxJolt: 0.3 } as never, { load0: 1 });
   expect(release.note).toMatch(/놓을 때/);
 });
@@ -331,7 +331,7 @@ it('높이는 지켰어도 한 레버만 썼으면 별 3개는 아니다', () =>
   const L = both();
   const g = L.grade!({} as never, { devSum: 0.02 * 100, devN: 100, multi: 5, frames: 100 });
   expect(g.stars).toBeLessThan(3);
-  expect(g.note).toMatch(/같이|한 번에/);
+  expect(g.note).toMatch(/동시에/);
 });
 
 it('3단계도 별은 언제나 1~3', () => {
@@ -380,8 +380,9 @@ it('4단계도 별은 언제나 1~3', () => {
   expect([1, 2, 3]).toContain(all().grade!({} as never, {}).stars);
 });
 
-it('기본기는 네 미션이고 순서대로다', () => {
-  expect(BASIC_LESSONS.map((l) => l.id)).toEqual(['b-stop', 'b-aim', 'b-both', 'b-all']);
+it('기본기는 다섯 미션이고 레버 익히기가 맨 앞이다', () => {
+  // 레버를 쓸 줄 모르는 사람에게 미션을 줄 수 없다
+  expect(BASIC_LESSONS.map((l) => l.id)).toEqual(['b-levers', 'b-stop', 'b-aim', 'b-both', 'b-all']);
   expect(BASIC_LESSONS.every((l) => l.tier === '기본기')).toBe(true);
   expect(BASIC_LESSONS.every((l) => l.why && l.grade)).toBe(true);
 });

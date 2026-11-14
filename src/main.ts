@@ -1111,6 +1111,8 @@ function beginLesson(i: number, again = false, lv = 0) {
   $('clear').hidden = true;
   if (matchMedia('(pointer: coarse)').matches) goFullscreen();
   sound.start();
+  // 한 톤 배경 (가장 낮은 화질에서는 걸지 않는다 — 색보다 프레임이 낫다)
+  document.body.classList.toggle('flat-bg', !!L.flat && qNow().level > 0);
   if (drive) {
     drive.s.ready();
     tutor = new Tutor(L, drive.s);
@@ -1246,10 +1248,15 @@ function updateIntro() {
 function updateMeter() {
   updateSay();
   updateIntro();
-  // 미션이 띄우는 짧은 한 줄 (세는 중 ●●○ · 멈춘 뒤 오차 cm)
+  // 미션이 띄우는 짧은 한 줄 (세는 중 ●●○ · 멈춘 뒤 오차 cm · 레버 익히기의 반응)
   const h = tutor?.hud() ?? null;
-  $('m-hold').hidden = !h;
-  if (h) $('m-hold').textContent = h;
+  if (tutor?.lesson.big) {
+    $('dr-say').textContent = h ?? tutor.coach?.msg ?? '';
+    $('m-hold').hidden = true;
+  } else {
+    $('m-hold').hidden = !h;
+    if (h) $('m-hold').textContent = h;
+  }
   const m = guideLv >= 1 ? null : (tutor?.meter() ?? null);
   meterEl.hidden = !m;
   if (!m) return;
@@ -1271,8 +1278,18 @@ function renderMission(intro = false) {
   const m = $('mission');
   if (!tutor) {
     m.hidden = true;
+    $('drill').hidden = true;
     $('btn-why').hidden = true;
     for (const el of document.querySelectorAll('.lab')) el.classList.remove('hint');
+    return;
+  }
+  // 레버 익히기: 지시문을 배경에 크게. 미션 판·게이지는 안 쓴다
+  const big = !!tutor.lesson.big;
+  $('drill').hidden = !big;
+  if (big) {
+    m.hidden = true;
+    $('dr-text').textContent = tutor.notice ?? tutor.current?.text ?? '';
+    for (const el of document.querySelectorAll('.lab')) el.classList.toggle('hint', new Set(tutor.current?.labels ?? []).has((el.textContent ?? '').replace(/ /g, ' ')));
     return;
   }
   const st = tutor.current;
@@ -1319,6 +1336,7 @@ function onRewind() {
 }
 function onLessonClear() {
   const L = tutor!.lesson;
+  document.body.classList.remove('flat-bg');
   const done = new Set(loadCleared());
   done.add(L.id);
   save('exc-tut', JSON.stringify([...done]));

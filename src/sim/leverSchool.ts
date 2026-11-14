@@ -6,6 +6,7 @@
  * 단방향 import — tutorial.ts는 이 파일을 모른다.
  */
 import { co, fill, hold, pose, type Grade, type Lesson, type Step } from './tutorial';
+import { LEVER_DRILL } from './leverDrill';
 import type { DigSession } from './session';
 
 type Mem = Record<string, number>;
@@ -61,7 +62,7 @@ const watched = (j: J | null, more?: Step['coach']): Step['coach'] =>
   (s, mem, bag) => {
     if (j && reversing(s, j)) {
       bag.flick = 1; // 중립을 거치지 않고 꺾은 적이 있다 (끝낸 뒤 뭘 고칠지 알려 주려고)
-      return co('멈춘 뒤에 바꾸기 — 레버를 중립으로');
+      return co('먼저 멈추세요 — 레버를 가운데로');
     }
     return more?.(s, mem, bag) ?? null;
   };
@@ -84,7 +85,7 @@ const stopStep = (j: J, text: string): Step => ({
   labels: [],
   done: (s, mem) => hold(mem, still(s, j), STILL.frames),
   meter: (_s, mem) => ({ v: Math.min(1, (mem.hold ?? 0) / STILL.frames) }),
-  coach: watched(j, (s) => (moving(s, j) ? co('레버를 중립으로 놓고 서기까지 기다리기') : null)),
+  coach: watched(j, (s) => (moving(s, j) ? co('레버를 가운데에 두고, 완전히 멈출 때까지 기다리세요') : null)),
 });
 
 /**
@@ -133,7 +134,7 @@ const aimStep = (round: number, key = `err${round + 1}`, of: number = AIM.target
   const target = AIM.targets[round];
   const tol = AIM.tol[round];
   return {
-    text: `붐을 내려 버킷을 흙 위 ${Math.round(target * 100)}cm에 세우기${of > 1 ? ` (${no}/${of})` : ''}`,
+    text: `붐을 내려 버킷을 흙 위 ${Math.round(target * 100)}cm에 세우세요${of > 1 ? ` (${no}/${of})` : ''}`,
     labels: ['붐 내림', '붐 올림'],
     begin: (_s, mem) => {
       mem.hold = 0;
@@ -179,7 +180,7 @@ const aimStep = (round: number, key = `err${round + 1}`, of: number = AIM.target
       return _s.groundGap() > target ? '붐을 내려 보세요' : '붐을 올려 보세요';
     },
     coach: (s) => {
-      if (s.groundGap() < 0) return co('이빨이 흙에 닿았어요 → 붐 살짝 올림', '붐 올림');
+      if (s.groundGap() < 0) return co('버킷이 흙에 닿았어요 → 붐을 살짝 올리세요', '붐 올림');
       return null;
     },
   };
@@ -189,14 +190,16 @@ const aimAt: Lesson = {
   id: 'b-aim',
   tier: '기본기',
   icon: 'stAim',
-  title: '원하는 데서 멈추기',
+  title: '버킷 높이 맞춰 멈추기',
   noFail: true,
   why: {
-    title: '왜 미리 줄여야 하나',
+    title: '왜 이걸 배우나',
     lines: [
-      '레버를 놓아도 바로 서지 않습니다. 놓은 뒤에도 조금 더 갑니다.',
-      '그래서 목표에 닿기 전에 레버를 미리 줄여야 목표에 섭니다.',
-      '얼마나 미리인지는 머리가 아니라 손이 기억합니다. 세 번 해 보세요.',
+      '흙을 파려면 <b>버킷</b>(팔 끝의 흙 담는 부분)을 흙 바로 위에 내렸다가 꽂습니다.',
+      '너무 내리면 땅을 긁고, 덜 내리면 흙이 얕게 담깁니다. 둘 다 점수가 깎입니다.',
+      '버킷 높이는 <b>오른쪽 레버를 위아래로</b> 움직여 바꿉니다. 위로 밀면 내려가고, 아래로 당기면 올라갑니다.',
+      '레버를 가운데로 놓아도 버킷은 바로 서지 않고 조금 더 내려갑니다.',
+      '그래서 목표에 닿기 <b>전에</b> 레버를 조금씩 줄여야 합니다. 세 번 해 보며 익히세요.',
     ],
   },
   // 버킷 밑을 A 구덩이 위 1.2m에 둔 자세 (붐만 내리면 목표 높이에 닿는다)
@@ -210,9 +213,9 @@ const aimAt: Lesson = {
     const avg = errs.reduce((a, b) => a + b, 0) / errs.length;
     const worst = Math.max(...errs);
     // 세 번 다 잘해야 별 3개 — 평균으로 보면 한 번 크게 틀려도 가려진다
-    if (worst <= 0.04) return { stars: 3, note: `가장 나쁜 회차도 ${cm(worst)} — 손이 기억하고 있어요` };
-    if (avg <= 0.08) return { stars: 2, note: `평균 ${cm(avg)} · 가장 나쁜 회차 ${cm(worst)} — 조금 더 미리 줄여 보세요` };
-    return { stars: 1, note: `평균 ${cm(avg)} — 목표 한참 전에 레버를 줄이기 시작하세요` };
+    if (worst <= 0.04) return { stars: 3, note: `세 번 다 ${cm(worst)} 안쪽 — 멈추는 자리를 잡았어요` };
+    if (avg <= 0.08) return { stars: 2, note: `평균 ${cm(avg)}, 가장 많이 빗나간 게 ${cm(worst)} — 조금 더 미리 줄여 보세요` };
+    return { stars: 1, note: `평균 ${cm(avg)} 빗나갔어요 — 목표 한참 전부터 레버를 줄여 보세요` };
   },
   steps: AIM.targets.map((_t, i) => aimStep(i)),
 };
@@ -270,8 +273,8 @@ const lineStep = (dir: 1 | -1, dist: number, text: string, label: string): Step 
   },
   coach: (s) => {
     const d = s.groundGap() - LINE.height;
-    if (d > LINE.good) return co('이빨이 높아요 → 붐 내림을 같이', '붐 내림', label);
-    if (d < -LINE.good) return co('이빨이 낮아요 → 붐 올림을 같이', '붐 올림', label);
+    if (d > LINE.good) return co('버킷이 높아요 → 붐 내림도 같이 쓰세요', '붐 내림', label);
+    if (d < -LINE.good) return co('버킷이 낮아요 → 붐 올림도 같이 쓰세요', '붐 올림', label);
     return null;
   },
 });
@@ -280,15 +283,17 @@ const bothLevers: Lesson = {
   id: 'b-both',
   tier: '기본기',
   icon: 'stBoth',
-  title: '두 레버를 같이 쓰기',
+  title: '버킷 곧게 옮기기',
   noFail: true,
   trail: true,
   why: {
-    title: '왜 두 레버를 같이 쓰나',
+    title: '왜 이걸 배우나',
     lines: [
-      '붐만 올리면 이빨이 호를 그립니다. 붐은 한 점을 중심으로 도니까요.',
-      '암을 같이 펴거나 당겨야 이빨이 직선으로 갑니다. 평탄 작업이 이 원리입니다.',
-      '지나간 자리에 선이 남습니다. 휘었는지 곧은지 보고 고치세요.',
+      '시험에는 파낸 자리를 <b>평평하게 고르는</b> 과정이 있습니다. 바닥이 울퉁불퉁하면 점수가 깎입니다.',
+      '<b>오른쪽 레버 위아래</b>는 버킷 높이를 바꿉니다(붐). <b>왼쪽 레버 위아래</b>는 버킷을 앞뒤로 보냅니다(암).',
+      '왼쪽 레버만 밀면 버킷이 둥글게 휩니다 — 팔이 한 점을 중심으로 돌기 때문입니다.',
+      '그래서 왼쪽 레버를 쓰는 동안 <b>오른쪽 레버로 높이를 같이</b> 맞춰야 곧게 갑니다.',
+      '지나간 자리에 노란 선이 남습니다. 휘었으면 오른쪽 레버로 고치세요.',
     ],
   },
   // 버킷 밑을 목표 높이에 두고 몸 가까이. 버킷은 암과 일직선(평탄 자세) — 가동범위 안
@@ -300,14 +305,14 @@ const bothLevers: Lesson = {
     const dev = devOf(bag);
     const multi = multiOf(bag);
     if (!bag.devN) return { stars: 1, note: '해 보세요' };
-    if (dev > LINE.ok) return { stars: 1, note: `높이가 평균 ${cm(dev)} 벗어났어요. 붐만 쓰면 호가 그려집니다` };
-    if (dev > LINE.good) return { stars: 2, note: `높이가 평균 ${cm(dev)} 벗어났어요. 조금 더 붙여 보세요` };
-    if (multi < LINE.multi) return { stars: 2, note: '높이는 지켰지만 한 레버씩 번갈아 썼어요. 두 레버를 같이 움직여 보세요' };
-    return { stars: 3, note: `높이 평균 ${cm(dev)} — 선이 곧습니다` };
+    if (dev > LINE.ok) return { stars: 1, note: `높이가 평균 ${cm(dev)} 흔들렸어요. 암을 쓰는 동안 붐도 같이 쓰세요` };
+    if (dev > LINE.good) return { stars: 2, note: `높이가 평균 ${cm(dev)} 흔들렸어요. 거의 다 됐습니다` };
+    if (multi < LINE.multi) return { stars: 2, note: '높이는 지켰지만 레버를 번갈아 썼어요. 두 개를 동시에 움직여 보세요' };
+    return { stars: 3, note: `높이가 ${cm(dev)}밖에 안 흔들렸어요 — 선이 곧습니다` };
   },
   steps: [
-    lineStep(1, LINE.dist, '버킷 높이를 지키며 바깥으로 긋기 — 암 펴기 + 붐으로 높이 맞추기', '암 펴기'),
-    lineStep(-1, LINE.dist, '이제 몸 쪽으로 당겨 오기 — 암 당기기 + 붐으로 높이 맞추기', '암 당기기'),
+    lineStep(1, LINE.dist, '암을 펴 버킷을 앞으로 보내세요 — 높이는 붐으로 맞추면서', '암 펴기'),
+    lineStep(-1, LINE.dist, '이제 암을 당겨 돌아오세요 — 높이는 그대로 지키면서', '암 당기기'),
   ],
 };
 
@@ -315,14 +320,15 @@ const stopFirst: Lesson = {
   id: 'b-stop',
   tier: '기본기',
   icon: 'stStop',
-  title: '멈춘 뒤에 바꾸기',
+  title: '몸통 돌리고 멈추기',
   noFail: true,
   why: {
-    title: '왜 멈춘 뒤에 바꾸나',
+    title: '왜 이걸 먼저 하나',
     lines: [
-      '선회 레버를 반대로 확 꺾으면, 돌고 있던 수십 톤이 그 자리에서 방향을 바꿔야 합니다.',
-      '그 힘이 갈 데가 없어 차체와 버킷의 흙으로 갑니다. 흙이 쏟아지면 그만큼 점수입니다.',
-      '중립에서 한 번 세우고 바꾸세요. 레버를 놓는 것과 멈추는 것은 다릅니다.',
+      '시험은 흙을 퍼서 <b>몸통을 돌려</b> 옆에 붓는 일을 네 번 되풀이합니다. 그 돌리기가 이 미션입니다.',
+      '몸통을 돌리는 레버는 왼쪽 레버를 좌우로 미는 것입니다 (화면에 <b>선회</b>라고 적혀 있습니다).',
+      '돌아가는 중에 레버를 반대로 꺾으면 버킷의 흙이 쏟아집니다. 쏟은 만큼 점수가 깎입니다.',
+      '레버를 <b>가운데</b>로 옮겨 몸통이 완전히 멈춘 뒤에 반대로 돌리세요. 레버를 놓는 것과 멈추는 것은 다릅니다.',
     ],
   },
   // 고봉으로 담은 흙을 들고 A 쪽에 서 있는 자세 (팔을 뻗어 둬 흔들림이 크게 느껴진다)
@@ -335,19 +341,19 @@ const stopFirst: Lesson = {
     const lost = lostOf(s, bag);
     const jolt = s.maxJolt ?? 0;
     const flick = !!bag.flick;
-    if (lost >= 0.05) return { stars: 1, note: '방향을 바꿀 때 흙이 쏟아졌어요. 중립에서 한 번 세우고 바꾸세요' };
-    if (lost >= 0.01) return { stars: 2, note: '흙이 조금 흘렀어요. 중립에서 완전히 선 다음에 바꾸세요' };
-    if (jolt < SMOOTH.warn) return { stars: 3, note: '멈춘 뒤에 바꿨어요. 흙도 그대로입니다' };
+    if (lost >= 0.05) return { stars: 1, note: '방향을 바꿀 때 흙이 쏟아졌어요. 완전히 멈춘 다음에 반대로 돌리세요' };
+    if (lost >= 0.01) return { stars: 2, note: '흙이 조금 흘렀어요. 멈췄는지 확인하고 나서 바꾸세요' };
+    if (jolt < SMOOTH.warn) return { stars: 3, note: '멈춘 다음에 돌렸어요. 흙도 그대로입니다' };
     return flick
-      ? { stars: 2, note: '중립을 거르고 꺾은 적이 있어요. 완전히 선 다음에 바꾸세요' }
+      ? { stars: 2, note: '멈추기 전에 반대로 꺾은 적이 있어요. 한 번 세우고 나서 돌리세요' }
       : { stars: 2, note: '레버를 놓을 때 덜컹했어요. 한 번에 놓지 말고 조금씩 줄이며 놓아보세요' };
   },
   steps: [
-    turned('swing', -1, 35 * deg, '선회 레버를 왼쪽으로 — C 쪽으로 돌리기', '선회 ◀'),
-    stopStep('swing', '레버를 중립으로 놓고, 완전히 설 때까지 기다리기'),
-    turned('swing', 1, 30 * deg, '이제 반대로 — A 쪽으로 돌아오기', '▶ 선회'),
-    stopStep('swing', '한 번 더 — 중립으로 놓고 완전히 멈추기'),
-    turned('swing', -1, 45 * deg, '마지막으로 C 쪽으로, 조금 더 멀리', '선회 ◀'),
+    turned('swing', -1, 35 * deg, '왼쪽 레버를 왼쪽으로 밀어 몸통을 돌리세요', '선회 ◀'),
+    stopStep('swing', '레버를 가운데로 — 몸통이 완전히 멈출 때까지 기다리세요'),
+    turned('swing', 1, 30 * deg, '멈췄으면 이제 오른쪽으로 돌리세요', '▶ 선회'),
+    stopStep('swing', '다시 가운데로 — 완전히 멈출 때까지'),
+    turned('swing', -1, 45 * deg, '마지막으로 왼쪽으로, 조금 더 멀리', '선회 ◀'),
   ].map(withLoad0),
 };
 
@@ -362,15 +368,15 @@ const allTogether: Lesson = {
   id: 'b-all',
   tier: '기본기',
   icon: 'stAll',
-  title: '셋을 한 번에',
+  title: '흘리지 않고 곧게 멈추기',
   noFail: true,
   trail: true,
   why: {
-    title: '셋을 한 번에',
+    title: '왜 합쳐서 하나',
     lines: [
-      '흙을 흘리지 않게 멈춘 뒤에 바꾸고, 두 레버를 같이 쓰고, 원하는 데서 멈춥니다.',
-      '실제 작업이 이 셋을 동시에 합니다. 하나씩은 됐으니 이제 합쳐 보세요.',
-      '끝나면 세 항목을 따로 보여 드립니다. 약한 쪽을 다시 연습하면 됩니다.',
+      '실제 작업은 앞의 세 가지를 <b>동시에</b> 합니다. 하나씩 따로 되는 것과는 다릅니다.',
+      '흙을 흘리지 않게, 두 레버를 같이 쓰면서, 목표 높이에 멈추세요.',
+      '끝나면 세 가지를 따로 보여 드립니다. 약한 쪽만 다시 연습하면 됩니다.',
     ],
   },
   setup: (s) => {
@@ -397,11 +403,12 @@ const allTogether: Lesson = {
   },
   steps: [
     {
-      ...lineStep(1, LINE.distLaden, '흙을 흘리지 말고, 두 레버를 같이 써서 바깥으로 긋기', '암 펴기'),
+      ...lineStep(1, LINE.distLaden, '흙을 흘리지 않게, 두 레버를 같이 써서 앞으로 보내세요', '암 펴기'),
       labels: ['암 펴기', '붐 올림', '붐 내림'],
     },
     aimStep(1, 'errAll', 1),
   ],
 };
 
-export const BASIC_LESSONS: Lesson[] = [stopFirst, aimAt, bothLevers, allTogether];
+// 레버 익히기가 맨 앞 — 레버를 쓸 줄 모르는 사람에게 미션을 줄 수 없다
+export const BASIC_LESSONS: Lesson[] = [LEVER_DRILL, stopFirst, aimAt, bothLevers, allTogether];

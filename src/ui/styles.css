@@ -7663,3 +7663,56 @@ body.stage-on #precheck .mode-pick {
   letter-spacing: 0.06em;
   color: var(--sun);
 }
+
+/* 이론 카드에서 처음 나오는 부품 이름·핵심어 */
+.why-text b {
+  color: color-mix(in srgb, var(--ink) 70%, var(--sun));
+  border-bottom: 2px solid var(--sun);
+}
+
+/* ----- 레버 익히기: 배경에 크게 띄우는 지시문 ----- */
+.drill {
+  position: absolute;
+  left: 50%;
+  top: max(14px, env(safe-area-inset-top));
+  transform: translateX(-50%);
+  width: min(560px, calc(100% - 32px));
+  text-align: center;
+  pointer-events: none;
+  z-index: 6;
+}
+.dr-text {
+  font: 900 calc(26px * var(--z-txt, 1)) / 1.3 var(--font);
+  color: #fff;
+  text-shadow:
+    0 3px 0 var(--ink),
+    0 0 14px rgb(29 27 46 / 0.75);
+}
+.dr-say {
+  margin-top: 8px;
+  min-height: 1.4em;
+  font: 800 calc(17px * var(--z-txt, 1)) / 1.4 var(--font);
+  color: var(--sun);
+  text-shadow: 0 2px 0 var(--ink);
+}
+.dr-say:empty {
+  min-height: 0;
+}
+@media (max-width: 520px) {
+  .dr-text {
+    font-size: calc(21px * var(--z-txt, 1));
+  }
+}
+/* 가로로 누운 작은 화면: 장비를 가리지 않게 더 작게 */
+@media (max-height: 420px) {
+  .dr-text {
+    font-size: calc(18px * var(--z-txt, 1));
+  }
+  .dr-say {
+    font-size: calc(14px * var(--z-txt, 1));
+  }
+}
+/* 한 톤 배경: 캔버스만 (레버·글자는 그대로). 가장 낮은 화질에서는 걸지 않는다 */
+body.flat-bg #view {
+  filter: saturate(0.12) contrast(1.04);
+}
