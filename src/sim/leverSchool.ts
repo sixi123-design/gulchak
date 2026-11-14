@@ -101,6 +101,21 @@ export const AIM = {
   frames: 18,
 } as const;
 
+/**
+ * 버킷 밑이 흙 위 gap에 오도록 자세를 잡는다.
+ * groundGap()은 이빨이 아니라 버킷 하부에서 가장 낮은 점을 재므로(session.ts groundGap),
+ * 날 끝 높이로 자세를 잡으면 실제 간격이 달라진다.
+ */
+function poseAtGap(s: DigSession, swing: number, r: number, gap: number, bucketAbs: number, bucketRel?: number) {
+  let y = gap;
+  for (let i = 0; i < 6; i++) {
+    pose(s, swing, r, y, bucketAbs, bucketRel);
+    const d = s.groundGap() - gap;
+    if (Math.abs(d) < 0.01) break;
+    y -= d;
+  }
+}
+
 const JOINTS = ['swing', 'boom', 'arm', 'bucket'] as const;
 /** 네 관절이 다 서 있고 레버도 중립 */
 const allStill = (s: DigSession) =>
@@ -113,22 +128,27 @@ const cm = (m: number) => `${Math.round(Math.abs(m) * 100)}cm`;
 /** 오차에 따른 한 마디 */
 const aimWord = (err: number, tol: number) => (err <= tol * 0.4 ? '완벽!' : err <= tol ? '좋음' : '아쉬움');
 
-/** 한 회차: 이빨을 목표 높이에 세운다. 멈추면(맞췄든 못 맞췄든) 오차를 적고 넘어간다 */
-const aimStep = (round: number): Step => {
+/** 한 회차: 버킷을 목표 높이에 세운다. 멈추면(맞췄든 못 맞췄든) 오차를 적고 넘어간다 */
+const aimStep = (round: number, key = `err${round + 1}`, of: number = AIM.targets.length, no = round + 1): Step => {
   const target = AIM.targets[round];
   const tol = AIM.tol[round];
-  const key = `err${round + 1}`;
   return {
-    text: `붐을 내려 이빨을 흙 위 ${Math.round(target * 100)}cm에 세우기 (${round + 1}/${AIM.targets.length})`,
+    text: `붐을 내려 버킷을 흙 위 ${Math.round(target * 100)}cm에 세우기${of > 1 ? ` (${no}/${of})` : ''}`,
     labels: ['붐 내림', '붐 올림'],
-    begin: (_s, mem) => (mem.hold = 0),
+    begin: (_s, mem) => {
+      mem.hold = 0;
+      mem.used = 0;
+    },
     done: (s, mem, bag) => {
       if (mem.done) {
         // 오차를 0.75초 보여 준 뒤 다음 회차로 (바로 넘기면 숫자를 못 본다)
         mem.show = (mem.show ?? 0) + 1;
         return mem.show >= 45;
       }
-      mem.hold = allStill(s) ? (mem.hold ?? 0) + 1 : 0;
+      // 가만히 있어도 '멈췄다'가 되지 않게: 붐 레버를 한 번이라도 쓴 뒤부터 센다.
+      // (거리로 재면, 앞 회차에서 지나쳐 내려온 사람은 다음 목표가 5cm 위라 길이 막힌다)
+      if (Math.abs(s.input.ry) > 0.03) mem.used = 1;
+      mem.hold = mem.used && allStill(s) ? (mem.hold ?? 0) + 1 : 0;
       if (mem.hold < AIM.frames) return false;
       mem.done = 1;
       mem.err = Math.abs(s.groundGap() - target);
@@ -153,7 +173,9 @@ const aimStep = (round: number): Step => {
         return `멈춤 ${'●'.repeat(n)}${'○'.repeat(3 - n)}`;
       }
       // 아직 멈추기 전이면 앞 회차 결과를 남겨 둔다
-      return bag.lastErr === undefined ? null : `지난 회차 ${cm(bag.lastErr)} · ${aimWord(bag.lastErr, bag.lastTol)}`;
+      if (bag.lastErr !== undefined) return `지난 회차 ${cm(bag.lastErr)} · ${aimWord(bag.lastErr, bag.lastTol)}`;
+      if (mem.used) return null;
+      return _s.groundGap() > target ? '붐을 내려 보세요' : '붐을 올려 보세요';
     },
     coach: (s) => {
       if (s.groundGap() < 0) return co('이빨이 흙에 닿았어요 → 붐 살짝 올림', '붐 올림');
@@ -176,17 +198,19 @@ const aimAt: Lesson = {
       '얼마나 미리인지는 머리가 아니라 손이 기억합니다. 세 번 해 보세요.',
     ],
   },
-  // 이빨을 A 구덩이 위 1.2m에 둔 자세 (붐만 내리면 목표 높이에 닿는다)
+  // 버킷 밑을 A 구덩이 위 1.2m에 둔 자세 (붐만 내리면 목표 높이에 닿는다)
   setup: (s) => {
-    pose(s, SWING_A, s.digTarget.rho - 0.5, 1.2, -10 * deg);
+    poseAtGap(s, SWING_A, s.digTarget.rho - 0.5, 1.2, -10 * deg, 0);
     fill(s, 0);
   },
   grade: (_s, bag): Grade => {
     const errs = [bag.err1, bag.err2, bag.err3].filter((x) => typeof x === 'number' && Number.isFinite(x));
-    if (!errs.length) return { stars: 1, note: '세 번 다 해 보세요' };
+    if (errs.length < AIM.targets.length) return { stars: 1, note: '세 번 다 해 보세요' };
     const avg = errs.reduce((a, b) => a + b, 0) / errs.length;
-    if (avg <= 0.04) return { stars: 3, note: `평균 ${cm(avg)} — 손이 기억하고 있어요` };
-    if (avg <= 0.08) return { stars: 2, note: `평균 ${cm(avg)} — 조금 더 미리 줄여 보세요` };
+    const worst = Math.max(...errs);
+    // 세 번 다 잘해야 별 3개 — 평균으로 보면 한 번 크게 틀려도 가려진다
+    if (worst <= 0.04) return { stars: 3, note: `가장 나쁜 회차도 ${cm(worst)} — 손이 기억하고 있어요` };
+    if (avg <= 0.08) return { stars: 2, note: `평균 ${cm(avg)} · 가장 나쁜 회차 ${cm(worst)} — 조금 더 미리 줄여 보세요` };
     return { stars: 1, note: `평균 ${cm(avg)} — 목표 한참 전에 레버를 줄이기 시작하세요` };
   },
   steps: AIM.targets.map((_t, i) => aimStep(i)),
@@ -205,6 +229,10 @@ export const LINE = {
   height: 0.6,
   /** 이 비율 이상 두 관절을 같이 움직여야 '같이 썼다' */
   multi: 0.35,
+  /** 한 방향으로 그을 거리 (m) */
+  dist: 1.6,
+  /** 4단계는 고봉 흙을 든 채라 버킷을 끝까지 오므리고 있어 반경 여유가 적다 */
+  distLaden: 0.7,
 } as const;
 
 /** 이빨 높이가 목표에서 얼마나 벗어났는지 매 프레임 쌓는다 + 동시조작 비율 */
@@ -218,14 +246,14 @@ function lineWatch(s: DigSession, bag: Mem) {
 const devOf = (bag: Mem) => (bag.devN ? bag.devSum / bag.devN : 0);
 const multiOf = (bag: Mem) => (bag.frames ? (bag.multi ?? 0) / bag.frames : 0);
 
-/** 한 방향 긋기: 이빨을 목표 높이로 유지하며 dir(1 바깥 · -1 몸 쪽)으로 옮긴다 */
-const lineStep = (dir: 1 | -1, text: string, label: string): Step => ({
+/** 한 방향 긋기: 버킷을 목표 높이로 유지하며 dir(1 바깥 · -1 몸 쪽)으로 dist만큼 옮긴다 */
+const lineStep = (dir: 1 | -1, dist: number, text: string, label: string): Step => ({
   text,
   labels: [label, '붐 올림', '붐 내림'],
   begin: (s, mem) => (mem.r0 = s.frame.tip.r),
   done: (s, mem, bag) => {
     lineWatch(s, bag);
-    return (s.frame.tip.r - mem.r0) * dir >= 1.6;
+    return (s.frame.tip.r - mem.r0) * dir >= dist;
   },
   meter: (s) => {
     const lo = LINE.height - LINE.ok * 3;
@@ -262,9 +290,9 @@ const bothLevers: Lesson = {
       '지나간 자리에 선이 남습니다. 휘었는지 곧은지 보고 고치세요.',
     ],
   },
-  // 이빨을 A 구덩이 위 목표 높이에 두고 몸 가까이 (바깥으로 1.6m 긋고, 다시 당겨 온다)
+  // 버킷 밑을 목표 높이에 두고 몸 가까이. 버킷은 암과 일직선(평탄 자세) — 가동범위 안
   setup: (s) => {
-    pose(s, SWING_A, s.digTarget.rho - 2.2, LINE.height, -10 * deg);
+    poseAtGap(s, SWING_A, s.digTarget.rho - 2.2, LINE.height, -10 * deg, 0);
     fill(s, 0);
   },
   grade: (_s, bag): Grade => {
@@ -277,8 +305,8 @@ const bothLevers: Lesson = {
     return { stars: 3, note: `높이 평균 ${cm(dev)} — 선이 곧습니다` };
   },
   steps: [
-    lineStep(1, '이빨 높이를 지키며 바깥으로 긋기 — 암 펴기 + 붐으로 높이 맞추기', '암 펴기'),
-    lineStep(-1, '이제 몸 쪽으로 당겨 오기 — 암 당기기 + 붐으로 높이 맞추기', '암 당기기'),
+    lineStep(1, LINE.dist, '버킷 높이를 지키며 바깥으로 긋기 — 암 펴기 + 붐으로 높이 맞추기', '암 펴기'),
+    lineStep(-1, LINE.dist, '이제 몸 쪽으로 당겨 오기 — 암 당기기 + 붐으로 높이 맞추기', '암 당기기'),
   ],
 };
 
@@ -345,14 +373,14 @@ const allTogether: Lesson = {
     ],
   },
   setup: (s) => {
-    pose(s, SWING_A, s.digTarget.rho - 2.2, LINE.height + 0.6, 95 * deg, s.m.limits.bucket[0] + 2 * deg);
+    poseAtGap(s, SWING_A, s.digTarget.rho - 2.6, LINE.height, 95 * deg, s.m.limits.bucket[0] + 2 * deg);
     fill(s, 1.25);
     s.maxJolt = 0;
   },
   grade: (s, bag): Grade => {
     const lost = lostOf(s, bag);
     const jolt = s.maxJolt ?? 0;
-    const err = typeof bag.err1 === 'number' ? bag.err1 : Infinity;
+    const err = typeof bag.errAll === 'number' ? bag.errAll : Infinity;
     const dev = devOf(bag);
     const multi = multiOf(bag);
     // 흙 지키기 · 동시조작(높이 유지) · 멈추기
@@ -360,15 +388,18 @@ const allTogether: Lesson = {
     const line = mark(bag.devN > 0 && dev <= LINE.good && multi >= LINE.multi, bag.devN > 0 && dev <= LINE.ok);
     const stop = mark(err <= 0.04, err <= 0.08);
     const note = `흙 ${soil} · 직선 ${line} · 멈춤 ${stop}`;
-    const bad = [soil, line, stop].filter((m) => m === '△').length;
-    return { stars: bad === 0 ? 3 : bad === 1 ? 2 : 1, note };
+    const marks = [soil, line, stop];
+    const bad = marks.filter((m) => m === '△').length;
+    // 별 3개는 셋 다 ◎일 때만 — ○ 세 개로 3개를 주면 앞 단계들보다 느슨해진다
+    if (marks.every((m) => m === '◎')) return { stars: 3, note };
+    return { stars: bad >= 2 ? 1 : 2, note };
   },
   steps: [
     {
-      ...lineStep(1, '흙을 흘리지 말고, 두 레버를 같이 써서 바깥으로 긋기', '암 펴기'),
+      ...lineStep(1, LINE.distLaden, '흙을 흘리지 말고, 두 레버를 같이 써서 바깥으로 긋기', '암 펴기'),
       labels: ['암 펴기', '붐 올림', '붐 내림'],
     },
-    aimStep(2),
+    aimStep(1, 'errAll', 1),
   ],
 };
 

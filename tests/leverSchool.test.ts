@@ -351,14 +351,14 @@ it('4단계가 있고 세 가지를 다 본다', () => {
 
 it('세 항목을 ◎○△로 보여 준다', () => {
   const L = all();
-  const g = L.grade!({ load: 1, maxJolt: 0 } as never, { load0: 1, err1: 0.02, devSum: 2, devN: 100, multi: 80, frames: 100 });
+  const g = L.grade!({ load: 1, maxJolt: 0 } as never, { load0: 1, errAll: 0.02, devSum: 2, devN: 100, multi: 80, frames: 100 });
   expect(g.note).toMatch(/[◎○△]/);
   expect((g.note.match(/[◎○△]/g) ?? []).length).toBe(3);
 });
 
 it('세 항목이 모두 좋으면 별 3개 (◎ 세 개)', () => {
   const L = all();
-  const g = L.grade!({ load: 1, maxJolt: 0 } as never, { load0: 1, err1: 0.02, devSum: 2, devN: 100, multi: 80, frames: 100 });
+  const g = L.grade!({ load: 1, maxJolt: 0 } as never, { load0: 1, errAll: 0.02, devSum: 2, devN: 100, multi: 80, frames: 100 });
   expect(g.stars).toBe(3);
   expect((g.note.match(/◎/g) ?? []).length).toBe(3);
 });
@@ -366,13 +366,13 @@ it('세 항목이 모두 좋으면 별 3개 (◎ 세 개)', () => {
 it('한 항목만 나쁘면 별 2개', () => {
   const L = all();
   // 흙을 30% 쏟음, 나머지는 좋음
-  const g = L.grade!({ load: 0.7, maxJolt: 0.5 } as never, { load0: 1, err1: 0.02, devSum: 2, devN: 100, multi: 80, frames: 100 });
+  const g = L.grade!({ load: 0.7, maxJolt: 0.5 } as never, { load0: 1, errAll: 0.02, devSum: 2, devN: 100, multi: 80, frames: 100 });
   expect(g.stars).toBe(2);
 });
 
 it('두 항목 이상 나쁘면 별 1개', () => {
   const L = all();
-  const g = L.grade!({ load: 0.7, maxJolt: 0.5 } as never, { load0: 1, err1: 0.3, devSum: 2, devN: 100, multi: 80, frames: 100 });
+  const g = L.grade!({ load: 0.7, maxJolt: 0.5 } as never, { load0: 1, errAll: 0.3, devSum: 2, devN: 100, multi: 80, frames: 100 });
   expect(g.stars).toBe(1);
 });
 
@@ -389,4 +389,92 @@ it('기본기는 네 미션이고 순서대로다', () => {
 it('기본기 네 미션의 아이콘이 모두 다르다', () => {
   const icons = BASIC_LESSONS.map((l) => l.icon);
   expect(new Set(icons).size).toBe(icons.length);
+});
+
+// ---------- 실제 조작으로 끝까지 가는지 (가동범위·도달성까지 함께 막는다) ----------
+
+/** 시작 자세가 장비 가동범위 안이어야 한다 */
+it('네 미션의 시작 자세가 모두 가동범위 안', () => {
+  const lim = MACHINE.limits;
+  for (const L of BASIC_LESSONS) {
+    const t = new Tutor(L, sess());
+    const p = t.s.pose;
+    expect(p.boom, `${L.id} boom`).toBeGreaterThanOrEqual(lim.boom[0] - 1e-6);
+    expect(p.boom, `${L.id} boom`).toBeLessThanOrEqual(lim.boom[1] + 1e-6);
+    expect(p.arm, `${L.id} arm`).toBeGreaterThanOrEqual(lim.arm[0] - 1e-6);
+    expect(p.arm, `${L.id} arm`).toBeLessThanOrEqual(lim.arm[1] + 1e-6);
+    expect(p.bucket, `${L.id} bucket`).toBeGreaterThanOrEqual(lim.bucket[0] - 1e-6);
+    expect(p.bucket, `${L.id} bucket`).toBeLessThanOrEqual(lim.bucket[1] + 1e-6);
+    expect(t.s.groundGap(), `${L.id} gap`).toBeGreaterThan(0);
+  }
+});
+
+/** 목표 높이를 지키며 암을 펴거나 당긴다 (붐으로 높이를 보정하는 간단한 자동 조작) */
+function holdLine(t: Tutor, armDir: 1 | -1, target: number, frames = 1200) {
+  const from = t.step;
+  for (let i = 0; i < frames; i++) {
+    const e = t.s.groundGap() - target;
+    t.s.input = { lx: 0, ly: armDir, rx: 0, ry: Math.max(-1, Math.min(1, e * 4)) };
+    t.s.step();
+    t.update();
+    if (t.step !== from || t.cleared) return true;
+  }
+  return false;
+}
+/**
+ * 목표 높이로 다가가 멈춘다. 가까워질수록 레버를 줄인다 — 이 단계가 가르치려는 조작.
+ * (레버를 끝까지 주고 놓으면 15cm쯤 더 내려가 허용 오차를 넘는다)
+ */
+function aimAuto(t: Tutor, target: number) {
+  const from = t.step;
+  for (let i = 0; i < 1500; i++) {
+    const e = t.s.groundGap() - target; // + 면 높다 → 붐 내림(ry +)
+    if (Math.abs(e) < 0.008) break;
+    t.s.input = { lx: 0, ly: 0, rx: 0, ry: Math.max(-1, Math.min(1, e * 2)) };
+    t.s.step();
+    t.update();
+    if (t.step !== from || t.cleared) return true;
+  }
+  for (let i = 0; i < 400; i++) {
+    t.s.input = { lx: 0, ly: 0, rx: 0, ry: 0 };
+    t.s.step();
+    t.update();
+    if (t.step !== from || t.cleared) return true;
+  }
+  return false;
+}
+
+it('2단계: 세 회차를 목표에 맞춰 끝내면 별 2개 이상', () => {
+  const t = aimTutor();
+  for (const target of AIM.targets) {
+    if (t.cleared) break;
+    expect(aimAuto(t, target), `회차 ${target}`).toBe(true);
+  }
+  expect(t.cleared).toBe(true);
+  expect(aim().grade!(t.s, t.bag).stars).toBeGreaterThanOrEqual(2);
+});
+
+it('3단계: 두 레버를 같이 써서 끝까지 간다', () => {
+  const t = bothTutor();
+  expect(holdLine(t, 1, LINE.height), '바깥으로 긋기').toBe(true);
+  expect(holdLine(t, -1, LINE.height), '당겨 오기').toBe(true);
+  expect(t.cleared).toBe(true);
+});
+
+it('3단계: 두 레버를 같이 쓰면 별 2개 이상', () => {
+  const t = bothTutor();
+  holdLine(t, 1, LINE.height);
+  holdLine(t, -1, LINE.height);
+  const g = both().grade!(t.s, t.bag);
+  expect(g.stars).toBeGreaterThanOrEqual(2);
+});
+
+it('4단계: 끝까지 가고 흙도 지킨다', () => {
+  const t = new Tutor(all(), sess());
+  expect(holdLine(t, 1, LINE.height), '긋기').toBe(true);
+  expect(aimAuto(t, AIM.targets[2]), '멈추기').toBe(true);
+  expect(t.cleared).toBe(true);
+  const g = all().grade!(t.s, t.bag);
+  expect(g.stars).toBeGreaterThanOrEqual(2);
+  expect(g.note).toMatch(/흙 [◎○]/); // 흙을 쏟지 않았다
 });

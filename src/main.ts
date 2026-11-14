@@ -749,12 +749,13 @@ function newSession(autoEnd?: boolean) {
   drive?.dispose();
   drive = null;
   exc?.disposeCache();
+  // 이빨 경로 선은 world에 붙어 있으니 world를 버리기 전에 정리한다
+  trail?.dispose();
+  trail = null;
   scene.remove(world);
   disposeTree(world);
   world = new THREE.Group();
   scene.add(world);
-  // 이빨 경로 선: 쓰는 미션에서만 보인다 (world와 함께 버려진다)
-  trail?.dispose();
   trail = new TipTrail();
   world.add(trail.object);
   session = new DigSession(MACHINE, RULES, modeKey === 'tutorial' ? { ...MODES.tutorial, autoEnd: !!autoEnd } : MODES[modeKey]);
