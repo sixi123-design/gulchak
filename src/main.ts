@@ -1008,8 +1008,10 @@ let tutor: Tutor<any> | null = null;
 const PEEK_SEC = 1.5;
 const PEEK_DROP = 2.6;
 let peekT = 0;
+/** 시선 내리기를 단계마다 한 번만 */
+let peekStep = -1;
 /** 땅을 한 번 보여 준다 (운전석 안에서 시선만 내린다) */
-export function peekGround() {
+function peekGround() {
   peekT = PEEK_SEC;
 }
 /** 화면을 누르면 건너뛴다 */
@@ -1361,6 +1363,15 @@ function updateIntro() {
 function updateMeter() {
   updateSay();
   updateIntro();
+  // 단계가 바뀔 때 한 번: 운전석에서 시선을 내려 땅을 보여 준다
+  if (tutor && tutor.step !== peekStep) {
+    peekStep = tutor.step;
+    if (tutor.current?.peek) peekGround();
+  }
+  // 땅 표식 ("여기를 파세요")
+  const sp = tutor && !tutor.cleared ? (tutor.current?.spot?.(session) ?? null) : null;
+  if (sp) spot?.put(sp.swing, sp.r);
+  else spot?.hide();
   // 미션이 띄우는 짧은 한 줄 (세는 중 ●●○ · 멈춘 뒤 오차 cm · 레버 익히기의 반응)
   const h = tutor?.hud() ?? null;
   if (tutor?.lesson.big) {

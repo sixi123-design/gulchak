@@ -23,6 +23,10 @@ export interface Step<S = DigSession> {
    * `null`을 돌려주면 시범이 끝난 것이다 (영상으로 못 배우는 손맛을 먼저 보여 주는 장치).
    */
   demo?: (frame: number) => Partial<Sticks> | null;
+  /** 이 단계가 시작될 때 운전석에서 시선을 내려 땅을 한 번 보여 줄까 */
+  peek?: boolean;
+  /** 땅에 "여기" 표식을 놓을 자리 (없으면 표식 없음) */
+  spot?: (s: S) => { swing: number; r: number } | null;
   /** 이 단계가 시작될 때의 상태 기록 */
   begin?: (s: S, mem: Mem, bag: Mem) => void;
   done: (s: S, mem: Mem, bag: Mem) => boolean;

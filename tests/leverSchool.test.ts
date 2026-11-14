@@ -254,9 +254,10 @@ it('두 항목 이상 나쁘면 별 1개', () => {
   expect(g.stars).toBe(1);
 });
 
-it('기본기 다섯 미션의 뼈대', () => {
-  // 레버를 쓸 줄 모르는 사람에게 미션을 줄 수 없으니 레버 익히기가 맨 앞
-  expect(BASIC_LESSONS.map((l) => l.id)).toEqual(['b-levers', 'b-stop', 'b-aim', 'b-both', 'b-all']);
+it('기본기 미션의 뼈대', () => {
+  // 레버를 쓸 줄 모르는 사람에게 미션을 줄 수 없으니 레버 익히기가 맨 앞,
+  // 그다음이 새 과정의 2단계 '흙 퍼기' (옛 b-stop~b-all은 Task 11에서 걷어낸다)
+  expect(BASIC_LESSONS.map((l) => l.id)).toEqual(['b-levers', 'b-scoop', 'b-stop', 'b-aim', 'b-both', 'b-all']);
   expect(BASIC_LESSONS.every((l) => l.tier === '기본기')).toBe(true);
   // 모두 '왜 배우나' 카드와 끝낸 뒤 한 줄이 있다
   expect(BASIC_LESSONS.every((l) => l.why && l.grade)).toBe(true);
@@ -265,8 +266,10 @@ it('기본기 다섯 미션의 뼈대', () => {
     const v = BASIC_LESSONS.map((l) => l[k]);
     expect(new Set(v).size, k).toBe(v.length);
   }
-  // 레버 익히기만 한 톤 배경 + 배경 지시문을 쓴다
-  expect(BASIC_LESSONS.filter((l) => l.flat || l.big).map((l) => l.id)).toEqual(['b-levers']);
+  // 가운데 글자 형식(big)을 쓰는 것: 레버 익히기와 새 2단계.
+  // 한 톤 배경(flat)은 레버 익히기만 (2단계부터는 실제 시험장을 봐야 한다)
+  expect(BASIC_LESSONS.filter((l) => l.big).map((l) => l.id)).toEqual(['b-levers', 'b-scoop']);
+  expect(BASIC_LESSONS.filter((l) => l.flat).map((l) => l.id)).toEqual(['b-levers']);
   // 선이 남는 미션은 동시조작을 가르치는 둘
   expect(BASIC_LESSONS.filter((l) => l.trail).map((l) => l.id)).toEqual(['b-both', 'b-all']);
 });

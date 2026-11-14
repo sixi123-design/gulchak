@@ -6,6 +6,7 @@
  * 단방향 import — tutorial.ts는 이 파일을 모른다.
  */
 import { co, fill, hold, pose, type Grade, type Lesson, type Step } from './tutorial';
+import { SCOOP_LESSON } from './digCourse';
 import { LEVER_DRILL } from './leverDrill';
 import type { DigSession } from './session';
 
@@ -413,4 +414,4 @@ const allTogether: Lesson = {
 };
 
 // 레버 익히기가 맨 앞 — 레버를 쓸 줄 모르는 사람에게 미션을 줄 수 없다
-export const BASIC_LESSONS: Lesson[] = [LEVER_DRILL, stopFirst, aimAt, bothLevers, allTogether];
+export const BASIC_LESSONS: Lesson[] = [LEVER_DRILL, SCOOP_LESSON, stopFirst, aimAt, bothLevers, allTogether];
