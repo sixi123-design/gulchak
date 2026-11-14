@@ -187,8 +187,13 @@ it('#hud 안의 화면 덮는 층은 모두 터치를 통과시킨다', () => {
   }
 });
 
-it('깜빡이는 부품의 이름을 글자로 알려 준다', () => {
-  // 붐이 번쩍거리는데 그게 붐이라는 걸 어디서도 말해 주지 않았다
-  expect(main).toMatch(/PART_NAME/);
-  expect(main).toMatch(/깜빡이는 곳이 \$\{PART_NAME\[part\]\}입니다/);
+it('깜빡이는 부품의 이름은 지시가 끝날 때까지 전용 줄에 남는다', () => {
+  // 붐이 번쩍거리는데 그게 붐이라는 걸 어디서도 말해 주지 않았다.
+  // 반응·코치와 같은 자리에 두면 서로 가리고, 2.2초만 띄우면 레버 찾다가 놓친다
+  expect([...html.matchAll(/id="dr-part"/g)].length).toBe(1);
+  expect(main).toMatch(/\$\('dr-part'\)\.textContent = part \? `깜빡이는 곳 = \$\{PART_NAME\[part\]\}`/);
+  // 레버 익히기는 그 지시를 해낼 때까지 계속 깜빡인다
+  expect(main).toMatch(/introUntil = big \? Infinity : now \+ 2200/);
+  // 작은 줄은 반응·코치만
+  expect(main).toMatch(/\$\('dr-say'\)\.textContent = h \?\? tutor\.coach\?\.msg \?\? ''/);
 });

@@ -7827,3 +7827,14 @@ body.flat-bg {
     animation: none;
   }
 }
+
+/* 지시가 가리키는 부품 이름. 깜빡임을 놓쳐도 글자는 남아 있다 */
+.dr-part {
+  margin-top: 6px;
+  font: 900 calc(15px * var(--z-txt, 1)) / 1.3 var(--font);
+  color: color-mix(in srgb, var(--ink) 62%, transparent);
+  letter-spacing: 0.02em;
+}
+.dr-part:empty {
+  display: none;
+}

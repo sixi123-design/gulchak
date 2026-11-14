@@ -1265,26 +1265,39 @@ type Part = 'boom' | 'arm' | 'bucket';
 const PART_OF = (l: string): Part | null => (l.startsWith('붐') ? 'boom' : l.startsWith('암') ? 'arm' : l.startsWith('버킷') ? 'bucket' : null);
 /** 부품 이름. 깜빡이는 곳이 무엇인지 글자로 알려 준다 (깜빡임만으로는 이름을 알 수 없다) */
 const PART_NAME: Record<Part, string> = { boom: '붐', arm: '암', bucket: '버킷' };
-/** 지금 깜빡이고 있는 부품 (없으면 null) */
-const blinking = (): Part | null => (intro.length && performance.now() < introUntil ? intro[0].part : null);
+/** 지금 지시가 가리키는 부품 (없으면 null) */
+const stepPart = (): Part | null => {
+  for (const l of tutor?.current?.labels ?? []) {
+    const p = PART_OF(l);
+    if (p) return p;
+  }
+  return null;
+};
 const introduced = new Set<Part>();
 let intro: { part: Part }[] = [];
 let introUntil = 0;
 let introStep = -1;
 function updateIntro() {
   const now = performance.now();
+  const big = !!tutor?.lesson.big;
   if (tutor && !tutor.cleared && tutor.step !== introStep) {
     introStep = tutor.step;
     const fresh: typeof intro = [];
     for (const l of tutor.current?.labels ?? []) {
       const part = PART_OF(l);
-      if (!part || introduced.has(part) || fresh.some((f) => f.part === part)) continue;
+      if (!part || fresh.some((f) => f.part === part)) continue;
+      // 배우기 미션들은 부품을 처음 쓸 때만 한 번. 레버 익히기는 매 지시마다
+      if (!big && introduced.has(part)) continue;
       introduced.add(part);
       fresh.push({ part });
     }
     if (fresh.length) {
       intro = fresh;
-      introUntil = now + 2200;
+      // 레버 익히기: 그 지시를 해낼 때까지 계속 깜빡인다 (2.2초면 레버 찾다가 놓친다)
+      introUntil = big ? Infinity : now + 2200;
+    } else if (big) {
+      intro = [];
+      introUntil = 0;
     }
   }
   const on = !!tutor && guideLv === 0 && now < introUntil && $('fail').hidden && $('clear').hidden;
@@ -1303,8 +1316,9 @@ function updateMeter() {
   // 미션이 띄우는 짧은 한 줄 (세는 중 ●●○ · 멈춘 뒤 오차 cm · 레버 익히기의 반응)
   const h = tutor?.hud() ?? null;
   if (tutor?.lesson.big) {
-    const part = blinking();
-    $('dr-say').textContent = h ?? (part ? `깜빡이는 곳이 ${PART_NAME[part]}입니다` : (tutor.coach?.msg ?? ''));
+    const part = stepPart();
+    $('dr-part').textContent = part ? `깜빡이는 곳 = ${PART_NAME[part]}` : '';
+    $('dr-say').textContent = h ?? tutor.coach?.msg ?? '';
     $('m-hold').hidden = true;
     const ok = tutor.bag.okN ?? 0;
     const bad = tutor.bag.badN ?? 0;
@@ -1342,6 +1356,7 @@ function renderMission(intro = false) {
   if (!tutor) {
     m.hidden = true;
     $('drill').hidden = true;
+    $('dr-part').textContent = '';
     $('drill-fx').innerHTML = '';
     $('btn-why').hidden = true;
     for (const el of document.querySelectorAll('.lab')) el.classList.remove('hint');
