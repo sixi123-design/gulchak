@@ -10,22 +10,31 @@ import type { DigSession } from './session';
 
 type Joint = keyof Pose;
 
+/** 단계 메모(mem, 단계마다 초기화) · 미션 보관함(bag, 미션 끝까지 유지) */
+type Mem = Record<string, number>;
+
 export interface Step<S = DigSession> {
   /** 화면에 보이는 한 줄 지시 */
   text: string;
   /** 깜빡여 줄 레버 라벨 (화면의 조이스틱 라벨 글자와 같게) */
   labels?: string[];
   /** 이 단계가 시작될 때의 상태 기록 */
-  begin?: (s: S, mem: Record<string, number>) => void;
-  done: (s: S, mem: Record<string, number>) => boolean;
+  begin?: (s: S, mem: Mem, bag: Mem) => void;
+  done: (s: S, mem: Mem, bag: Mem) => boolean;
   /** 이 단계부터 '버킷 내려놓기' 종료 판정을 켬 (앞 단계에서 미리 끝나지 않게) */
   armEnd?: boolean;
   /** 되돌릴 수 없는 상태: 되돌아갈 단계 번호와 안내 문구 (없으면 null) */
-  fail?: (s: S, mem: Record<string, number>) => { to: number; msg: string } | null;
+  fail?: (s: S, mem: Mem, bag: Mem) => { to: number; msg: string } | null;
   /** 그 자리에서 바로잡을 수 있는 어긋남: 원인과 지금 할 레버 (없으면 null) */
-  coach?: (s: S, mem: Record<string, number>) => Coach | null;
+  coach?: (s: S, mem: Mem, bag: Mem) => Coach | null;
   /** 미묘한 단계의 도움 게이지 (0~1). band가 있으면 바늘+목표 구간, 없으면 채워지는 막대 */
-  meter?: (s: S, mem: Record<string, number>) => Meter;
+  meter?: (s: S, mem: Mem, bag: Mem) => Meter;
+}
+
+/** 미션을 끝냈을 때의 평가: 별 개수와 한 줄 평 */
+export interface Grade {
+  stars: 1 | 2 | 3;
+  note: string;
 }
 
 export interface Coach {
@@ -59,6 +68,11 @@ export interface Lesson<S = DigSession> {
   tier?: '기초' | '숙련';
   /** 레버만 익힘: 시험장 판정(실격·경고)을 안 보여 줌 */
   noFail?: boolean;
+  /**
+   * 끝났을 때 별 몇 개인지와 한 줄 평. 없으면 클리어 화면은 지금까지와 똑같다(별 3개).
+   * bag이 비어 있을 수도 있으니(단계를 다 안 거치고 끝난 경우) 별은 반드시 1~3을 돌려준다.
+   */
+  grade?: (s: S, bag: Record<string, number>) => Grade;
   setup: (s: S) => void;
   steps: Step<S>[];
 }
@@ -589,7 +603,9 @@ export class Tutor<S extends { flags: { autoEnd: boolean } } = DigSession> {
   /** 지금 바로잡을 것 (잠깐 사라져도 0.5초는 유지해 깜빡이지 않게) */
   coach: Coach | null = null;
   private coachHold = 0;
-  private mem: Record<string, number> = {};
+  private mem: Mem = {};
+  /** 미션 보관함: 단계가 넘어가도 지워지지 않는다 (등급 재료를 쌓는 곳) */
+  readonly bag: Mem = {};
   constructor(
     readonly lesson: Lesson<S>,
     readonly s: S,
@@ -603,7 +619,7 @@ export class Tutor<S extends { flags: { autoEnd: boolean } } = DigSession> {
     this.coachHold = 0;
     const st = this.lesson.steps[this.step];
     if (this.lesson.autoEnd) this.s.flags.autoEnd = !!st?.armEnd;
-    st?.begin?.(this.s, this.mem);
+    st?.begin?.(this.s, this.mem, this.bag);
   }
   get current(): Step<S> | null {
     return this.lesson.steps[this.step] ?? null;
@@ -611,14 +627,14 @@ export class Tutor<S extends { flags: { autoEnd: boolean } } = DigSession> {
   /** 지금 단계의 도움 게이지 (없으면 null) */
   meter(): Meter | null {
     if (this.cleared) return null;
-    return this.current?.meter?.(this.s, this.mem) ?? null;
+    return this.current?.meter?.(this.s, this.mem, this.bag) ?? null;
   }
   /** 이번 프레임에 단계가 넘어갔으면 true */
   update(): boolean {
     if (this.cleared) return false;
     const st = this.current;
     if (!st) return false;
-    const f = st.fail?.(this.s, this.mem);
+    const f = st.fail?.(this.s, this.mem, this.bag);
     if (f) {
       this.step = f.to;
       this.notice = f.msg;
@@ -627,12 +643,12 @@ export class Tutor<S extends { flags: { autoEnd: boolean } } = DigSession> {
       this.enter();
       return false;
     }
-    const c = st.coach?.(this.s, this.mem) ?? null;
+    const c = st.coach?.(this.s, this.mem, this.bag) ?? null;
     if (c) {
       this.coach = c;
       this.coachHold = 30;
     } else if (this.coachHold > 0 && --this.coachHold === 0) this.coach = null;
-    if (!st.done(this.s, this.mem)) return false;
+    if (!st.done(this.s, this.mem, this.bag)) return false;
     this.step++;
     this.notice = null;
     if (this.step >= this.lesson.steps.length) this.cleared = true;
