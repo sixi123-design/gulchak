@@ -588,7 +588,12 @@ export class DigSession {
       const e0 = v0 * moveF;
       const e1 = this.vel[j] * moveF;
       this.velEff[j] = j === 'swing' ? 1 : resist * relief;
-      const along = Math.sign(e1) === Math.sign(e0) ? Math.abs(e1) : -Math.abs(e1);
+      // 반대로 꺾으면 '없앤 운동량'에 되돌리는 몫까지 더해 충격이 커진다.
+      // 다만 되돌리는 몫은 원래 움직이던 양을 넘지 않는다 — 멈춘 관절에 반대 방향 레버를
+      // 주는 것(바른 조작: 중립에서 세우고 바꾸기)은 덜컹이 아니다. 이 상한이 없으면
+      // 다 선 뒤에 바꿔도 남아 있던 미세한 속도 때문에 가짜 덜컹이 나고 고봉 흙이 쏟아졌다.
+      const back = Math.min(Math.abs(e1), Math.abs(e0));
+      const along = Math.sign(e1) === Math.sign(e0) ? Math.abs(e1) : -back;
       const decel = (Math.abs(e0) - along) / dt;
       const safe = this.params.joltSafeDecel * vmax;
       if (e0 !== 0 && decel > safe) {
