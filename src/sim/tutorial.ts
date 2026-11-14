@@ -16,6 +16,8 @@ export interface Step<S = DigSession> {
   text: string;
   /** 깜빡여 줄 레버 라벨 (화면의 조이스틱 라벨 글자와 같게) */
   labels?: string[];
+  /** 레버를 이만큼 밀라고 가르치는 구간이면 목표 칸 수 (1~3). 화면의 3칸 표시에 쓴다 */
+  gauge?: 1 | 2 | 3;
   /** 이 단계가 시작될 때의 상태 기록 */
   begin?: (s: S, mem: Mem, bag: Mem) => void;
   done: (s: S, mem: Mem, bag: Mem) => boolean;

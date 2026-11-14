@@ -12,7 +12,7 @@ import { LESSONS, TIERS, tierProgress, Tutor } from './sim/tutorial';
 import { BASIC_LESSONS } from './sim/leverSchool';
 import { TipTrail } from './render/tipTrail';
 import { ik, toWorld } from './sim/kinematics';
-import { Joystick, KEY_ACTIONS, keyName, Keys } from './ui/joystick';
+import { gaugeLevel, Joystick, KEY_ACTIONS, keyName, Keys } from './ui/joystick';
 import { Pedal, SteeringWheel } from './ui/driveControls';
 import { MachineSound, type SoundLevels } from './ui/audio';
 import { cssVars, INTRO_KEY, loadNum, loadRaw, loadSeen, loadStep, markSeen, pickTab, saveRaw, saveStep, STEPS, wantIntro, WHY_KEY } from './ui/prefs';
@@ -1273,6 +1273,29 @@ const stepPart = (): Part | null => {
   }
   return null;
 };
+/** 부품을 움직이는 레버 축 (3칸 표시가 어느 레버를 볼지) */
+const PART_AXIS: Record<Part, 'ly' | 'ry' | 'rx'> = { boom: 'ry', arm: 'ly', bucket: 'rx' };
+/**
+ * 레버를 얼마나 밀었나를 칸 3개로 보여 준다. 글자는 0자다.
+ * `Step.gauge`가 있는 구간에서만 띄운다 — 평소에는 화면을 어지럽히지 않는다.
+ */
+function updateGauge(part: Part | null) {
+  const want = tutor?.current?.gauge;
+  const box = $('dr-gauge');
+  if (!want || !part) {
+    box.hidden = true;
+    return;
+  }
+  box.hidden = false;
+  const now = gaugeLevel(session.input[PART_AXIS[part]]);
+  box.classList.toggle('hit', now === want);
+  const bars = box.children;
+  for (let i = 0; i < bars.length; i++) {
+    bars[i].classList.toggle('on', i < now);
+    bars[i].classList.toggle('want', i === want - 1);
+  }
+}
+
 const introduced = new Set<Part>();
 let intro: { part: Part }[] = [];
 let introUntil = 0;
@@ -1318,6 +1341,7 @@ function updateMeter() {
   if (tutor?.lesson.big) {
     const part = stepPart();
     $('dr-part').textContent = part ? `깜빡이는 곳 = ${PART_NAME[part]}` : '';
+    updateGauge(part);
     $('dr-say').textContent = h ?? tutor.coach?.msg ?? '';
     $('m-hold').hidden = true;
     const ok = tutor.bag.okN ?? 0;
@@ -1357,6 +1381,7 @@ function renderMission(intro = false) {
     m.hidden = true;
     $('drill').hidden = true;
     $('dr-part').textContent = '';
+    $('dr-gauge').hidden = true;
     $('drill-fx').innerHTML = '';
     $('btn-why').hidden = true;
     for (const el of document.querySelectorAll('.lab')) el.classList.remove('hint');

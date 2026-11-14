@@ -56,7 +56,7 @@ export class Joystick {
     // 레버 크기 설정(scale)으로 키우면 손잡이 이동도 같이 커지므로 화면 px → 레버 안 px
     const s = this.el.getBoundingClientRect().width / Math.max(1, this.el.offsetWidth);
     this.knob.style.transform = `translate(${(dx * this.radius) / s}px, ${(dy * this.radius) / s}px)`;
-    const dz = 0.15;
+    const dz = DEADZONE;
     const shape = (v: number) => (Math.abs(v) < dz ? 0 : Math.sign(v) * ((Math.abs(v) - dz) / (1 - dz)));
     this.x = shape(dx);
     this.y = -shape(dy);
@@ -81,6 +81,26 @@ export class Joystick {
     this.knob.style.transform = '';
     this.el.classList.remove('active');
   }
+}
+
+/**
+ * 레버 데드존. 이 안에서는 기계가 전혀 안 움직인다.
+ * 화면의 3칸 표시도 같은 값을 써야 "밀었는데 안 움직인다"가 안 생긴다.
+ */
+export const DEADZONE = 0.15;
+
+/**
+ * 레버를 얼마나 밀었나를 칸 수로 (0~3).
+ *
+ * 숫자(%)는 쓰지 않는다 — 초심자 검수에서 "무엇의 25%인지 모르겠다"가 나왔다.
+ * 칸은 읽을 글자가 없고, 한 칸과 세 칸의 차이가 바로 보인다.
+ */
+export function gaugeLevel(v: number): 0 | 1 | 2 | 3 {
+  const a = Math.abs(v);
+  if (a <= DEADZONE) return 0;
+  if (a <= 0.4) return 1;
+  if (a <= 0.7) return 2;
+  return 3;
 }
 
 /** 키보드 조작: 동작마다 키 하나 (설정 > 조작키에서 바꿈). 이름은 화면 레버 라벨과 같게 */
