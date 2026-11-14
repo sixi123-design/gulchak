@@ -192,6 +192,96 @@ const aimAt: Lesson = {
   steps: AIM.targets.map((_t, i) => aimStep(i)),
 };
 
+/**
+ * 3단계 상수. 목표는 '이빨을 땅 위 일정 높이로 유지하며 직선으로 옮기기'.
+ * 붐만 올리면 이빨이 호를 그려 높이가 벗어난다 — 암을 같이 써야 직선이 된다.
+ */
+export const LINE = {
+  /** 평균 벗어남: 이 아래면 잘함 */
+  good: 0.04,
+  /** 이 아래면 보통 */
+  ok: 0.1,
+  /** 지킬 높이 (땅 위, m) */
+  height: 0.6,
+  /** 이 비율 이상 두 관절을 같이 움직여야 '같이 썼다' */
+  multi: 0.35,
+} as const;
+
+/** 이빨 높이가 목표에서 얼마나 벗어났는지 매 프레임 쌓는다 + 동시조작 비율 */
+function lineWatch(s: DigSession, bag: Mem) {
+  bag.devSum = (bag.devSum ?? 0) + Math.abs(s.groundGap() - LINE.height);
+  bag.devN = (bag.devN ?? 0) + 1;
+  const mv = (['boom', 'arm', 'bucket'] as const).filter((j) => Math.abs(s.vel[j]) > 0.02 * s.m.speeds[j]).length;
+  if (mv > 0) bag.frames = (bag.frames ?? 0) + 1;
+  if (mv >= 2) bag.multi = (bag.multi ?? 0) + 1;
+}
+const devOf = (bag: Mem) => (bag.devN ? bag.devSum / bag.devN : 0);
+const multiOf = (bag: Mem) => (bag.frames ? (bag.multi ?? 0) / bag.frames : 0);
+
+/** 한 방향 긋기: 이빨을 목표 높이로 유지하며 dir(1 바깥 · -1 몸 쪽)으로 옮긴다 */
+const lineStep = (dir: 1 | -1, text: string, label: string): Step => ({
+  text,
+  labels: [label, '붐 올림', '붐 내림'],
+  begin: (s, mem) => (mem.r0 = s.frame.tip.r),
+  done: (s, mem, bag) => {
+    lineWatch(s, bag);
+    return (s.frame.tip.r - mem.r0) * dir >= 1.6;
+  },
+  meter: (s) => {
+    const lo = LINE.height - LINE.ok * 3;
+    const hi = LINE.height + LINE.ok * 3;
+    const v = Math.min(1, Math.max(0, (s.groundGap() - lo) / (hi - lo)));
+    const a = (LINE.height - LINE.good - lo) / (hi - lo);
+    const b = (LINE.height + LINE.good - lo) / (hi - lo);
+    return { v, band: [a, b] };
+  },
+  hud: (s) => {
+    const d = s.groundGap() - LINE.height;
+    return Math.abs(d) < LINE.good ? '높이 좋음' : `${d > 0 ? '높음' : '낮음'} ${cm(d)}`;
+  },
+  coach: (s) => {
+    const d = s.groundGap() - LINE.height;
+    if (d > LINE.good) return co('이빨이 높아요 → 붐 내림을 같이', '붐 내림', label);
+    if (d < -LINE.good) return co('이빨이 낮아요 → 붐 올림을 같이', '붐 올림', label);
+    return null;
+  },
+});
+
+const bothLevers: Lesson = {
+  id: 'b-both',
+  tier: '기본기',
+  icon: 'stBoth',
+  title: '두 레버를 같이 쓰기',
+  noFail: true,
+  trail: true,
+  why: {
+    title: '왜 두 레버를 같이 쓰나',
+    lines: [
+      '붐만 올리면 이빨이 호를 그립니다. 붐은 한 점을 중심으로 도니까요.',
+      '암을 같이 펴거나 당겨야 이빨이 직선으로 갑니다. 평탄 작업이 이 원리입니다.',
+      '지나간 자리에 선이 남습니다. 휘었는지 곧은지 보고 고치세요.',
+    ],
+  },
+  // 이빨을 A 구덩이 위 목표 높이에 두고 몸 가까이 (바깥으로 1.6m 긋고, 다시 당겨 온다)
+  setup: (s) => {
+    pose(s, SWING_A, s.digTarget.rho - 2.2, LINE.height, -10 * deg);
+    fill(s, 0);
+  },
+  grade: (_s, bag): Grade => {
+    const dev = devOf(bag);
+    const multi = multiOf(bag);
+    if (!bag.devN) return { stars: 1, note: '해 보세요' };
+    if (dev > LINE.ok) return { stars: 1, note: `높이가 평균 ${cm(dev)} 벗어났어요. 붐만 쓰면 호가 그려집니다` };
+    if (dev > LINE.good) return { stars: 2, note: `높이가 평균 ${cm(dev)} 벗어났어요. 조금 더 붙여 보세요` };
+    if (multi < LINE.multi) return { stars: 2, note: '높이는 지켰지만 한 레버씩 번갈아 썼어요. 두 레버를 같이 움직여 보세요' };
+    return { stars: 3, note: `높이 평균 ${cm(dev)} — 선이 곧습니다` };
+  },
+  steps: [
+    lineStep(1, '이빨 높이를 지키며 바깥으로 긋기 — 암 펴기 + 붐으로 높이 맞추기', '암 펴기'),
+    lineStep(-1, '이제 몸 쪽으로 당겨 오기 — 암 당기기 + 붐으로 높이 맞추기', '암 당기기'),
+  ],
+};
+
 const stopFirst: Lesson = {
   id: 'b-stop',
   tier: '기본기',
@@ -232,4 +322,4 @@ const stopFirst: Lesson = {
   ].map(withLoad0),
 };
 
-export const BASIC_LESSONS: Lesson[] = [stopFirst, aimAt];
+export const BASIC_LESSONS: Lesson[] = [stopFirst, aimAt, bothLevers];

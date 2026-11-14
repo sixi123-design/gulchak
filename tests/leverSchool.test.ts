@@ -270,3 +270,70 @@ it('세 회차를 다 돌면 끝난다', () => {
   expect(t.cleared).toBe(true);
   expect(aim().grade!(t.s, t.bag).stars).toBeGreaterThanOrEqual(1);
 });
+
+// ---------- 3단계: 두 레버를 같이 쓰기 ----------
+import { LINE } from '../src/sim/leverSchool';
+const both = () => BASIC_LESSONS.find((l) => l.id === 'b-both')!;
+const bothTutor = () => new Tutor(both(), sess());
+
+it('3단계가 있고 선을 남긴다', () => {
+  const L = both();
+  expect(L.tier).toBe('기본기');
+  expect(L.trail).toBe(true);
+  expect(L.why).toBeTruthy();
+  expect(L.grade).toBeTruthy();
+});
+
+it('목표 높이와 등급 경계가 정해져 있다', () => {
+  expect(LINE.good).toBe(0.04);
+  expect(LINE.ok).toBe(0.1);
+  expect(LINE.height).toBeGreaterThan(0);
+});
+
+it('붐만 쓰면 높이가 벗어난다 (호를 그린다)', () => {
+  const t = bothTutor();
+  run(t, { ry: -1 }, 120); // 붐만 올림
+  const dev = t.bag.devN ? t.bag.devSum / t.bag.devN : 0;
+  expect(dev).toBeGreaterThan(LINE.ok);
+});
+
+it('이빨이 높으면 붐 내림, 낮으면 붐 올림을 알려 준다', () => {
+  const t = bothTutor();
+  run(t, { ry: -1 }, 120); // 붐만 올려 높아지게
+  expect(t.coach?.msg ?? '').toMatch(/붐 내림/);
+  const t2 = bothTutor();
+  run(t2, { ry: 1 }, 60); // 붐만 내려 낮아지게
+  expect(t2.coach?.msg ?? '').toMatch(/붐 올림/);
+});
+
+it('동시조작 비율을 센다', () => {
+  const t = bothTutor();
+  run(t, { ry: -1, ly: 1 }, 60); // 붐과 암을 같이
+  expect(t.bag.frames).toBeGreaterThan(0);
+  expect((t.bag.multi ?? 0) / t.bag.frames).toBeGreaterThan(0.5);
+  const t2 = bothTutor();
+  run(t2, { ry: -1 }, 60); // 붐만 — 같이 움직인 프레임이 아예 없다
+  expect(t2.bag.frames).toBeGreaterThan(0);
+  expect((t2.bag.multi ?? 0) / t2.bag.frames).toBeLessThan(0.2);
+});
+
+it('높이를 잘 지키면 별 3개', () => {
+  const L = both();
+  expect(L.grade!({} as never, { devSum: 0.02 * 100, devN: 100, multi: 80, frames: 100 }).stars).toBe(3);
+});
+
+it('높이가 많이 벗어나면 별 1개', () => {
+  const L = both();
+  expect(L.grade!({} as never, { devSum: 0.4 * 100, devN: 100, multi: 80, frames: 100 }).stars).toBe(1);
+});
+
+it('높이는 지켰어도 한 레버만 썼으면 별 3개는 아니다', () => {
+  const L = both();
+  const g = L.grade!({} as never, { devSum: 0.02 * 100, devN: 100, multi: 5, frames: 100 });
+  expect(g.stars).toBeLessThan(3);
+  expect(g.note).toMatch(/같이|한 번에/);
+});
+
+it('3단계도 별은 언제나 1~3', () => {
+  expect([1, 2, 3]).toContain(both().grade!({} as never, {}).stars);
+});
