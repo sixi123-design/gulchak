@@ -22,6 +22,11 @@ export const ICON = {
   stCarry: svg('<path d="M5 18V11a6 6 0 0 1 12 0v2"/><path d="M13.5 10.5L17 14l3.5-3.5"/>'),
   stDump: svg('<path d="M2.5 20l6.5-9 4 5 2.5-3 6 7z" fill="currentColor"/><path d="M14 4l3 3M18 3v3"/>'),
   stFlat: svg('<path d="M3 19h18"/><path d="M5 15h14"/><path d="M15 4l-3 11"/><path d="M8 15l1.5-3h5"/>'),
+  // 기본기 과정: 멈춘 뒤 바꾸기(마주 보는 화살표 사이의 정지선) · 목표선에 세우기 · 두 레버 같이 · 셋 다
+  stStop: svg('<path d="M12 3v18"/><path d="M4 8l4 4-4 4"/><path d="M20 8l-4 4 4 4"/>'),
+  stAim: svg('<path d="M3 16h18"/><path d="M12 4v8l-3 3"/><circle cx="12" cy="16" r="2.2" fill="currentColor"/>'),
+  stBoth: svg('<path d="M4 18c5-9 11-11 16-11"/><path d="M4 18h16"/><circle cx="4" cy="18" r="2" fill="currentColor"/>'),
+  stAll: svg('<path d="M12 3l2.6 5.6 6.1.8-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6L3.3 9.4l6.1-.8z"/>'),
   // 모드 (시작 페이지)
   mLearn: svg('<path d="M3 6.5c3-1.5 6-1.5 9 0v13c-3-1.5-6-1.5-9 0z"/><path d="M21 6.5c-3-1.5-6-1.5-9 0v13c3-1.5 6-1.5 9 0z"/>'),
   mFree: svg('<path d="M4 12a8 8 0 1 0 16 0a8 8 0 1 0-16 0" /><path d="M8.5 12h7M12 8.5v7"/>'),

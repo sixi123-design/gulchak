@@ -9,6 +9,7 @@ import { ExcavatorView, type MachineStyleKey } from './render/excavatorView';
 import { FxView, SiteView, SoilView } from './render/siteView';
 import { DigSession, type DigEntry, type RulesFile, type Sticks } from './sim/session';
 import { LESSONS, TIERS, tierProgress, Tutor } from './sim/tutorial';
+import { BASIC_LESSONS } from './sim/leverSchool';
 import { ik } from './sim/kinematics';
 import { Joystick, KEY_ACTIONS, keyName, Keys } from './ui/joystick';
 import { Pedal, SteeringWheel } from './ui/driveControls';
@@ -940,7 +941,9 @@ function updateCamera(dt: number) {
 let tutor: Tutor<any> | null = null;
 /** 지금 종목의 배우기 미션 */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const curLessons = (): Lesson<any>[] => (kindKey === 'drive' ? DRIVE_LESSONS : LESSONS);
+// 굴착 배우기: 기본기 과정이 먼저, 그 뒤가 기존 기초·숙련
+const DIG_LESSONS: Lesson<any>[] = [...BASIC_LESSONS, ...LESSONS];
+const curLessons = (): Lesson<any>[] => (kindKey === 'drive' ? DRIVE_LESSONS : DIG_LESSONS);
 let lessonIdx = -1;
 const loadCleared = (): string[] => {
   try {

@@ -78,7 +78,7 @@ export function tierProgress(lessons: readonly Lesson<never>[] | readonly Lesson
 export interface Lesson<S = DigSession> {
   id: string;
   /** 아이콘 이름 (src/ui/icons.ts) */
-  icon: 'stLevers' | 'stScoop' | 'stCarry' | 'stDump' | 'stFlat' | 'kDrive';
+  icon: 'stLevers' | 'stScoop' | 'stCarry' | 'stDump' | 'stFlat' | 'kDrive' | 'stStop' | 'stAim' | 'stBoth' | 'stAll';
   title: string;
   /** 마지막 단계에서 '버킷 내려놓기' 종료 판정을 켬 */
   autoEnd?: boolean;
@@ -120,7 +120,7 @@ const moved = (j: Joint, dir: 1 | -1, amount: number, text: string, labels: stri
  * 버킷 날 끝을 (r, y)에 두는 자세로 순간이동. bucketRel: 버킷 관절각(없으면 ik 그대로).
  * 버킷 각을 바꾸면 날 끝이 움직이므로 몇 번 되풀이해 맞춘다.
  */
-function pose(s: DigSession, swing: number, r: number, y: number, bucketAbs: number, bucketRel?: number) {
+export function pose(s: DigSession, swing: number, r: number, y: number, bucketAbs: number, bucketRel?: number) {
   let tr = r;
   let ty = y;
   for (let i = 0; i < 6; i++) {
@@ -142,10 +142,10 @@ const contactTravel = (s: DigSession, mem: Record<string, number>, dir: 1 | -1) 
   mem.r = r;
   return mem.d;
 };
-const SC = (s: DigSession) => s.m.struckCapacity;
+export const SC = (s: DigSession) => s.m.struckCapacity;
 /** 버킷 관절이 암에서 오므려진 각(°) */
 const curlDeg = (s: DigSession) => -s.pose.bucket / deg;
-const co = (msg: string, ...labels: string[]): Coach => ({ msg, labels });
+export const co = (msg: string, ...labels: string[]): Coach => ({ msg, labels });
 /** 선회가 목표(A=π, C=0)에서 벗어났으면 되돌아갈 방향 */
 const swingBack = (s: DigSession, target: number, name: string): Coach | null => {
   const d = s.pose.swing - target;
@@ -237,7 +237,7 @@ const carvePit = (s: DigSession, depth: number) => {
     }
   g.relax(Math.tan((s.params.reposeDeg * Math.PI) / 180) * s.params.soilCell, 200);
 };
-const fill = (s: DigSession, ratio: number) => {
+export const fill = (s: DigSession, ratio: number) => {
   s.load = s.m.struckCapacity * ratio;
   s.loadBack = s.load * 0.85;
 };
@@ -281,7 +281,7 @@ const preStab = (s: DigSession) =>
 /** 선회 직전: 줄·폴을 넘을 높이·반경, 버킷은 오므림 */
 const preSwing = (s: DigSession) => readyToCarry(s) && curlDeg(s) >= 60;
 /** 조건이 잠깐 스치는 게 아니라 0.2초 머물러야 */
-const hold = (mem: Record<string, number>, ok: boolean, n = 12) => {
+export const hold = (mem: Record<string, number>, ok: boolean, n = 12) => {
   mem.hold = ok ? (mem.hold ?? 0) + 1 : 0;
   return mem.hold >= n;
 };
