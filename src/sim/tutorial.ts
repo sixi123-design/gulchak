@@ -137,6 +137,8 @@ const contactTravel = (s: DigSession, mem: Record<string, number>, dir: 1 | -1) 
   return mem.d;
 };
 export const SC = (s: DigSession) => s.m.struckCapacity;
+/** 평탄 작업에 필요한 버킷 펼침각 (절대값). 버킷 한계와 무관하게 이 자세라야 흙을 고를 수 있다 */
+const FLATTEN_OPEN = 55 * deg;
 /** 버킷 관절이 암에서 오므려진 각(°) */
 const curlDeg = (s: DigSession) => -s.pose.bucket / deg;
 export const co = (msg: string, ...labels: string[]): Coach => ({ msg, labels });
@@ -465,11 +467,14 @@ export const LESSONS: Lesson[] = [
     },
     steps: [
       {
-        text: '버킷 끝까지 펴서 뒤집기',
+        text: '버킷 펴서 뒤집기',
         labels: ['버킷 펴기'],
         begin: (s, mem) => (mem.g0 = s.pose.bucket),
-        done: (s) => s.pose.bucket >= s.m.limits.bucket[1] - 15 * deg,
-        meter: (s, mem) => toward(s.pose.bucket, mem, s.m.limits.bucket[1] - 15 * deg),
+        // 평탄에 필요한 각도는 절대값이다. 예전에는 '한계에서 15° 이내'로 썼는데,
+        // 버킷 펴짐 한계를 +70°→+88°로 넓히자(바닥을 지면에 평평하게 대려면 필요하다)
+        // 같은 식이 18° 더 펴기를 요구해 이 자세로는 흙더미 너머까지 못 뻗는다.
+        done: (s) => s.pose.bucket >= FLATTEN_OPEN,
+        meter: (s, mem) => toward(s.pose.bucket, mem, FLATTEN_OPEN),
       },
       {
         text: '암 펴서 흙더미 너머로 뻗기',
@@ -515,8 +520,8 @@ export const LESSONS: Lesson[] = [
         labels: ['붐 내림', '버킷 펴기'],
         coach: (s) =>
           swingBack(s, SWING_C, 'C') ??
-          (s.pose.bucket < s.m.limits.bucket[1] - 10 * deg
-            ? co('버킷 끝까지 펴기', '버킷 펴기')
+          (s.pose.bucket < FLATTEN_OPEN + 5 * deg
+            ? co('버킷 더 펴기', '버킷 펴기')
             : s.groundGap() < -s.params.endSinkTol
               ? co('흙에 묻혔어요 → 붐 살짝 올림', '붐 올림')
               : null),
