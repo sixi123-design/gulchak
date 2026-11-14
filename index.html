@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#7fd3ff" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="도전! 굴착기" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="./icon-192.png" />
+    <title>도전! 굴착기 실기 · 집에서 미리 보는 시험장</title>
+    <script type="module" crossorigin src="./assets/index-CJLQyRbF.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-Be9-AmJO.css">
+  </head>
+  <body>
+    <canvas id="view"></canvas>
+
+    <div id="hud">
+      <div class="top">
+        <div class="chip drive-stage" id="drive-stage"></div>
+        <div class="chips">
+          <div class="chip" id="chip-dig"><b>굴착</b><span id="dig">0/4</span></div>
+          <div class="chip" id="chip-dump"><b>덤프</b><span id="dump">0</span></div>
+        </div>
+        <div class="actions">
+          <div class="timer" id="timer">4:00</div>
+          <button class="btn small" id="btn-restart" title="이 미션 처음부터">↺ 다시</button>
+          <button class="btn small" id="btn-settings" title="설정">⚙</button>
+          <button class="btn small danger" id="btn-end">그만하기</button>
+        </div>
+      </div>
+      <div class="guide" id="guide"></div>
+      <!-- 레버 익히기: 지시문을 배경에 크게 (작은 미션 판 대신) -->
+      <div class="drill" id="drill" hidden>
+        <div class="dr-text" id="dr-text"></div>
+        <div class="dr-part" id="dr-part"></div>
+        <div class="dr-say" id="dr-say"></div>
+      </div>
+      <div class="drill-fx" id="drill-fx" aria-hidden="true"></div>
+      <div class="mission" id="mission" hidden>
+        <button class="m-why" id="btn-why" hidden>왜?</button>
+        <div class="m-head" id="m-head"></div>
+        <div class="m-text" id="m-text"></div>
+        <div class="m-say" id="m-say"></div>
+        <div class="m-meter" id="m-meter" hidden><b class="band"></b><b class="fill"></b><b class="needle"></b></div>
+        <div class="m-hold" id="m-hold" hidden></div>
+        <div class="m-pips" id="m-pips"></div>
+      </div>
+      <div class="toasts" id="toasts"></div>
+
+      <button class="lab-toggle" id="btn-labels" title="레버 글자"></button>
+      <div class="stick left" id="stick-l">
+        <div class="ring"></div>
+        <div class="knob"></div>
+        <span class="lab up">암 펴기</span>
+        <span class="lab down">암 당기기</span>
+        <span class="lab lt">선회&nbsp;◀</span>
+        <span class="lab rt">▶&nbsp;선회</span>
+      </div>
+      <div class="stick right" id="stick-r">
+        <div class="ring"></div>
+        <div class="knob"></div>
+        <span class="lab up">붐 내림</span>
+        <span class="lab down">붐 올림</span>
+        <span class="lab lt">버킷 오므림</span>
+        <span class="lab rt">버킷 펴기</span>
+      </div>
+
+      <div class="console">
+        <span class="load soil"><b>버킷</b><i class="bar"><i id="loadbar"></i></i><b class="load-pct" id="loadpct">평적 0%</b></span>
+        <button class="btn small" id="btn-engine" hidden>시동</button>
+      </div>
+      <div class="endring" id="endring"></div>
+      <!-- 실제 시험: 시작 전 점검(안전벨트·안전레버·RPM) → 손 들기 → 감독관 호각 -->
+      <div class="exam-check" id="exam-check" hidden>
+        <div class="ec-row">
+          <button class="ec-btn" id="ec-belt"><i></i><b>안전벨트</b><small></small></button>
+          <button class="ec-btn" id="ec-lever"><i></i><b>안전레버</b><small></small></button>
+          <button class="ec-btn" id="ec-rpm"><i></i><b>RPM</b><small></small></button>
+        </div>
+        <button class="ec-hand" id="ec-hand"><span>✋</span>준비되면 손 들기</button>
+      </div>
+      <div class="hand-pop" id="hand-pop" hidden>✋</div>
+      <!-- 주행: 기어(F·N·R) · 주차브레이크 · 상부회전체 고정 · 핸들 가운데, 조향 표시 -->
+      <div class="dctl wheel-ctl" id="wheel-ctl">
+        <div class="wh-rim">
+          <svg viewBox="-50 -50 100 100" aria-hidden="true">
+            <circle class="wh-ring" r="42" />
+            <path class="wh-spoke" d="M-40 6 L-9 4 M40 6 L9 4 M0 12 L0 40" />
+            <circle class="wh-hub" r="11" />
+            <circle class="wh-knob" cx="0" cy="-42" r="7" />
+          </svg>
+        </div>
+        <span class="lab lt">핸들&nbsp;◀</span>
+        <span class="lab rt">▶&nbsp;핸들</span>
+        <span class="wh-end">끝</span>
+      </div>
+      <!-- 시점: 미러 · 정면 · 바퀴 (하나만 켜짐) -->
+      <div class="dctl look-seg" id="look-seg" role="group" aria-label="시점">
+        <button class="look-mirror" id="btn-lookmirror"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9.5 15 7.5a2 2 0 0 1 2.3 2v5a2 2 0 0 1-2.3 2L3 14.5z" /><path d="M17.5 12H21" /></svg>미러</button>
+        <button class="look-front on" id="btn-lookfront"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21 10 4M19 21 14 4M12 19v-3M12 12v-2" /></svg>정면</button>
+        <button class="look-wheel" id="btn-lookwheel"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" /><circle cx="12" cy="12" r="3" /><path d="M12 3.5v5.5M12 15v5.5M3.5 12H9M15 12h5.5" /></svg>바퀴</button>
+      </div>
+      <div class="dctl pedals" id="pedals">
+        <button class="pedal brake" id="pedal-brake"><i></i><span class="lab">브레이크</span></button>
+        <button class="pedal accel" id="pedal-accel"><i></i><span class="lab">가속</span></button>
+      </div>
+      <div class="drive-ctl" id="drive-ctl">
+        <div class="gear" id="gear-box">
+          <button data-gear="F">F</button>
+          <button data-gear="N">N</button>
+          <button data-gear="R">R</button>
+        </div>
+        <span class="dc-sep" aria-hidden="true"></span>
+        <button class="dc-btn" id="btn-park"><i></i>주차</button>
+        <button class="dc-btn" id="btn-swlock"><i></i>상부 고정</button>
+      </div>
+      <div class="steer-ind" id="steer-ind"><svg viewBox="-20 -20 40 40" aria-hidden="true"><circle r="15" /><path d="M-15 0h30M0 0v15" /><circle r="3.5" /></svg><small>조향</small><b id="steer-deg">0°</b></div>
+    </div>
+
+    <div class="modal page" id="precheck">
+      <div class="card start">
+        <header class="sp-head">
+          <!-- 종목 전환: 굴착작업 · 코스운전(주행) -->
+          <div class="sp-kind" id="sp-kind" role="group" aria-label="시험 과목">
+            <b class="sp-kind-tag" aria-hidden="true">시험 과목</b>
+            <button class="on" data-kind="dig"></button>
+            <button data-kind="drive"></button>
+          </div>
+          <button class="card-gear" id="btn-settings2" title="설정">⚙</button>
+        </header>
+        <div class="mode-pick" id="mode-pick"></div>
+        <p class="fs-hint" id="fs-hint" hidden>전체화면: 공유 → <b>홈 화면에 추가</b></p>
+      </div>
+      <!-- 시작 무대 위 로고 (3D 굴착기 옆, src/ui/startStage.ts) -->
+      <div class="sp-hero" aria-hidden="true"><span class="sp-hero-tag">도전!</span><b class="sp-hero-logo"><span>굴착기</span> 실기</b><small class="sp-hero-sub">집에서 미리 보는 시험장</small></div>
+    </div>
+
+    <div class="modal" id="settings" hidden>
+      <div class="card settings-card">
+        <div class="set-top">
+          <h2 class="set-title">설정</h2>
+          <div class="tabs">
+            <button data-tab="keys">조작</button>
+            <button data-tab="view">화면</button>
+            <button data-tab="sound">소리</button>
+            <button data-tab="machine">시험장</button>
+          </div>
+        </div>
+        <section data-pane="sound" hidden>
+          <div class="set-group">
+            <p class="set-h">음량</p>
+            <div class="vol-row all"><span>전체</span><button class="mute" id="mute-all"></button><input type="range" id="vol-all" min="0" max="100" /></div>
+            <div class="vol-row"><span>엔진음</span><button class="mute" id="mute-eng">🔊</button><input type="range" id="vol-eng" min="0" max="100" /></div>
+            <div class="vol-row"><span>환경음</span><button class="mute" id="mute-amb">🔊</button><input type="range" id="vol-amb" min="0" max="100" /></div>
+            <div class="vol-row"><span>효과음</span><button class="mute" id="mute-sfx">🔊</button><input type="range" id="vol-sfx" min="0" max="100" /></div>
+          </div>
+        </section>
+        <section data-pane="machine" hidden>
+          <div class="set-group">
+            <p class="set-h">내 시험장 <small>큐넷 기종 현황 2026.09.07 기준</small></p>
+            <div class="site-cur" id="site-cur"></div>
+            <div class="site-tools">
+              <button class="site-q" id="btn-site-search">시험장 검색</button>
+              <button class="btn small" id="btn-near">📍 가까운 곳</button>
+            </div>
+          </div>
+          <div class="set-group">
+            <p class="set-h">굴착기 모델</p>
+            <div class="machine-pick" id="machine-pick"></div>
+            <div class="machine-shot"><img id="machine-img" alt="" /></div>
+          </div>
+          <div class="set-group">
+            <p class="set-h">시험 시간·계절 <small>실제 시험에만 적용</small></p>
+            <div class="exam-look" id="exam-look"></div>
+          </div>
+          <div class="set-group">
+            <p class="set-h">배운 내용 <small>되돌릴 수 없어요</small></p>
+            <button class="btn small" id="btn-reset-tut">배운 내용 초기화</button>
+          </div>
+        </section>
+        <section data-pane="seat" hidden>
+          <p class="set-h">좌석 높이 <small>키를 맞추면 눈높이가 바뀌어요</small></p>
+          <div class="ruler" id="ruler">
+            <div class="ruler-fill" id="ruler-fill"><span class="ruler-handle">🧍 <b id="height-val">170cm</b></span></div>
+            <i style="bottom: 0%">150</i><i style="bottom: 22.2%">160</i><i style="bottom: 44.4%">170</i><i style="bottom: 66.7%">180</i><i style="bottom: 88.9%">190</i>
+          </div>
+        </section>
+        <section data-pane="view" hidden>
+          <div class="set-group">
+            <p class="set-h">화질 <small>느리면 부드럽게</small></p>
+            <div class="lk-row s4" id="q-row"></div>
+            <p class="set-note" id="q-note" hidden>다음에 켤 때 적용돼요</p>
+          </div>
+          <div class="set-group">
+            <p class="set-h">버튼 크기 <small>위쪽 시간·버튼, 아래 버킷 막대</small></p>
+            <div class="lk-row s3" id="z-btn"></div>
+          </div>
+          <div class="set-group">
+            <p class="set-h">글자 크기 <small>안내·알림 글</small></p>
+            <div class="lk-row s3" id="z-txt"></div>
+          </div>
+          <div class="set-group">
+            <p class="set-h">좌석 높이 <small>눈높이가 바뀌어요</small></p>
+            <button class="btn small" id="btn-seat-go">좌석 높이 맞추기</button>
+          </div>
+        </section>
+        <section data-pane="keys" hidden>
+          <div class="set-group">
+            <p class="set-h">레버 크기 <small>화면 레버 (폰·패드)</small></p>
+            <div class="lk-row s3" id="z-stick"></div>
+          </div>
+          <div class="set-group">
+            <p class="set-h">레버 여백 <small>화면 가장자리에서 띄우기</small></p>
+            <div class="lk-row s3" id="z-edge"></div>
+          </div>
+          <div class="set-group">
+            <p class="set-h">레버 글자 <small>붐·암·버킷 이름</small></p>
+            <div class="lk-row s2" id="z-labels"></div>
+          </div>
+          <div class="set-group">
+            <p class="set-h">진동</p>
+            <div class="lk-row s2" id="buzz-row"></div>
+          </div>
+          <div class="set-group">
+            <p class="set-h">게임패드 <small>듀얼쇼크 · 듀얼센스 · 프로콘 · 엑스박스</small></p>
+            <p class="pad-state" id="pad-state"></p>
+            <div class="pad-map">
+              <span><b>왼쪽 스틱</b>암 · 선회</span>
+              <span><b>오른쪽 스틱</b>붐 · 버킷</span>
+              <span><b>주행</b>왼쪽 스틱 핸들 · R2/ZR 가속 · L2/ZL 브레이크</span>
+            </div>
+          </div>
+          <div class="set-group kb-only">
+            <p class="set-h">키보드 <small>누르고 새 키 입력 · Esc 취소</small></p>
+            <div class="key-grid" id="key-grid"></div>
+          </div>
+        </section>
+        <div class="set-foot">
+          <button class="btn" id="btn-keys-reset" hidden>키 기본값</button>
+          <button class="btn" id="btn-seat-cancel" hidden>취소</button>
+          <button class="btn big go" id="btn-settings-ok">확인</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal" id="site-pop" hidden>
+      <div class="card site-card">
+        <div class="site-head">
+          <input class="site-q" id="site-q" type="search" placeholder="시험장 검색 (예: 광주)" autocomplete="off" />
+          <button class="pw-x" id="btn-site-close" title="닫기"></button>
+        </div>
+        <div class="site-list" id="site-list"></div>
+        <p class="site-src">장비: 큐넷 시험장별 기종 현황(2026.11.10) 기준 · 바뀔 수 있으니 수험표를 확인하세요</p>
+      </div>
+    </div>
+
+    <div class="modal page" id="lessons" hidden>
+      <div class="card wide lessons-card">
+        <div class="ls-head"><button class="btn small" id="btn-lessons-back">◀</button><h1>배우기</h1><span class="ls-count" id="stage-count"></span></div>
+        <div class="stage-map" id="stage-map"></div>
+      </div>
+    </div>
+
+    <!-- 이론 카드: 미션 앞에 왜 그렇게 하는지 한 장 (처음 한 번만, '왜?'로 다시) -->
+    <div class="modal page" id="why" hidden>
+      <div class="card why-card">
+        <button class="btn small why-back" id="btn-why-back">◀</button>
+        <h1 id="why-title"></h1>
+        <div class="why-art" id="why-art"></div>
+        <div class="why-text" id="why-text"></div>
+        <button class="btn big go" id="btn-why-go">해보기 ▶</button>
+      </div>
+    </div>
+
+    <div id="clear" hidden>
+      <div class="cl-rays"><i class="gl band"></i><i class="gl rose"></i></div>
+      <div class="cl-ring"></div>
+      <div class="cl-box">
+        <div class="cl-stars"><i>★</i><i>★</i><i>★</i></div>
+        <div class="cl-word">CLEAR!</div>
+        <div class="cl-title" id="clear-title"></div>
+        <div class="cl-note" id="clear-note" hidden></div>
+        <div class="cl-btns">
+          <button class="btn" id="btn-clear-map">목록</button>
+          <button class="btn" id="btn-clear-again">↺ 반복</button>
+          <button class="btn" id="btn-clear-less" hidden>목표만 보고 다시</button>
+          <button class="btn big go" id="btn-clear-next">다음 ▶</button>
+          <button class="btn big go" id="btn-clear-exam" hidden>시험장 가보기 ▶</button>
+          <button class="btn" id="btn-clear-free" hidden>자유 연습으로</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="fail" hidden>
+      <div class="sheet">
+        <div class="fs-ico">!</div>
+        <div class="fs-body">
+          <div class="fs-title">다시!</div>
+          <div class="fs-reason" id="fail-detail"></div>
+        </div>
+        <button class="btn ghost" id="btn-fail-map">목록</button>
+        <button class="btn big go fs-go" id="btn-fail-retry"><span id="fail-retry-ico"></span>다시 하기</button>
+      </div>
+    </div>
+
+    <div class="modal" id="paywall" hidden>
+      <div class="card pw">
+        <button class="pw-x" id="btn-paywall-close" title="닫기"></button>
+        <div class="pw-visual">
+          <div class="modebtn tier-mid"><b>연습 시험</b></div>
+          <div class="modebtn tier-boss"><b>실제 시험</b></div>
+        </div>
+        <div class="pw-info">
+          <h1 id="pw-title">연습 시험 · 실제 시험 열기</h1>
+          <p class="pw-runs" id="pw-runs" hidden></p>
+          <ul class="pw-perks" id="pw-perks"></ul>
+          <button class="btn big pw-buy" id="btn-buy"></button>
+          <p class="pw-once">한 번만 결제 · 구독 아님 · 두 모드 다 · 몇 번이든 다시</p>
+          <button class="pw-restore" id="btn-restore">구매 복원</button>
+          <div class="redeem" id="redeem" hidden>
+            <input id="redeem-input" type="text" inputmode="text" autocomplete="off" placeholder="구매 코드" />
+            <button class="btn small" id="btn-redeem">코드 확인</button>
+            <p class="set-note" id="redeem-msg" hidden></p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="paid" hidden><span id="paid-ico"></span>결제 완료</div>
+
+    <div class="modal" id="result" hidden>
+      <div class="card wide">
+        <div class="stamp" id="stamp"></div>
+        <h1 id="res-title"></h1>
+        <!-- 점수판: 총점 + 항목 (src/ui/scoreView.ts, 데이터는 main.ts) -->
+        <div class="res-score" id="res-score" hidden></div>
+        <div class="cols" id="res-cols">
+          <section>
+            <h2>실격 판정</h2>
+            <ul id="res-dq"></ul>
+          </section>
+          <section>
+            <div class="hero" id="res-hero"></div>
+            <div class="checks" id="res-checks"></div>
+          </section>
+        </div>
+        <!-- 다음엔 이렇게: 가장 큰 문제 하나 (src/sim/fixTips.ts) -->
+        <p class="res-runs" id="res-runs" hidden></p>
+        <div class="res-tip" id="res-tip" hidden></div>
+        <div class="res-btns">
+          <button class="btn" id="btn-home">처음으로</button>
+          <button class="btn big go" id="btn-retry">다시 하기</button>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- 합격 연출 (src/ui/passFx.ts): 결과표 전에, 탭하면 넘김 -->
+    <div id="pass-fx" hidden>
+      <div class="pf-dim"></div>
+      <div class="pf-burst"><i class="gl band"></i><i class="gl rose"></i><i class="gl core"></i><i class="gl-foil"></i></div>
+      <div class="pf-stripes"><i></i><i></i></div>
+      <div class="pf-ring r1"></div>
+      <div class="pf-ring r2"></div>
+      <div class="pf-confetti"></div>
+      <div class="pf-center">
+        <span class="pf-tag"></span>
+        <div class="pf-medal"><b class="pf-grade"></b></div>
+        <b class="pf-word">합격</b>
+        <span class="pf-sub"></span>
+        <span class="pf-seal"><b>실기</b><i>통과</i></span>
+      </div>
+      <span class="pf-skip">눌러서 넘기기 ▶</span>
+    </div>
+
+    <div id="ready-flash" hidden>호각!</div>
+    <div id="dq-banner" hidden><b>실격</b><span id="dq-why"></span></div>
+    <div id="boss-intro" hidden>
+      <div class="bi-bg"></div>
+      <div class="bi-flash"></div>
+      <div class="bi-tag" id="bi-tag"></div>
+      <div class="bi-title" id="bi-title"></div>
+      <div class="bi-sub" id="bi-sub"></div>
+    </div>
+    <!-- 오프닝: 3D 굴착기 + 로고 (src/ui/intro.ts). 탭하면 건너뜀 -->
+    <div id="intro" hidden>
+      <div class="in-burst"></div>
+      <div class="in-title">
+        <span class="in-tag">도전!</span>
+        <h1 class="in-logo"><span class="w1">굴착기</span><span class="w2">실기</span></h1>
+        <span class="in-sub">집에서 미리 보는 시험장</span>
+      </div>
+      <span class="in-skip">눌러서 건너뛰기 ▶</span>
+      <div class="in-wipe in-open"></div>
+      <div class="in-wipe in-close"></div>
+    </div>
+    <div id="perf" hidden></div>
+  </body>
+</html>
