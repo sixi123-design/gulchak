@@ -82,3 +82,23 @@ export const INTRO_KEY = 'exc-seen-intro';
 export function wantIntro(saved: string | null, noIntro: boolean): boolean {
   return !noIntro && saved !== '1';
 }
+
+/** 이미 본 이론 카드 (미션 id 목록) */
+export const WHY_KEY = 'exc-why';
+
+/** 본 것 목록 읽기. 깨진 값·막힌 저장소는 빈 목록 */
+export function loadSeen(key: string): string[] {
+  try {
+    const v: unknown = JSON.parse(loadRaw(key) ?? '[]');
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+/** 본 것으로 적어 둔다 (이미 있으면 그대로) */
+export function markSeen(key: string, id: string): void {
+  const list = loadSeen(key);
+  if (list.includes(id)) return;
+  saveRaw(key, JSON.stringify([...list, id]));
+}

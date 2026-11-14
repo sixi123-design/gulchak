@@ -7581,3 +7581,67 @@ body.stage-on #precheck .mode-pick {
   font: 800 12px var(--font);
   color: #1d1b2e99;
 }
+
+/* ----- 이론 카드: 미션 앞에 왜 그렇게 하는지 한 장 ----- */
+#why .card {
+  width: min(560px, 100%);
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  text-align: center;
+}
+#why h1 {
+  margin: 0;
+  font: 900 23px var(--font);
+}
+.why-art {
+  width: 96px;
+  height: 96px;
+  display: grid;
+  place-items: center;
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--sun) 22%, transparent);
+  border: 3px solid var(--ink);
+}
+.why-art svg {
+  width: 60px;
+  height: 60px;
+}
+.why-text {
+  display: grid;
+  gap: 7px;
+  max-width: 34ch;
+}
+.why-text p {
+  margin: 0;
+  font: 600 calc(16px * var(--z-txt, 1)) / 1.5 var(--font);
+  color: var(--ink);
+}
+#btn-why-go {
+  margin-top: 2px;
+}
+/* 미션 박스의 '왜?' — 작게 붙지만 손가락으로 누를 수 있게 */
+.m-why {
+  position: absolute;
+  top: -14px;
+  right: -10px;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 50%;
+  border: 3px solid var(--ink);
+  background: var(--sun);
+  color: var(--ink);
+  font: 900 15px var(--font);
+  cursor: pointer;
+}
+/* 못 받은 별 */
+.cl-stars i.off {
+  color: color-mix(in srgb, var(--ink) 25%, transparent);
+  -webkit-text-stroke: 3px color-mix(in srgb, var(--ink) 45%, transparent);
+}
+.cl-note {
+  font: 700 calc(14px * var(--z-txt, 1)) / 1.4 var(--font);
+  color: var(--ink);
+  max-width: 30ch;
+  text-align: center;
+}

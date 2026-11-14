@@ -32,6 +32,7 @@
       </div>
       <div class="guide" id="guide"></div>
       <div class="mission" id="mission" hidden>
+        <button class="m-why" id="btn-why" hidden>왜?</button>
         <div class="m-head" id="m-head"></div>
         <div class="m-text" id="m-text"></div>
         <div class="m-say" id="m-say"></div>
@@ -254,6 +255,16 @@
       </div>
     </div>
 
+    <!-- 이론 카드: 미션 앞에 왜 그렇게 하는지 한 장 (처음 한 번만, '왜?'로 다시) -->
+    <div class="modal page" id="why" hidden>
+      <div class="card why-card">
+        <h1 id="why-title"></h1>
+        <div class="why-art" id="why-art"></div>
+        <div class="why-text" id="why-text"></div>
+        <button class="btn big go" id="btn-why-go">해보기 ▶</button>
+      </div>
+    </div>
+
     <div id="clear" hidden>
       <div class="cl-rays"><i class="gl band"></i><i class="gl rose"></i></div>
       <div class="cl-ring"></div>
@@ -261,6 +272,7 @@
         <div class="cl-stars"><i>★</i><i>★</i><i>★</i></div>
         <div class="cl-word">CLEAR!</div>
         <div class="cl-title" id="clear-title"></div>
+        <div class="cl-note" id="clear-note" hidden></div>
         <div class="cl-btns">
           <button class="btn" id="btn-clear-map">목록</button>
           <button class="btn" id="btn-clear-again">↺ 반복</button>

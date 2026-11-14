@@ -105,3 +105,29 @@ it('결제 벽은 바깥 가격과 비교하지 않고, 한 번 내면 끝이라
   expect(pw).toMatch(/한 번만 결제/);
   expect(pw).not.toMatch(/학원|만원 아/);
 });
+
+it('이론 카드 자리가 있고 id가 유일하다', () => {
+  for (const id of ['why', 'why-title', 'why-art', 'why-text', 'btn-why-go', 'btn-why']) {
+    expect([...html.matchAll(new RegExp(`id="${id}"`, 'g'))].length, id).toBe(1);
+  }
+});
+
+it('이론 카드 버튼도 손가락 크기만큼 크다', () => {
+  // 미션 박스의 '왜?' (#btn-why는 .m-why로 모양을 받는다)
+  for (const sel of ['.m-why']) {
+    const blocks = [...css.matchAll(/([^{}]*)\{([^}]*)\}/g)].filter(([, s2]) => s2.includes(sel));
+    expect(blocks.some(([, , body]) => /min-height:\s*4[4-9]px|min-height:\s*5\dpx/.test(body)), sel).toBe(true);
+  }
+});
+
+it('클리어 화면에 별 세 개와 한 줄 평 자리가 있다', () => {
+  const stars = html.slice(html.indexOf('cl-stars'), html.indexOf('cl-stars') + 120);
+  expect([...stars.matchAll(/<i>/g)].length).toBe(3);
+  expect([...html.matchAll(/id="clear-note"/g)].length).toBe(1);
+});
+
+it('등급 없는 미션은 클리어 화면을 건드리지 않는다', () => {
+  // 기존 배우기 7개·주행 5개는 grade가 없다. 별을 끄거나 한 줄 평을 띄우면 안 된다
+  const fn = main.slice(main.indexOf('function onLessonClear'), main.indexOf('function onLessonClear') + 2200);
+  expect(fn).toMatch(/L\.grade/);
+});

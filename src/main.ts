@@ -13,7 +13,7 @@ import { ik } from './sim/kinematics';
 import { Joystick, KEY_ACTIONS, keyName, Keys } from './ui/joystick';
 import { Pedal, SteeringWheel } from './ui/driveControls';
 import { MachineSound, type SoundLevels } from './ui/audio';
-import { cssVars, INTRO_KEY, loadNum, loadRaw, loadStep, pickTab, saveRaw, saveStep, STEPS, wantIntro } from './ui/prefs';
+import { cssVars, INTRO_KEY, loadNum, loadRaw, loadSeen, loadStep, markSeen, pickTab, saveRaw, saveStep, STEPS, wantIntro, WHY_KEY } from './ui/prefs';
 import { buzz, buzzOn, setBuzz } from './ui/buzz';
 import { Q, current as qNow, markRendererAa, pick as qPick, tick as qTick, type QLevel } from './ui/quality';
 import { ICON } from './ui/icons';
@@ -1028,7 +1028,43 @@ let streak = 0;
 /** 안내 단계: 0 레버까지 안내 · 1 목표 문구만 · 2 안내 없음 (같은 미션을 성공할 때마다 줄여 감) */
 let guideLv = 0;
 const GUIDE_TAG = ['', '목표만', '안내 없이'];
+/**
+ * 이론 카드. 처음 보는 미션이면 미션 대신 이걸 먼저 띄운다.
+ * 미션 중 '왜?'로 다시 볼 때는 본 것으로 적지 않고, 닫으면 미션으로 돌아간다.
+ */
+let whyAfter: (() => void) | null = null;
+function openWhy(L: Lesson<any>, after: () => void) {
+  if (!L.why) return after();
+  $('why-title').textContent = L.why.title;
+  $('why-art').innerHTML = ICON[L.icon];
+  $('why-text').innerHTML = L.why.lines.map((t) => `<p>${t}</p>`).join('');
+  $('lessons').hidden = true;
+  $('clear').hidden = true;
+  whyAfter = after;
+  $('why').hidden = false;
+}
+$('btn-why-go').onclick = () => {
+  $('why').hidden = true;
+  const f = whyAfter;
+  whyAfter = null;
+  f?.();
+};
+$('btn-why').onclick = () => {
+  if (!tutor?.lesson.why) return;
+  openWhy(tutor.lesson, () => {
+    /* 미션으로 돌아가기만 */
+  });
+};
 function startLesson(i: number, again = false, lv = 0) {
+  const L0 = curLessons()[i];
+  // 처음 보는 미션은 이론 카드를 먼저 (반복할 때는 건너뜀)
+  if (!again && L0?.why && !loadSeen(WHY_KEY).includes(L0.id)) {
+    markSeen(WHY_KEY, L0.id);
+    return openWhy(L0, () => beginLesson(i, again, lv));
+  }
+  beginLesson(i, again, lv);
+}
+function beginLesson(i: number, again = false, lv = 0) {
   clearTimeout(againTimer);
   guideLv = lv;
   if (!again || i !== lessonIdx) streak = 0;
@@ -1196,12 +1232,14 @@ function renderMission(intro = false) {
   const m = $('mission');
   if (!tutor) {
     m.hidden = true;
+    $('btn-why').hidden = true;
     for (const el of document.querySelectorAll('.lab')) el.classList.remove('hint');
     return;
   }
   const st = tutor.current;
   const n = tutor.lesson.steps.length;
   m.hidden = false;
+  $('btn-why').hidden = !tutor.lesson.why;
   $('m-head').innerHTML = `${ICON[tutor.lesson.icon]}${tutor.lesson.title}${guideLv ? `<span class="m-lv">${GUIDE_TAG[guideLv]}</span>` : ''}<span class="m-n">${Math.min(tutor.step + 1, n)}/${n}</span>`;
   // 안내 없음: 단계 문구도 숨기고 '혼자 해 보기'만 (되돌림 안내는 보임)
   const stText = guideLv >= 2 ? '안내 없이 끝까지 해 보세요' : (st?.text ?? '');
@@ -1249,6 +1287,12 @@ function onLessonClear() {
   $('mission').hidden = true;
   for (const el of document.querySelectorAll('.lab')) el.classList.remove('hint');
   $('clear-title').innerHTML = `${ICON[L.icon]}${L.title}`;
+  // 등급이 있는 미션만: 별 n개를 켜고 한 줄 평. 없으면 지금까지와 똑같이 별 세 개
+  const g = L.grade?.(tutor!.s as never, tutor!.bag);
+  const stars = [...document.querySelectorAll<HTMLElement>('.cl-stars i')];
+  stars.forEach((el, k) => el.classList.toggle('off', !!g && k >= g.stars));
+  $('clear-note').hidden = !g;
+  $('clear-note').textContent = g?.note ?? '';
   const last = lessonIdx >= curLessons().length - 1;
   $('btn-clear-next').hidden = last;
   $('btn-clear-exam').hidden = !last;
@@ -2118,7 +2162,7 @@ function frame(now: number) {
     return;
   }
   acc += dt;
-  if (!$('settings').hidden) acc = 0; // 설정 중에는 일시정지
+  if (!$('settings').hidden || !$('why').hidden) acc = 0; // 설정·이론 카드 중에는 일시정지
   let n = 0;
   // 밀린 시간을 버리지 않고 따라잡는다 (저사양에서도 제한시간이 실제 시간과 일치)
   acc = Math.min(acc, 0.5);
@@ -2194,7 +2238,7 @@ function driveFrame(dt: number, _now: number) {
     sound.thump(0.35);
   }
   acc += dt;
-  if (!$('settings').hidden || !$('precheck').hidden) acc = 0;
+  if (!$('settings').hidden || !$('precheck').hidden || !$('why').hidden) acc = 0;
   acc = Math.min(acc, 0.5);
   let n = 0;
   while (acc >= STEP && n < 30) {

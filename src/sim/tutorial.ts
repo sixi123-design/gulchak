@@ -91,6 +91,11 @@ export interface Lesson<S = DigSession> {
    * bag이 비어 있을 수도 있으니(단계를 다 안 거치고 끝난 경우) 별은 반드시 1~3을 돌려준다.
    */
   grade?: (s: S, bag: Record<string, number>) => Grade;
+  /**
+   * 미션 앞에 한 장 보여 줄 이론. 처음 한 번만 뜨고, 미션 화면의 '왜?'로 다시 본다.
+   * 그림은 이 미션의 icon을 크게 쓴다 (sim 층은 SVG를 들지 않는다).
+   */
+  why?: { title: string; lines: readonly string[] };
   setup: (s: S) => void;
   steps: Step<S>[];
 }
