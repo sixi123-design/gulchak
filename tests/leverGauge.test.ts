@@ -57,6 +57,10 @@ describe('3칸 표시 마크업', () => {
     expect(html.indexOf('id="dr-gauge"')).toBeLessThan(html.indexOf('id="dr-part"'));
   });
 
+  it('hidden일 때 정말로 숨는다 (display를 지정하면 [hidden]이 먹히지 않는다)', () => {
+    expect(css).toMatch(/\.dr-gauge\[hidden\]\s*\{\s*display:\s*none/);
+  });
+
   it('맞춘 칸은 색으로만 알리지 않는다 (테두리 모양도 바뀐다)', () => {
     expect(css).toMatch(/\.dr-gauge i\.want[\s\S]*?border-style: dashed/);
   });
