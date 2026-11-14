@@ -29,6 +29,10 @@ export interface MachineStyle {
   rim: number;
   trim: number; // 난간·프레임
   /** 캐빈 앞유리 기울기(m, 위쪽이 뒤로 들어간 정도), 앞면 둥글기 */
+  /** 유압 실린더 통 (없으면 CYL 검정). 튜토리얼 장비는 글자를 가리지 않게 밝은 회색 */
+  cyl?: number;
+  /** 캐빈 창틀 (없으면 기본 짙은 회색) */
+  frame?: number;
   cabSlope: number;
   cabRound: boolean;
   /** 카운터웨이트 모서리 둥글기 (m) */
@@ -57,6 +61,8 @@ export const TUTOR_LOOK: MachineStyle = {
   counterweight: 0x9aa4ae,
   rim: 0xb9c2ca,
   trim: 0x8e97a1,
+  cyl: 0xb3bcc4,
+  frame: 0xa8b2ba,
   cabSlope: 0.08,
   cabRound: false,
   cwRound: 0.55,
@@ -242,6 +248,7 @@ class Cylinder {
     rRod: number,
     private barrelLen: number,
     readonly z: number,
+    cyl = CYL,
   ) {
     // 통: 양 끝에 굵은 고리(헤드·캡)가 있는 선반 단면 (길이 1로 두고 늘림)
     const R = rBarrel * 1.2;
@@ -259,7 +266,7 @@ class Cylinder {
       10,
     );
     const rg = new THREE.CylinderGeometry(rRod, rRod, 1, 8);
-    this.barrel = new THREE.Mesh(bg, toon(CYL));
+    this.barrel = new THREE.Mesh(bg, toon(cyl));
     this.rod = new THREE.Mesh(rg, toon(CHROME));
     parent.add(this.barrel, this.rod);
   }
@@ -717,7 +724,7 @@ export class ExcavatorView {
       // 문틀 (왼쪽 면)
       const zf = -0.85 - 0.475 - CB - 0.012;
       // 문틀은 가늘고 짙은 회색 (굵은 검정이면 만화처럼 보임)
-      const FRAME = S.key === 'C' ? 0x1e2024 : 0x3a3f48;
+      const FRAME = S.frame ?? (S.key === 'C' ? 0x1e2024 : 0x3a3f48);
       if (S.key === 'A') cb.add(boxG(1.1, 0.04, 0.025, 0.32, 2.3, zf), S.trim, 0); // 현대: 옆유리 위·아래 각진 분할
       if (S.key === 'B') {
         // 왼쪽 문 2분할 미닫이 창
@@ -801,8 +808,8 @@ export class ExcavatorView {
         0,
       );
     bm.build(this.boom);
-    for (const z of [-0.3, 0.3]) this.boomCyls.push(new Cylinder(this.upper, 0.085, 0.05, 1.25, z));
-    this.armCyl = new Cylinder(this.boom, 0.08, 0.048, 1.15, 0);
+    for (const z of [-0.3, 0.3]) this.boomCyls.push(new Cylinder(this.upper, 0.085, 0.05, 1.25, z, S.cyl ?? CYL));
+    this.armCyl = new Cylinder(this.boom, 0.08, 0.048, 1.15, 0, S.cyl ?? CYL);
 
     // ---------- 암: 붐 쪽이 굵고 끝으로 가늘어짐, 뒤로 실린더 연결 브래킷 ----------
     const L2 = m.L2;
@@ -853,7 +860,7 @@ export class ExcavatorView {
         0,
       );
     am.build(this.arm);
-    this.bucketCyl = new Cylinder(this.arm, 0.07, 0.042, 0.95, 0);
+    this.bucketCyl = new Cylinder(this.arm, 0.07, 0.042, 0.95, 0, this.style.cyl ?? CYL);
     // H링크: 아이들러 링크 2장, 푸시로드 2장
     // 링크는 붐·암 색. 버킷은 세 모델 공통 밝은 회색 (흙 갈색과 잘 구분되게, 실제 버킷도 모델별 차이 거의 없음)
     const linkMat = toon(S.boom);
@@ -1096,7 +1103,7 @@ export class ExcavatorView {
   private buildCabInterior() {
     const g = new THREE.Group();
     g.visible = false;
-    const mat = new THREE.MeshBasicMaterial({ color: PALETTE.cabin });
+    const mat = new THREE.MeshBasicMaterial({ color: this.style.frame ?? PALETTE.cabin });
     const dash = new THREE.MeshBasicMaterial({ color: 0x3a3946 });
     const zc = -0.85;
     const add = (w: number, h: number, d: number, x: number, y: number, z: number, mm: THREE.Material = mat) => {

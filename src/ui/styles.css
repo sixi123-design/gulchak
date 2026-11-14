@@ -7680,10 +7680,16 @@ body.stage-on #precheck .mode-pick {
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: min(560px, calc(100% - 24px));
+  width: fit-content;
+  max-width: min(560px, calc(100% - 24px));
   text-align: center;
   pointer-events: none;
   z-index: 6;
+  /* 장비(실린더·붐)가 글자 뒤로 지나가도 읽히게 하는 바탕.
+     글자 자체에는 효과를 주지 않는다 (흐림 효과는 저가폰에서 비싸서 안 쓴다) */
+  padding: 14px 20px;
+  border-radius: 20px;
+  background: color-mix(in srgb, #eaf3f8 88%, transparent);
 }
 /* 레버 익히기에는 굴착 횟수·덤프·남은 시간이 뜻이 없다. 글자 자리를 비운다 */
 body.flat-bg #hud .chips,
