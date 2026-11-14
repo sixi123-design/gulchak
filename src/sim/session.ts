@@ -287,6 +287,8 @@ export class DigSession {
   private downAvg = 0;
   /** 마지막 충격 세기 (화면 흔들림·진동용, 렌더에서 읽고 감쇠) */
   lastJolt = 0;
+  /** 이번 판에서 가장 컸던 충격 (화면 프레임 수와 무관하게 정확히 남는다 — 배우기 등급이 읽는다) */
+  maxJolt = 0;
   private joltCd = 0;
   flattenVol = 0;
   precheck = { belt: false, lever: false, rpm: false };
@@ -956,6 +958,7 @@ export class DigSession {
     r.pitch += r.pitchV * dt;
     r.roll += r.rollV * dt;
     this.lastJolt = Math.max(this.lastJolt * Math.exp(-dt * 6), shock);
+    if (working) this.maxJolt = Math.max(this.maxJolt, shock);
     this.joltCd -= dt;
     if (!working || shock < this.params.joltWarn) return;
     if (this.joltCd <= 0) {

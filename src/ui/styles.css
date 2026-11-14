@@ -7590,9 +7590,19 @@ body.stage-on #precheck .mode-pick {
   gap: 14px;
   text-align: center;
 }
+#why .card {
+  position: relative;
+}
 #why h1 {
   margin: 0;
   font: 900 23px var(--font);
+}
+.why-back {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  min-width: 44px;
+  min-height: 44px;
 }
 .why-art {
   width: 96px;

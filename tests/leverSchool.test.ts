@@ -64,7 +64,7 @@ it('미션이 하나 있고 기본기 묶음이다', () => {
   expect(L.tier).toBe('기본기');
   expect(L.why).toBeTruthy();
   expect(L.grade).toBeTruthy();
-  expect(L.steps.length).toBeGreaterThanOrEqual(6);
+  expect(L.steps.length).toBeGreaterThanOrEqual(5);
   // 1단계는 선회만 다룬다 — 고봉으로 담은 채 붐을 내리면 덜컹과 무관하게 흙이 흐른다(pour)
   expect(L.steps.every((st) => (st.labels ?? []).every((t) => t.includes('선회') || t === ''))).toBe(true);
 });
@@ -99,7 +99,7 @@ it('멈춘 뒤에 바꾸면 흙이 안 쏟아지고 별 3개', () => {
     until(t, inp, 900);
     ease(t, inp); // 다음 단계로 넘어갈 때마다 레버를 줄여서 놓고 완전히 세운다
   }
-  expect(t.bag.lost ?? 0).toBeLessThan(0.01);
+  expect((t.bag.load0 - t.s.load) / t.bag.load0).toBeLessThan(0.01);
   expect(L.grade!(t.s, t.bag).stars).toBe(3);
 });
 
@@ -107,9 +107,10 @@ it('반대로 확 꺾으면 흙이 쏟아진다', () => {
   const t = tutor();
   until(t, { lx: -1 }); // 선회를 충분히 올린 뒤
   run(t, { lx: -1 }, 60);
+  const l0 = t.s.load;
   run(t, { lx: 1 }, 30); // 중립을 거치지 않고 반대로
-  expect(t.bag.lost ?? 0).toBeGreaterThan(0.1);
-  expect(t.bag.maxJolt ?? 0).toBeGreaterThan(R.params.joltSpill);
+  expect((l0 - t.s.load) / l0).toBeGreaterThan(0.1);
+  expect(t.s.maxJolt).toBeGreaterThan(R.params.joltSpill);
 });
 
 it('반대로 꺾으면 코치가 멈추라고 한다', () => {
@@ -122,17 +123,20 @@ it('반대로 꺾으면 코치가 멈추라고 한다', () => {
 
 it('흙을 쏟으면 별이 깎인다', () => {
   const L = stop();
-  expect(L.grade!({} as never, { lost: 0.3, maxJolt: 0.9 }).stars).toBeLessThan(3);
-  expect(L.grade!({} as never, { lost: 0.02, maxJolt: 0.05 }).stars).toBe(2);
+  // 처음 1.0 담았는데 0.7만 남음 = 30% 손실
+  expect(L.grade!({ load: 0.7, maxJolt: 0.9 } as never, { load0: 1 }).stars).toBe(1);
+  // 2% 손실
+  expect(L.grade!({ load: 0.98, maxJolt: 0.05 } as never, { load0: 1 }).stars).toBe(2);
 });
 
 it('덜컹거리면 별 3개를 못 받는다', () => {
   const L = stop();
-  expect(L.grade!({} as never, { lost: 0, maxJolt: SMOOTH.warn + 0.01 }).stars).toBeLessThan(3);
+  expect(L.grade!({ load: 1, maxJolt: SMOOTH.warn + 0.01 } as never, { load0: 1 }).stars).toBeLessThan(3);
 });
 
 it('별은 언제나 1~3 (보관함이 비어 있어도)', () => {
   const L = stop();
+  expect([1, 2, 3]).toContain(L.grade!({ load: 0, maxJolt: 0 } as never, {}).stars);
   expect([1, 2, 3]).toContain(L.grade!({} as never, {}).stars);
 });
 
@@ -144,4 +148,26 @@ it('부드럽게 하면 막다른 길 없이 끝까지 간다', () => {
     ease(t, inp);
   }
   expect(t.cleared).toBe(true);
+});
+
+it('충격 최대값은 세션이 기록한다 (화면 프레임 수와 무관)', () => {
+  // coach에서 쌓으면 한 프레임에 물리가 여러 번 돌 때 정점을 놓친다
+  const t = tutor();
+  expect(t.s.maxJolt).toBe(0); // setup에서 0으로
+  until(t, { lx: -1 });
+  run(t, { lx: -1 }, 60);
+  run(t, { lx: 1 }, 20);
+  expect(t.s.maxJolt).toBeGreaterThan(0.2);
+});
+
+it('중립을 거르고 꺾었으면 그렇게 말해 준다', () => {
+  const L = stop();
+  const flick = L.grade!({ load: 1, maxJolt: 0.3 } as never, { load0: 1, flick: 1 });
+  expect(flick.note).toMatch(/중립을 거르/);
+  const release = L.grade!({ load: 1, maxJolt: 0.3 } as never, { load0: 1 });
+  expect(release.note).toMatch(/놓을 때/);
+});
+
+it('단계는 다섯 개 (같은 왕복을 네 번 하면 지루하다)', () => {
+  expect(stop().steps.length).toBe(5);
 });

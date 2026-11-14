@@ -40,22 +40,29 @@ const reversing = (s: DigSession, j: J) => {
 };
 
 /**
- * 매 프레임 등급 재료를 쌓는다. coach에서 부른다(update가 매 프레임 coach를 부른다).
- * - maxJolt: 미션 전체에서 가장 큰 충격
- * - lost: 처음 담았던 흙 대비 잃은 비율 (가장 적었던 적재 기준)
+ * 등급 재료.
+ * 충격은 세션이 직접 최댓값을 남긴다(s.maxJolt) — coach는 화면 프레임마다 한 번만
+ * 불리는데 물리는 한 프레임에 여러 번 돌 수 있어, 여기서 쌓으면 정점을 놓친다.
+ * 흙 손실은 처음 담았던 양(setup에서 기록)과 지금 양으로 바로 계산한다.
  */
-function watch(s: DigSession, bag: Mem) {
-  bag.maxJolt = Math.max(bag.maxJolt ?? 0, s.lastJolt);
-  if (bag.load0 === undefined) bag.load0 = s.load;
-  bag.minLoad = Math.min(bag.minLoad ?? s.load, s.load);
-  bag.lost = (bag.load0 - bag.minLoad) / Math.max(bag.load0, 1e-6);
-}
+const lostOf = (s: DigSession, bag: Mem) => (bag.load0 ? (bag.load0 - s.load) / bag.load0 : 0);
+
+/** 처음 담았던 흙을 한 번만 기록한다 (setup은 bag을 못 받는다) */
+const withLoad0 = (st: Step): Step => ({
+  ...st,
+  begin: (s, mem, bag) => {
+    if (bag.load0 === undefined) bag.load0 = s.load;
+    st.begin?.(s, mem, bag);
+  },
+});
 
 /** 반대로 꺾는 중이면 멈추라고 한다. 아니면 넘긴 코치를 쓴다 */
 const watched = (j: J | null, more?: Step['coach']): Step['coach'] =>
   (s, mem, bag) => {
-    watch(s, bag);
-    if (j && reversing(s, j)) return co('멈춘 뒤에 바꾸기 — 레버를 중립으로');
+    if (j && reversing(s, j)) {
+      bag.flick = 1; // 중립을 거치지 않고 꺾은 적이 있다 (끝낸 뒤 뭘 고칠지 알려 주려고)
+      return co('멈춘 뒤에 바꾸기 — 레버를 중립으로');
+    }
     return more?.(s, mem, bag) ?? null;
   };
 
@@ -98,24 +105,26 @@ const stopFirst: Lesson = {
   setup: (s) => {
     pose(s, SWING_A, s.digTarget.rho - 0.6, s.site.B.ropeY + 1.1, 95 * deg, s.m.limits.bucket[0] + 2 * deg);
     fill(s, 1.25); // 고봉: 평적을 넘은 흙만 충격에 쏟아진다 (session.ts joltSpill)
+    s.maxJolt = 0;
   },
-  grade: (_s, bag): Grade => {
-    const lost = bag.lost ?? 0;
-    const jolt = bag.maxJolt ?? 0;
+  grade: (s, bag): Grade => {
+    const lost = lostOf(s, bag);
+    const jolt = s.maxJolt ?? 0;
+    const flick = !!bag.flick;
     if (lost >= 0.05) return { stars: 1, note: '방향을 바꿀 때 흙이 쏟아졌어요. 중립에서 한 번 세우고 바꾸세요' };
     if (lost >= 0.01) return { stars: 2, note: '흙이 조금 흘렀어요. 중립에서 완전히 선 다음에 바꾸세요' };
-    if (jolt >= SMOOTH.warn) return { stars: 2, note: '레버를 놓을 때 덜컹했어요. 한 번에 놓지 말고 조금씩 줄이며 놓아보세요' };
-    return { stars: 3, note: '멈춘 뒤에 바꿨어요. 흙도 그대로입니다' };
+    if (jolt < SMOOTH.warn) return { stars: 3, note: '멈춘 뒤에 바꿨어요. 흙도 그대로입니다' };
+    return flick
+      ? { stars: 2, note: '중립을 거르고 꺾은 적이 있어요. 완전히 선 다음에 바꾸세요' }
+      : { stars: 2, note: '레버를 놓을 때 덜컹했어요. 한 번에 놓지 말고 조금씩 줄이며 놓아보세요' };
   },
   steps: [
     turned('swing', -1, 35 * deg, '선회 레버를 왼쪽으로 — C 쪽으로 돌리기', '선회 ◀'),
     stopStep('swing', '레버를 중립으로 놓고, 완전히 설 때까지 기다리기'),
     turned('swing', 1, 30 * deg, '이제 반대로 — A 쪽으로 돌아오기', '▶ 선회'),
-    stopStep('swing', '또 한 번 — 중립으로 놓고 완전히 멈추기'),
-    turned('swing', -1, 45 * deg, '다시 C 쪽으로, 조금 더 멀리', '선회 ◀'),
-    stopStep('swing', '중립으로 놓고 멈추기'),
-    turned('swing', 1, 45 * deg, '마지막으로 A 쪽으로 돌아오기', '▶ 선회'),
-  ],
+    stopStep('swing', '한 번 더 — 중립으로 놓고 완전히 멈추기'),
+    turned('swing', -1, 45 * deg, '마지막으로 C 쪽으로, 조금 더 멀리', '선회 ◀'),
+  ].map(withLoad0),
 };
 
 export const BASIC_LESSONS: Lesson[] = [stopFirst];

@@ -107,14 +107,14 @@ it('결제 벽은 바깥 가격과 비교하지 않고, 한 번 내면 끝이라
 });
 
 it('이론 카드 자리가 있고 id가 유일하다', () => {
-  for (const id of ['why', 'why-title', 'why-art', 'why-text', 'btn-why-go', 'btn-why']) {
+  for (const id of ['why', 'why-title', 'why-art', 'why-text', 'btn-why-go', 'btn-why', 'btn-why-back']) {
     expect([...html.matchAll(new RegExp(`id="${id}"`, 'g'))].length, id).toBe(1);
   }
 });
 
 it('이론 카드 버튼도 손가락 크기만큼 크다', () => {
   // 미션 박스의 '왜?' (#btn-why는 .m-why로 모양을 받는다)
-  for (const sel of ['.m-why']) {
+  for (const sel of ['.m-why', '.why-back']) {
     const blocks = [...css.matchAll(/([^{}]*)\{([^}]*)\}/g)].filter(([, s2]) => s2.includes(sel));
     expect(blocks.some(([, , body]) => /min-height:\s*4[4-9]px|min-height:\s*5\dpx/.test(body)), sel).toBe(true);
   }
@@ -130,4 +130,25 @@ it('등급 없는 미션은 클리어 화면을 건드리지 않는다', () => {
   // 기존 배우기 7개·주행 5개는 grade가 없다. 별을 끄거나 한 줄 평을 띄우면 안 된다
   const fn = main.slice(main.indexOf('function onLessonClear'), main.indexOf('function onLessonClear') + 2200);
   expect(fn).toMatch(/L\.grade/);
+});
+
+it('이론 카드가 떠 있는 동안은 미션 판정도 멈춘다', () => {
+  // 물리만 멈추면 '중립으로 놓고 멈추기' 단계가 카드 뒤에서 저절로 끝난다
+  expect([...main.matchAll(/tutor && \$\('why'\)\.hidden && tutor\.update\(\)/g)].length).toBe(2);
+});
+
+it('이론 카드는 읽고 해보기를 누른 뒤에 본 것으로 적는다', () => {
+  // 띄울 때 적으면 카드만 보고 나간 사람에게 다시 안 보여 준다
+  const i = main.indexOf('loadSeen(WHY_KEY).includes');
+  expect(i).toBeGreaterThan(0);
+  const near = main.slice(i, i + 260);
+  expect(near.indexOf('markSeen')).toBeGreaterThan(near.indexOf('openWhy'));
+});
+
+it('시작 카드 배지 번호가 목록의 다음 번호와 같다', () => {
+  // 옛 사용자가 '이어서 8단계'를 보는데 목록에서는 1번이 다음으로 뜨던 문제
+  const i = main.indexOf("'처음이면 여기부터'");
+  const near = main.slice(Math.max(0, i - 400), i + 200);
+  expect(near).toMatch(/findIndex\(\(l\) => !done\.has\(l\.id\)\)/);
+  expect(near).toMatch(/이어서 \$\{next \+ 1\}단계/);
 });

@@ -166,8 +166,12 @@ function openPaywall(k: ModeKey) {
 function modeBadge(k: ModeKey) {
   let t = '';
   if (k === 'tutorial') {
-    const n = loadCleared().filter((id) => curLessons().some((l) => l.id === id)).length;
-    t = n === 0 ? '처음이면 여기부터' : n < curLessons().length ? `이어서 ${n + 1}단계` : '복습하기';
+    // 목록의 '다음' 표시와 같은 번호: 아직 안 깬 첫 미션의 자리
+    const LS = curLessons();
+    const done = new Set(loadCleared());
+    const next = LS.findIndex((l) => !done.has(l.id));
+    const n = LS.filter((l) => done.has(l.id)).length;
+    t = n === 0 ? '처음이면 여기부터' : next < 0 ? '복습하기' : `이어서 ${next + 1}단계`;
   } else if (k === 'free') t = '시간 제한 없음';
   else if (k === 'practice') t = '안내·피드백 포함';
   else if (k === 'exam') t = '실제 시험 조건';
@@ -1036,7 +1040,8 @@ const GUIDE_TAG = ['', '목표만', '안내 없이'];
  * 미션 중 '왜?'로 다시 볼 때는 본 것으로 적지 않고, 닫으면 미션으로 돌아간다.
  */
 let whyAfter: (() => void) | null = null;
-function openWhy(L: Lesson<any>, after: () => void) {
+let whyBack: (() => void) | null = null;
+function openWhy(L: Lesson<any>, after: () => void, back?: () => void) {
   if (!L.why) return after();
   $('why-title').textContent = L.why.title;
   $('why-art').innerHTML = ICON[L.icon];
@@ -1044,26 +1049,46 @@ function openWhy(L: Lesson<any>, after: () => void) {
   $('lessons').hidden = true;
   $('clear').hidden = true;
   whyAfter = after;
+  whyBack = back ?? null;
+  $('btn-why-back').hidden = !back;
   $('why').hidden = false;
 }
 $('btn-why-go').onclick = () => {
   $('why').hidden = true;
   const f = whyAfter;
   whyAfter = null;
+  whyBack = null;
+  f?.();
+};
+$('btn-why-back').onclick = () => {
+  $('why').hidden = true;
+  const f = whyBack;
+  whyAfter = null;
+  whyBack = null;
   f?.();
 };
 $('btn-why').onclick = () => {
   if (!tutor?.lesson.why) return;
-  openWhy(tutor.lesson, () => {
-    /* 미션으로 돌아가기만 */
-  });
+  // 미션 중 다시 보기: '해보기'도 '뒤로'도 미션으로 돌아간다 (본 것으로 적지 않는다)
+  openWhy(
+    tutor.lesson,
+    () => {},
+    () => {},
+  );
 };
 function startLesson(i: number, again = false, lv = 0) {
   const L0 = curLessons()[i];
   // 처음 보는 미션은 이론 카드를 먼저 (반복할 때는 건너뜀)
   if (!again && L0?.why && !loadSeen(WHY_KEY).includes(L0.id)) {
-    markSeen(WHY_KEY, L0.id);
-    return openWhy(L0, () => beginLesson(i, again, lv));
+    // 읽고 '해보기'를 누른 뒤에 본 것으로 적는다 (카드만 보고 나가면 다음에 또 보여 준다)
+    return openWhy(
+      L0,
+      () => {
+        markSeen(WHY_KEY, L0.id);
+        beginLesson(i, again, lv);
+      },
+      openLessonMap,
+    );
   }
   beginLesson(i, again, lv);
 }
@@ -2183,7 +2208,7 @@ function frame(now: number) {
   sound.active = operating();
   sound.update(session);
   const rw = tutor?.rewinds ?? 0;
-  if (tutor && tutor.update()) {
+  if (tutor && $('why').hidden && tutor.update()) {
     if (tutor.cleared) onLessonClear();
     else {
       sound.ding();
@@ -2251,7 +2276,7 @@ function driveFrame(dt: number, _now: number) {
   }
   d.sync(scene);
   const rw = tutor?.rewinds ?? 0;
-  if (tutor && tutor.update()) {
+  if (tutor && $('why').hidden && tutor.update()) {
     if (tutor.cleared) onLessonClear();
     else {
       sound.ding();
