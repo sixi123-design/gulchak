@@ -152,3 +152,11 @@ it('시작 카드 배지 번호가 목록의 다음 번호와 같다', () => {
   expect(near).toMatch(/findIndex\(\(l\) => !done\.has\(l\.id\)\)/);
   expect(near).toMatch(/이어서 \$\{next \+ 1\}단계/);
 });
+
+it('이빨 경로 선은 쓰는 미션에서만 남고, 떠나면 지워진다', () => {
+  // 장면 누수·메모리: 세션이 바뀌면 dispose, 다른 미션에서는 clear
+  expect(main).toMatch(/trail\?\.dispose\(\)/);
+  expect(main).toMatch(/tutor\?\.lesson\.trail/);
+  const i = main.indexOf('tutor?.lesson.trail');
+  expect(main.slice(i, i + 320)).toMatch(/trail\.clear\(\)/);
+});

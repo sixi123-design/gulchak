@@ -10,7 +10,8 @@ import { FxView, SiteView, SoilView } from './render/siteView';
 import { DigSession, type DigEntry, type RulesFile, type Sticks } from './sim/session';
 import { LESSONS, TIERS, tierProgress, Tutor } from './sim/tutorial';
 import { BASIC_LESSONS } from './sim/leverSchool';
-import { ik } from './sim/kinematics';
+import { TipTrail } from './render/tipTrail';
+import { ik, toWorld } from './sim/kinematics';
 import { Joystick, KEY_ACTIONS, keyName, Keys } from './ui/joystick';
 import { Pedal, SteeringWheel } from './ui/driveControls';
 import { MachineSound, type SoundLevels } from './ui/audio';
@@ -90,6 +91,7 @@ let soilView: SoilView;
 let siteView: SiteView;
 let fx: FxView;
 let world = new THREE.Group();
+let trail: TipTrail | null = null;
 scene.add(world);
 
 function disposeTree(o: THREE.Object3D) {
@@ -751,6 +753,10 @@ function newSession(autoEnd?: boolean) {
   disposeTree(world);
   world = new THREE.Group();
   scene.add(world);
+  // 이빨 경로 선: 쓰는 미션에서만 보인다 (world와 함께 버려진다)
+  trail?.dispose();
+  trail = new TipTrail();
+  world.add(trail.object);
   session = new DigSession(MACHINE, RULES, modeKey === 'tutorial' ? { ...MODES.tutorial, autoEnd: !!autoEnd } : MODES[modeKey]);
   // 시험·연습: 마지막 자세(버킷 끝까지 펴서 내려놓기) 그대로 A 흙 위에서 시작 (배우기는 단계마다 자세를 따로 잡음)
   if (modeKey !== 'tutorial') {
@@ -2207,6 +2213,17 @@ function frame(now: number) {
   soilView.flatGuide = session.flags.feedback && session.dumpCount >= 1;
   soilView.now = session.t;
   soilView.sync();
+  // 이빨이 지나간 자리: '두 레버를 같이 쓰기'에서만 (붐만 쓰면 호가 보인다)
+  if (trail) {
+    if (tutor?.lesson.trail && $('why').hidden) {
+      const w = toWorld(session.pose.swing, session.frame.tip);
+      trail.push(w.x, w.y, w.z);
+      trail.object.visible = true;
+    } else if (trail.count) {
+      trail.clear();
+      trail.object.visible = false;
+    }
+  }
   exc.sync(session);
   fx.sync(session);
   sound.active = operating();

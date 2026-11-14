@@ -98,6 +98,8 @@ export interface Lesson<S = DigSession> {
    * 그림은 이 미션의 icon을 크게 쓴다 (sim 층은 SVG를 들지 않는다).
    */
   why?: { title: string; lines: readonly string[] };
+  /** 이빨이 지나간 자리에 선을 남긴다 (동시조작을 눈으로 보여 주는 미션) */
+  trail?: boolean;
   setup: (s: S) => void;
   steps: Step<S>[];
 }
