@@ -112,7 +112,8 @@ it('3단계: 눌러서 차체가 들리면 실격을 알려 주고, 손을 떼�
   expect(t.step).toBe(2);
   run(t, { ry: 1 }, 200); // 계속 누른다
   expect(t.s.lift).toBeGreaterThan(0);
-  expect(t.hud() ?? '').toMatch(/실격/);
+  expect(t.hud() ?? '').toMatch(/차체가 들렸습니다/);
+  expect(t.coach?.msg ?? '').toMatch(/실격/);
   expect(t.step).toBe(2); // 손을 떼야 넘어간다
   expect(until(t, {}, 600)).toBe(true);
   // 처음 자세로 돌아왔다
@@ -190,4 +191,18 @@ it('끝까지 오면 별 3개 (익히는 자리라 깎지 않는다)', () => {
   const g = LEVER_DRILL.grade!({} as never, {});
   expect(g.stars).toBe(3);
   expect(g.note).toMatch(/붐|버킷|암/);
+});
+
+it('일부러 시킨 일을 판정으로 꾸짖지 않는다', () => {
+  // 반응은 '무슨 일이 일어났나', 규칙은 따로. 시킨 대로 했는데 '실격'이라고 하면 억울하다
+  const press = LEVER_DRILL.steps[2];
+  expect(press.text).toMatch(/일부러/);
+});
+
+it('멈추는 방법을 지시에 적는다', () => {
+  expect(LEVER_DRILL.steps[7].text).toMatch(/레버를 놓아/);
+});
+
+it('선회는 다음 미션에서 다룬다고 알려 준다', () => {
+  expect(LEVER_DRILL.grade!({} as never, {}).note).toMatch(/몸통 돌리기/);
 });
