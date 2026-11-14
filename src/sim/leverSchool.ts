@@ -341,9 +341,11 @@ const stopFirst: Lesson = {
     const lost = lostOf(s, bag);
     const jolt = s.maxJolt ?? 0;
     const flick = !!bag.flick;
-    if (lost >= 0.05) return { stars: 1, note: '방향을 바꿀 때 흙이 쏟아졌어요. 완전히 멈춘 다음에 반대로 돌리세요' };
-    if (lost >= 0.01) return { stars: 2, note: '흙이 조금 흘렀어요. 멈췄는지 확인하고 나서 바꾸세요' };
-    if (jolt < SMOOTH.warn) return { stars: 3, note: '멈춘 다음에 돌렸어요. 흙도 그대로입니다' };
+    // 고봉으로 담고 선회를 여러 번 하면 정석으로 해도 10% 안팎은 흘린다 (측정).
+    // 선회 관성 흘림이 들어오기 전 기준(1%/5%)은 이제 아무도 못 넘는다.
+    if (lost >= 0.2) return { stars: 1, note: '방향을 바꿀 때 흙이 쏟아졌어요. 완전히 멈춘 다음에 반대로 돌리세요' };
+    if (lost >= 0.12) return { stars: 2, note: '흙이 꽤 흘렀어요. 레버를 서서히 주고 서서히 놓으세요' };
+    if (jolt < SMOOTH.warn) return { stars: 3, note: '멈춘 다음에 돌렸어요. 흙도 거의 그대로입니다' };
     return flick
       ? { stars: 2, note: '멈추기 전에 반대로 꺾은 적이 있어요. 한 번 세우고 나서 돌리세요' }
       : { stars: 2, note: '레버를 놓을 때 덜컹했어요. 한 번에 놓지 말고 조금씩 줄이며 놓아보세요' };

@@ -85,7 +85,9 @@ it('멈춘 뒤에 바꾸면 흙이 안 쏟아지고 별 3개', () => {
     ease(t, inp); // 다음 단계로 넘어갈 때마다 레버를 줄여서 놓고 완전히 세운다
   }
   expect(t.cleared, '막다른 길 없이 끝까지 간다').toBe(true);
-  expect((t.bag.load0 - t.s.load) / t.bag.load0).toBeLessThan(0.01);
+  // 고봉으로 여러 번 선회하면 정석으로 해도 10% 안팎은 흘린다 (선회 관성).
+  // 중요한 건 '반대로 확 꺾기'보다 훨씬 적다는 것 — 아래 테스트가 그걸 본다.
+  expect((t.bag.load0 - t.s.load) / t.bag.load0).toBeLessThan(0.12);
   expect(L.grade!(t.s, t.bag).stars).toBe(3);
 });
 
@@ -111,8 +113,8 @@ it('흙을 쏟으면 별이 깎인다', () => {
   const L = stop();
   // 처음 1.0 담았는데 0.7만 남음 = 30% 손실
   expect(L.grade!({ load: 0.7, maxJolt: 0.9 } as never, { load0: 1 }).stars).toBe(1);
-  // 2% 손실
-  expect(L.grade!({ load: 0.98, maxJolt: 0.05 } as never, { load0: 1 }).stars).toBe(2);
+  // 15% 손실 — 선회 관성이 들어온 뒤로 정석도 10% 안팎을 흘리므로 기준이 올라갔다
+  expect(L.grade!({ load: 0.85, maxJolt: 0.05 } as never, { load0: 1 }).stars).toBe(2);
 });
 
 it('충격 최대값은 세션이 기록한다 (화면 프레임 수와 무관)', () => {

@@ -1748,21 +1748,60 @@ export class DigSession {
     if (mv > 0) this.loadBack += mv;
   }
 
+  /** 직전 프레임의 선회 각속도 (각가속도를 내려고 들고 있는다) */
+  private prevSwingVel = 0;
+
+  /**
+   * 선회 관성으로 흘리는 양 (m³/프레임).
+   *
+   * 실제로는 완전히 오므린 버킷도 **고봉까지 싣고 빠르게 돌리거나 급정지하면** 흘린다
+   * (현장 기준: 고봉 최고속 5~15%, 급가감속 10~25%). 지금까지는 버킷 입구 방향만 봐서
+   * 아무리 빨리 돌려도 한 톨도 안 흘렸다.
+   *
+   * 저가폰에서도 돌아야 하므로 **스칼라 몇 개**로만 센다 — 흙 격자를 훑거나 입자를 늘리지 않는다.
+   * 연출(입자·먼지)은 이 값을 받아 화질 높은 기기에서만 재생한다.
+   */
+  private spinSpill(dt: number, ny: number, r: number): number {
+    const w = this.vel.swing;
+    const alpha = dt > 0 ? (w - this.prevSwingVel) / dt : 0;
+    this.prevSwingVel = w;
+    const S = this.m.struckCapacity;
+    const H = this.heapedCap;
+    // 바깥으로 받는 가속도를 중력으로 나눈 값.
+    // 현장 기준으로 **가감속이 정속 원심력보다 더 흘린다** — 접선 가속도에 더 무게를 둔다.
+    const x = (r * w * w + r * Math.abs(alpha)) / 9.81;
+    // 반경 4m·선회 40°/s면 원심 가속도가 약 0.2g다. 그 아래(살살 돌리기)는 안 흘리고,
+    // 반대로 확 꺾을 때(측정 3.3g)가 최대가 되도록 잡는다.
+    const motion = clamp((x - 0.15) / 1.0, 0, 1);
+    if (motion <= 0) return 0;
+    // 평적을 넘겨 봉긋하게 쌓인(고봉) 만큼이 먼저 흘러내린다. 평적 이하면 이 항은 0
+    const exposed = clamp((this.load - S) / Math.max(1e-6, H - S), 0, 1);
+    // 입구가 덜 오므려졌을수록 더 샌다. 충분히 오므리면(ny ≥ 0.6) 이 항은 사라진다
+    const open = clamp((0.6 - ny) / 0.6, 0, 1);
+    return dt * H * motion * (0.035 * open + 0.12 * exposed);
+  }
+
   private pour(dt: number, cutting = false) {
     const f = this.frame;
-    // 흙을 깎으며 나아가는 중이면 입구를 새 흙이 막고 있어 쏟아지지 않는다
-    if (cutting) return;
-    // 버킷이 흙에 묻혀 있으면(날 끝이 표면 아래) 흙이 빠져나갈 수 없다
     const tipW = toWorld(this.pose.swing, f.tip);
-    if (tipW.y < this.soil.surfaceAt(tipW.x, tipW.z) - 0.02) return;
+    // 버킷이 흙에 묻혀 있으면(날 끝이 표면 아래) 흙이 빠져나갈 수 없다
+    const buried = tipW.y < this.soil.surfaceAt(tipW.x, tipW.z) - 0.02;
     const ny = f.nOpen.y;
-    const retainAll = clamp((ny + 0.35) / 0.9, 0, 1) * this.heapedCap;
-    // 입구 쪽에 걸친 흙은 입구가 충분히 위를 향해야(오므려야) 버틴다
-    const frontCap = this.heapedCap - this.backCap;
-    const retainFront = clamp((ny - 0.15) / 0.6, 0, 1) * frontCap;
-    const retain = Math.min(retainAll, Math.min(this.loadBack, retainAll) + retainFront);
-    if (this.load <= retain + 1e-6) return;
-    const v = Math.min(this.load - retain, 0.8 * dt);
+    // 선회 관성 흘림은 **공중에 떠 있으면 늘** 센다.
+    // 날 앞 덧쌓임(surcharge)이 남아 cutting이 켜져 있어도 운반 중에는 흘러야 한다.
+    let v = buried ? 0 : this.spinSpill(dt, ny, Math.max(0.5, f.tip.r));
+    if (buried) this.prevSwingVel = this.vel.swing;
+    // 흙을 깎으며 나아가는 중이면 입구를 새 흙이 막고 있어 기울기로는 쏟아지지 않는다
+    if (!buried && !cutting) {
+      const retainAll = clamp((ny + 0.35) / 0.9, 0, 1) * this.heapedCap;
+      // 입구 쪽에 걸친 흙은 입구가 충분히 위를 향해야(오므려야) 버틴다
+      const frontCap = this.heapedCap - this.backCap;
+      const retainFront = clamp((ny - 0.15) / 0.6, 0, 1) * frontCap;
+      const retain = Math.min(retainAll, Math.min(this.loadBack, retainAll) + retainFront);
+      v += Math.min(Math.max(0, this.load - retain), 0.8 * dt);
+    }
+    v = Math.min(this.load, v);
+    if (v <= 1e-6) return;
     this.load -= v;
     this.pourStep += v;
     this.loadBack = Math.min(this.loadBack, this.load);
