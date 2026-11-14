@@ -154,7 +154,7 @@ function dir(o: {
 /** 2 붐 내리기 — 바닥에 닿을 때까지 */
 const toGround = (): Step =>
   wrap({
-    text: '오른쪽 레버를 위로 — 바닥에 닿을 때까지',
+    text: '오른쪽 레버를 위로\n바닥에 닿을 때까지',
     labels: ['붐 내림'],
     begin: (_s, mem) => (mem.say = 0),
     done: (s, mem, bag) => {

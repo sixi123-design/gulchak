@@ -7676,18 +7676,20 @@ body.stage-on #precheck .mode-pick {
  * #hud > * 가 pointer-events: auto 라 더 구체적인 선택자로 꺼야 캔버스 터치를 안 먹는다.
  */
 /*
- * 지시문은 화면 가운데. **바탕을 깔지 않는다** — 하얀 판을 깔면 그게 버킷을 가린다.
- * (한때 글자가 묻혀서 바탕을 깔았는데, 그건 장비에 검정 실린더·A필러가 있던 때 이야기다.
- *  튜토리얼 장비를 밝은 회색으로 바꾼 뒤로는 필요 없다. 글자만 있으면 사이로 장비가 보인다.)
+ * 지시문은 **왼쪽 정렬, 시작점 고정**.
+ * - 가운데 정렬은 지시문 길이(9~20자)가 바뀔 때마다 첫 글자 자리가 움직인다.
+ * - 체크(✓)가 붙을 때도 문장이 통째로 밀린다.
+ * - 운전석 시점에서 장비는 화면 오른쪽에 몰려 있고 왼쪽이 비어 있다.
+ * 화면 끝까지 밀지는 않는다 — 버킷에서 글자까지 시선이 멀어지는 값이다 (약 57px).
+ * 바탕은 깔지 않는다. 하얀 판이 버킷을 가린다.
  */
 #hud > .drill {
   position: absolute;
-  left: 50%;
+  left: 16%;
   top: 50%;
-  transform: translate(-50%, -50%);
-  width: fit-content;
-  max-width: min(340px, calc(100% - 152px));
-  text-align: center;
+  transform: translateY(-50%);
+  width: min(56%, 280px);
+  text-align: left;
   pointer-events: none;
   z-index: 6;
 }
@@ -7697,7 +7699,11 @@ body.flat-bg #hud .timer {
   display: none;
 }
 .dr-text {
-  font: 900 calc(26px * var(--z-txt, 1)) / 1.3 var(--font);
+  /* 줄을 문구에서 직접 나눈다 (
+). 브라우저가 끊으면 "바닥에 닿을 / 때까지"처럼 어색해진다 */
+  white-space: pre-line;
+  position: relative;
+  font: 900 calc(24px * var(--z-txt, 1)) / 1.35 var(--font);
   color: var(--ink);
 }
 .dr-say {
@@ -7797,8 +7803,11 @@ body.flat-bg {
 .drill.ok .dr-text {
   color: #1c7a4a;
 }
+/* 체크는 글자 왼쪽 바깥에 띄운다 — 글 앞에 붙이면 문장이 통째로 밀려 시작점이 흔들린다 */
 .drill.ok .dr-text::before {
-  content: '✓ ';
+  content: '✓';
+  position: absolute;
+  left: -1.1em;
   font-weight: 900;
 }
 .drill.ok .dr-say {
@@ -7839,7 +7848,7 @@ body.flat-bg {
 .dr-gauge {
   display: flex;
   gap: 7px;
-  justify-content: center;
+  justify-content: flex-start;
   margin-top: 10px;
 }
 /* 8×18px으로 만들었더니 실제 화면에서 거의 안 보였다 (헤드리스 크롬으로 확인) */
