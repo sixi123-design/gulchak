@@ -63,13 +63,13 @@ export class SiteView {
    * 바닥 재질은 SiteView마다 새로 만드니(공유 캐시가 아니다) 색을 바꿔도 다른 화면에
    * 영향이 없다. 세션이 바뀌면 SiteView가 새로 만들어지므로 되돌릴 일도 없다.
    */
-  bare(color: number) {
+  bare(color: number, line = 0x8d97a0) {
     for (const c of this.group.children) {
       const keep = c.name === 'floor' || c.name === 'lines';
       c.visible = keep;
-      if (c.name !== 'floor') continue;
-      const m = (c as THREE.Mesh).material as THREE.MeshLambertMaterial;
-      m.color.setHex(color);
+      if (!keep) continue;
+      const m = (c as THREE.Mesh | THREE.LineSegments).material as THREE.Material & { color: THREE.Color };
+      m.color.setHex(c.name === 'floor' ? color : line);
     }
     for (const s of this.labels) s.visible = false;
   }
@@ -130,9 +130,10 @@ export class SiteView {
       this.group.add(lab);
       this.labels.push(lab);
     }
-    // B 가상통과제한선: 폴에서 위로
+    // B 가상통과제한선: 폴에서 위로 (바닥 선과 따로 — 폴을 감추면 이것도 감춰야 한다)
+    const upright: number[] = [];
     for (const r of [site.B.rE, site.B.rF]) {
-      seg(dashed, new THREE.Vector3(0, 0, r), new THREE.Vector3(0, site.beta + 1.6, r));
+      seg(upright, new THREE.Vector3(0, 0, r), new THREE.Vector3(0, site.beta + 1.6, r));
     }
     const solidG = new THREE.BufferGeometry();
     solidG.setAttribute('position', new THREE.Float32BufferAttribute(solid, 3));
@@ -145,6 +146,11 @@ export class SiteView {
     dl.computeLineDistances();
     dl.name = 'lines';
     this.group.add(dl);
+    const upG = new THREE.BufferGeometry();
+    upG.setAttribute('position', new THREE.Float32BufferAttribute(upright, 3));
+    const ul = new THREE.LineSegments(upG, new THREE.LineDashedMaterial({ color: 0x1d1b2e, dashSize: 0.25, gapSize: 0.18 }));
+    ul.computeLineDistances();
+    this.group.add(ul);
     const labB = label('B', '#2fd27a');
     labB.position.set(0, site.beta + 2.0, (site.B.rE + site.B.rF) / 2);
     this.group.add(labB);

@@ -97,6 +97,8 @@ const TUTOR_FLOOR = 0xd7e3ec;
 const TUTOR_SKY = 0xeaf3f8;
 /** 흙 주변 다진 바닥 (원래 0x5e5a55 짙은 회갈색 — 글자가 묻힌다) */
 const TUTOR_GROUND = 0xa79c8e;
+/** 바닥 실격선 (원래 거의 검정 0x1d1b2e). 바닥이 밝으니 흰색은 안 보여 회색으로 */
+const TUTOR_LINE = 0x8d97a0;
 /** 잘했다·잘못했다 연출: 미션이 센 값이 늘어난 만큼만 재생한다 */
 let fxOk = 0;
 let fxBad = 0;
@@ -1153,7 +1155,7 @@ function beginLesson(i: number, again = false, lv = 0) {
   // 화면 전체에 필터를 걸어 회색으로 만들던 것을 버렸다 (장비·흙까지 탈색되고 비용도 든다)
   document.body.classList.toggle('flat-bg', !!L.flat);
   if (L.flat) {
-    siteView.bare(TUTOR_FLOOR);
+    siteView.bare(TUTOR_FLOOR, TUTOR_LINE);
     soilView.setGround(TUTOR_GROUND);
     (scene.fog as THREE.Fog).color.setHex(TUTOR_SKY);
   }
