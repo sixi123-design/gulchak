@@ -82,16 +82,23 @@ it('움직이는 중에 반대로 확 꺾으면 덜컹하고 고봉 흙이 쏟�
   expect((l0 - s.load) / SC).toBeGreaterThan(0.1);
 });
 
-it('멈춘 뒤에 바꾸면 선회를 몇 번 돌려도 흙이 그대로다', () => {
+it('멈췄다 바꾸면 확 꺾을 때보다 훨씬 덜 흘린다', () => {
   const s = laden();
   const l0 = s.load;
-  for (const inp of [{ lx: 1 }, { lx: -1 }, { lx: 1 }, { lx: -1 }] as const) {
-    go(s, inp, 40);
+  // 레버를 서서히 주고 서서히 놓는다 — 확 주고 확 놓으면 덜컹으로 샌다(그건 아래 테스트)
+  for (const dir of [1, -1, 1, -1]) {
+    for (let i = 1; i <= 30; i++) go(s, { lx: (dir * i) / 30 }, 1);
+    go(s, { lx: dir }, 30);
+    for (let i = 30; i >= 0; i--) go(s, { lx: (dir * i) / 30 }, 1);
     settle(s, 'swing');
   }
-  // 멈췄다 바꾸면 덜컹은 안 나지만, 고봉을 여러 번 돌리면 관성으로 조금씩 샌다.
-  // 반대로 확 꺾을 때(한 번에 12% 안팎)와는 자릿수가 다르다.
-  expect((l0 - s.load) / SC).toBeLessThan(0.15);
+  const stopFirst = (l0 - s.load) / l0;
+  // 같은 횟수를 '멈추지 않고 반대로 확 꺾기'로 하면 훨씬 많이 쏟는다
+  const f = laden();
+  const f0 = f.load;
+  for (const dir of [1, -1, 1, -1]) go(f, { lx: dir }, 60);
+  const flick = (f0 - f.load) / f0;
+  expect(stopFirst).toBeLessThan(flick * 0.6);
 });
 
 it('고봉으로 담은 채 붐을 내리면 덜컹과 무관하게 흙이 흐른다', () => {

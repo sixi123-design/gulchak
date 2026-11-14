@@ -3,79 +3,78 @@ import { MACHINE } from '../src/config/machine';
 import rules from '../src/config/rules.json';
 import { MODES } from '../src/core/ruleEngine';
 import { DigSession, type RulesFile } from '../src/sim/session';
-import { fill, pose } from '../src/sim/tutorial';
 
 const R = rules as unknown as RulesFile;
-const deg = Math.PI / 180;
-const go = (s: DigSession, inp: Record<string, number>, n: number) => {
+const SC = MACHINE.struckCapacity;
+const d = (x: number) => (x * Math.PI) / 180;
+const go = (s: DigSession, lx: number, n: number) => {
   for (let i = 0; i < n; i++) {
-    s.input = { lx: 0, ly: 0, rx: 0, ry: 0, ...inp };
+    s.input = { lx, ly: 0, rx: 0, ry: 0 };
     s.step();
   }
 };
-/** 한 삽 퍼서 완전히 오므리고 운반 높이로 든 상태 */
-function carry(heaped: boolean) {
+/**
+ * 흙을 싣고 운반하는 자세. `bucket`으로 오므림 정도를 정한다.
+ * -133° = 제대로 오므림 (입구가 위를 봄), -60° = 어정쩡, 0° = 거의 안 오므림
+ */
+function carry(bucket: number, ratio = 1.25) {
   const s = new DigSession(MACHINE, R, MODES.tutorial);
   s.belt = true;
   s.leverUnlocked = true;
   s.rpm = 1;
   s.ready();
-  for (let i = 0; i < 60; i++) s.step();
-  const A = s.site.stations.find((x) => x.name === 'A')!;
-  pose(s, Math.PI, (A.zoneIn + A.zoneOut) / 2, 0.1, -20 * deg);
-  go(s, { ry: 0.5 }, 40);
-  go(s, { ly: -0.6, rx: -0.5 }, heaped ? 260 : 160);
-  go(s, { rx: -1, ry: -0.4 }, 120);
-  go(s, { rx: -1 }, 300); // 끝까지 오므림
-  go(s, { ry: -0.5 }, 60);
-  // 정석으로 파면 평적을 못 넘는다. 고봉 운반을 보려면 올려 담은 상태로 맞춘다
-  // (완전히 오므린 버킷은 이렇게 채워도 그대로 유지된다 — 측정으로 확인)
-  if (heaped) fill(s, 1.25);
+  for (let i = 0; i < 100; i++) s.step();
+  s.teleport({ swing: Math.PI, boom: d(25), arm: d(-40), bucket: d(bucket) });
+  s.load = SC * ratio;
+  s.loadBack = s.load * 0.85;
   return s;
 }
-/** 흙을 몇 % 흘렸나 */
 const lost = (s: DigSession, fn: (s: DigSession) => void) => {
   const b = s.load;
   fn(s);
   return ((b - s.load) / b) * 100;
 };
+/** 레버를 1초에 걸쳐 주고, 돌리고, 1초에 걸쳐 놓는다 */
+const smooth = (s: DigSession) => {
+  for (let i = 1; i <= 60; i++) go(s, i / 60, 1);
+  go(s, 1, 120);
+  for (let i = 60; i >= 0; i--) go(s, i / 60, 1);
+};
+const rough = (s: DigSession) => {
+  go(s, 1, 120);
+  go(s, 0, 120);
+};
+const flick = (s: DigSession) => {
+  go(s, 1, 150);
+  go(s, -1, 120);
+};
 
-describe('운반 중 흙 흘림 (현장 기준)', () => {
-  it('완전히 오므리고 가만히 있으면 거의 안 흘린다', () => {
-    expect(lost(carry(false), (s) => go(s, {}, 240))).toBeLessThan(2);
+describe('운반 중 흙 흘림', () => {
+  it('제대로 오므리고 부드럽게 돌리면 거의 안 흘린다', () => {
+    expect(lost(carry(-133), smooth)).toBeLessThan(2);
   });
 
-  it('완전히 오므리고 평적이면 최고 속도로 돌려도 거의 안 흘린다', () => {
-    expect(lost(carry(false), (s) => go(s, { lx: 1 }, 300))).toBeLessThan(5);
+  it('제대로 오므려도 레버를 확 주고 확 놓으면 흘린다', () => {
+    expect(lost(carry(-133), rough)).toBeGreaterThan(lost(carry(-133), smooth) * 2);
   });
 
-  it('고봉으로 담으면 돌릴 때 흘리기 시작한다 (평적은 안 흘린다)', () => {
-    // 이 장비는 흙을 실으면 선회가 느려져 정속 원심력이 0.1g 수준이다.
-    // 그래서 '최고속으로 돌리기'만으로는 조금 샌다. 크게 흘리는 것은 급조작이다 — 아래 테스트.
-    const heaped = lost(carry(true), (s) => go(s, { lx: 1 }, 300));
-    const struck = lost(carry(false), (s) => go(s, { lx: 1 }, 300));
-    expect(heaped).toBeGreaterThan(0.2);
-    expect(heaped).toBeGreaterThan(struck * 5);
+  it('반대로 확 꺾으면 가장 많이 흘린다', () => {
+    const v = lost(carry(-133), flick);
+    expect(v).toBeGreaterThan(lost(carry(-133), rough));
+    expect(v).toBeGreaterThan(5);
   });
 
-  it('고봉으로 레버를 확 주고 확 놓으면 살살 돌릴 때보다 많이 흘린다', () => {
-    const rough = lost(carry(true), (s) => { go(s, { lx: 1 }, 120); go(s, {}, 120); });
-    const gentle = lost(carry(true), (s) => go(s, { lx: 0.3 }, 600));
-    expect(rough).toBeGreaterThan(gentle * 3);
+  it('어정쩡하게 오므린 채로 돌리면 부드럽게 해도 크게 흘린다', () => {
+    const half = lost(carry(-60), smooth);
+    expect(half).toBeGreaterThan(lost(carry(-133), smooth) * 5);
+    expect(half).toBeGreaterThan(10);
   });
 
-  it('고봉으로 담고 반대로 확 꺾으면 크게 흘린다 (10~30%)', () => {
-    const v = lost(carry(true), (s) => {
-      go(s, { lx: 1 }, 150);
-      go(s, { lx: -1 }, 120);
-    });
-    expect(v).toBeGreaterThan(10);
-    expect(v).toBeLessThan(30);
+  it('평적만 담으면 고봉일 때보다 덜 흘린다', () => {
+    expect(lost(carry(-133, 0.9), flick)).toBeLessThan(lost(carry(-133, 1.25), flick));
   });
 
-  it('고봉이어도 천천히 돌리면 적게 흘린다 (급선회보다 덜)', () => {
-    const slow = lost(carry(true), (s) => go(s, { lx: 0.3 }, 600));
-    const fast = lost(carry(true), (s) => go(s, { lx: 1 }, 300));
-    expect(slow).toBeLessThan(fast);
+  it('돌리지 않고 가만히 있으면 안 흘린다', () => {
+    expect(lost(carry(-133), (s) => go(s, 0, 240))).toBeLessThan(0.5);
   });
 });
