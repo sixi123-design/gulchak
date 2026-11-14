@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { fixTip, TIP_LESSONS } from '../src/sim/fixTips';
 import { LESSONS } from '../src/sim/tutorial';
+import { BASIC_LESSONS } from '../src/sim/leverSchool';
 import { DRIVE_LESSONS } from '../src/sim/drive/driveTutorial';
 
 describe('결과 고칠 점 한 줄', () => {
   it('가리키는 배우기 미션이 모두 있음', () => {
-    const ids = new Set([...LESSONS, ...DRIVE_LESSONS].map((l) => l.id));
+    const ids = new Set([...BASIC_LESSONS, ...LESSONS, ...DRIVE_LESSONS].map((l) => l.id));
     const refs = TIP_LESSONS;
     expect(refs.length).toBeGreaterThan(10);
     for (const r of refs) expect(ids.has(r), r).toBe(true);

@@ -1,14 +1,12 @@
 import { shapeOf, staticHits } from './judge';
 import type { Site } from './site';
-import { bucketUnderside, ik, toWorld, type Pose } from './kinematics';
+import { bucketUnderside, ik, toWorld } from './kinematics';
 import type { DigSession } from './session';
 
 /**
  * 배우기(튜토리얼): 구간별 짧은 미션. 순수 로직 — 화면은 main.ts가 그린다.
  * 각 미션은 그 구간에 맞는 자세·상태에서 바로 시작한다.
  */
-
-type Joint = keyof Pose;
 
 /** 단계 메모(mem, 단계마다 초기화) · 미션 보관함(bag, 미션 끝까지 유지) */
 type Mem = Record<string, number>;
@@ -111,18 +109,6 @@ export interface Lesson<S = DigSession> {
 const deg = Math.PI / 180;
 const SWING_A = Math.PI; // A를 향함
 const SWING_C = 0; // C를 향함
-
-/** 관절을 한쪽 방향으로 일정 각도 이상 움직였는가 */
-const moved = (j: Joint, dir: 1 | -1, amount: number, text: string, labels: string[]): Step => ({
-  text,
-  labels,
-  begin: (s, mem) => (mem[j] = s.pose[j]),
-  // 시작점은 반대쪽으로 가장 멀리 간 곳: 앞 단계 레버를 계속 밀어 넘어가도(관성) 되돌린 만큼 다 셈
-  done: (s, mem) => {
-    mem[j] = dir > 0 ? Math.min(mem[j], s.pose[j]) : Math.max(mem[j], s.pose[j]);
-    return (s.pose[j] - mem[j]) * dir >= amount;
-  },
-});
 
 /**
  * 버킷 날 끝을 (r, y)에 두는 자세로 순간이동. bucketRel: 버킷 관절각(없으면 ik 그대로).
@@ -360,22 +346,6 @@ const toDump = (s: DigSession) => {
 const fromSwing = (s: DigSession) => pose(s, SWING_A, s.digTarget.rho - 1.4, s.site.B.ropeY + 0.9, -40 * deg, 35 * deg);
 
 export const LESSONS: Lesson[] = [
-  {
-    id: 'levers',
-    tier: '기초',
-    icon: 'stLevers',
-    title: '레버 익히기',
-    noFail: true,
-    setup: () => {},
-    steps: [
-      moved('boom', 1, 12 * deg, '붐 올리기', ['붐 올림']),
-      moved('boom', -1, 12 * deg, '붐 내리기', ['붐 내림']),
-      moved('arm', 1, 15 * deg, '암 펴기', ['암 펴기']),
-      moved('arm', -1, 15 * deg, '암 당기기', ['암 당기기']),
-      moved('bucket', -1, 25 * deg, '버킷 오므리기', ['버킷 오므림']),
-      moved('bucket', 1, 25 * deg, '버킷 펴기', ['버킷 펴기']),
-    ],
-  },
   {
     id: 'scoop',
     tier: '기초',

@@ -369,3 +369,17 @@ it('아무것도 안 하면 통과하지 못한다', () => {
   run(t, {}, 300);
   expect(t.step).toBe(0);
 });
+
+it('반대 방향으로 더 밀었다가 돌아와도 밀어낸 만큼부터 센다', () => {
+  // 앞 단계 레버를 계속 밀어 넘어가도 막다른 길이 되지 않게, 가장 멀리 간 곳을 기준으로 센다
+  const t = tutor();
+  until(t, { lx: -1 }); // 1단계: 왼쪽으로
+  until(t, {}, 400); // 2단계: 멈춤
+  const at = t.step; // 3단계: 오른쪽으로 30도
+  run(t, { lx: -1 }, 90); // 반대로 더 밀어 버린다
+  const far = t.s.pose.swing;
+  expect(until(t, { lx: 1 }, 900)).toBe(true);
+  // 밀어낸 자리에서 30도만 돌아오면 통과 (처음 자리까지 다 돌아올 필요 없음)
+  expect(t.s.pose.swing - far).toBeGreaterThan(29 * (Math.PI / 180));
+  expect(t.step).toBeGreaterThan(at);
+});
