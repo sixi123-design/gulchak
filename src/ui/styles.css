@@ -7671,15 +7671,39 @@ body.stage-on #precheck .mode-pick {
 }
 
 /* ----- 레버 익히기: 배경에 크게 띄우는 지시문 ----- */
-.drill {
+/*
+ * 위쪽 줄(굴착·덤프 칩 / 타이머·버튼) 아래로 내린다 — 같은 높이에 두면 휴대폰에서 겹친다.
+ * #hud > * 가 pointer-events: auto 라 더 구체적인 선택자로 꺼야 캔버스 터치를 안 먹는다.
+ */
+#hud > .drill {
   position: absolute;
   left: 50%;
-  top: max(14px, env(safe-area-inset-top));
+  top: 42px;
   transform: translateX(-50%);
-  width: min(560px, calc(100% - 32px));
+  width: min(560px, calc(100% - 24px));
   text-align: center;
   pointer-events: none;
   z-index: 6;
+}
+/*
+ * 글자 뒤 어두운 그라데이션. 하늘이 밝아 흰 글자가 묻히는 것을 막는다 —
+ * 판(배경 상자)을 두지 않고도 어떤 배경에서나 읽히게. 자막과 같은 처리.
+ */
+#hud > .drill::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -34px;
+  transform: translateX(-50%);
+  width: 100vw;
+  height: calc(100% + 54px);
+  background: linear-gradient(to bottom, rgb(29 27 46 / 0.62) 0%, rgb(29 27 46 / 0.5) 55%, rgb(29 27 46 / 0) 100%);
+  z-index: -1;
+}
+/* 레버 익히기에는 굴착 횟수·덤프·남은 시간이 뜻이 없다. 글자 자리를 비운다 */
+body.flat-bg #hud .chips,
+body.flat-bg #hud .timer {
+  display: none;
 }
 .dr-text {
   font: 900 calc(26px * var(--z-txt, 1)) / 1.3 var(--font);

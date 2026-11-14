@@ -160,3 +160,27 @@ it('이빨 경로 선은 쓰는 미션에서만 남고, 떠나면 지워진다',
   const i = main.indexOf('tutor?.lesson.trail');
   expect(main.slice(i, i + 320)).toMatch(/trail\.clear\(\)/);
 });
+
+it('배경 지시문이 위쪽 줄과 겹치지 않고 캔버스 터치를 먹지 않는다', () => {
+  // #hud > * 가 pointer-events: auto 라서 .drill 만으로는 못 끈다
+  const blocks = [...css.matchAll(/([^{}]*)\{([^}]*)\}/g)];
+  const drill = blocks.find(([, sel]) => sel.includes('#hud > .drill'));
+  expect(drill, '#hud > .drill 규칙이 있어야 한다').toBeTruthy();
+  expect(drill![2]).toMatch(/pointer-events:\s*none/);
+  // 위쪽 줄(타이머·버튼) 아래로 내려야 한다
+  const top = /top:\s*(\d+)px/.exec(drill![2]);
+  expect(top, 'top 값이 px로 있어야 한다').toBeTruthy();
+  expect(Number(top![1])).toBeGreaterThanOrEqual(36);
+});
+
+it('레버 익히기에서는 굴착 횟수·타이머를 숨긴다', () => {
+  expect(css).toMatch(/body\.flat-bg #hud \.chips/);
+  expect(css).toMatch(/body\.flat-bg #hud \.timer/);
+});
+
+it('배경 지시문 뒤에 어두운 바탕을 깐다 (밝은 하늘에서 흰 글자가 묻히지 않게)', () => {
+  const blocks = [...css.matchAll(/([^{}]*)\{([^}]*)\}/g)];
+  const scrim = blocks.find(([, sel]) => sel.includes('#hud > .drill::before'));
+  expect(scrim, '지시문 뒤 바탕 규칙이 있어야 한다').toBeTruthy();
+  expect(scrim![2]).toMatch(/linear-gradient/);
+});
