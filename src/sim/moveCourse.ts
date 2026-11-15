@@ -10,9 +10,10 @@ export const MOVE = {
   /** 두 관절 이상이 같이 움직인 시간 비율 */
   co: 0.3,
   /** 이빨을 파는 자리에 맞출 때 허용 오차 */
-  rTol: 0.5,
-  yLo: 0.05,
-  yHi: 0.5,
+  rTol: 0.6,
+  /** 버킷 하부와 지면 사이 (이빨 높이가 아니라 이걸로 본다 — 구덩이가 지면 아래라서) */
+  gapLo: 0.03,
+  gapHi: 0.45,
   /** 쏟았다고 보는 남은 양 */
   empty: 0.1,
   /** 선회 전 오므림 각 */
@@ -59,44 +60,57 @@ export const READY_LESSON: Lesson = {
     return { stars: 1, note: '레버를 하나씩 썼어요. 두 개를 같이 밀어야 빨라집니다' };
   },
   setup: (s) => {
-    // 선회해서 돌아온 직후: 흙은 비었고 버킷은 높이 든 상태
-    const { swing, r } = digSpot(s);
-    pose(s, swing, r - 1.2, ropeClear(s) + 0.6, -60 * deg);
+    // 흙을 쏟고 선회해서 돌아온 자세 (붐 높이·암 접힘·버킷 오므림).
+    // 여기서 세 레버를 같이 쓰면 3초쯤에 굴착 자세에 닿는다 — 측정으로 잡은 값
+    s.teleport({ swing: Math.PI, boom: 45 * deg, arm: -120 * deg, bucket: -110 * deg });
   },
   steps: [
+    {
+      text: '흙을 쏟고 돌아온 자세입니다\n여기서 파는 자리까지 갑니다',
+      peek: true,
+      spot: digSpot,
+      begin: (_s, mem) => (mem.t = 0),
+      done: (_s, mem) => ++mem.t > 130,
+    },
     span(
       {
-        text: '암을 펴서\n파는 자리 쪽으로',
-        labels: ['암 펴기'],
-        done: (s, mem) => hold(mem, s.frame.tip.r > digSpot(s).r - 1, 12),
-        coach: (s) => (bucketLow(s) < ropeClear(s) - 0.5 ? co('버킷이 너무 낮아요 — 붐을 올리기', '붐 올림') : null),
-      },
-      ['arm'],
-    ),
-    span(
-      {
-        text: '붐을 내리면서\n암도 같이 펴기',
-        labels: ['붐 내림', '암 펴기'],
+        text: '붐 내리고 암 펴고 버킷 열기\n세 레버를 같이',
+        spot: digSpot,
+        labels: ['붐 내림', '암 펴기', '버킷 펴기'],
         hud: (_s, mem) => `같이 쓴 시간 ${Math.round(spanCo(mem) * 100)}%`,
         done: (s, mem, bag) => {
           bag.co = Math.max(bag.co ?? 0, spanCo(mem));
-          return s.frame.tip.y < MOVE.yHi + 0.6;
+          // 파는 자리 가까이 내려오면 다음 (측정: 세 레버를 같이 쓰면 3초쯤)
+          return Math.abs(s.frame.tip.r - digSpot(s).r) < 1 && s.groundGap() < 0.7;
         },
-        coach: (_s, mem) => (spanCo(mem) < MOVE.co ? co('두 레버를 같이 밀기', '붐 내림', '암 펴기') : null),
+        coach: (s, mem) =>
+          spanCo(mem) < MOVE.co
+            ? co('세 레버를 같이 밀기', '붐 내림', '암 펴기')
+            : s.groundGap() > 1.5
+              ? co('붐을 더 내리기', '붐 내림')
+              : null,
       },
-      ['boom', 'arm'],
+      ['boom', 'arm', 'bucket'],
     ),
     span(
       {
         text: '이빨을 파는 자리 위에\n부드럽게 멈추기',
         spot: digSpot,
         labels: ['붐 내림', '암 당기기'],
+        hud: (s) => `바닥까지 ${Math.round(s.groundGap() * 100)}cm`,
         done: (s, mem) => {
-          const t = s.frame.tip;
-          const ok = Math.abs(t.r - digSpot(s).r) < MOVE.rTol && t.y > MOVE.yLo && t.y < MOVE.yHi && smooth(s, mem);
+          const g = s.groundGap();
+          const ok =
+            Math.abs(s.frame.tip.r - digSpot(s).r) < MOVE.rTol && g > MOVE.gapLo && g < MOVE.gapHi && smooth(s, mem);
           return hold(mem, ok, 14);
         },
-        coach: (s, mem) => (!smooth(s, mem) ? co('덜컹했어요 — 레버를 천천히 가운데로') : null),
+        coach: (s, mem) => {
+          if (!smooth(s, mem)) return co('덜컹했어요 — 레버를 천천히 가운데로');
+          const d = s.frame.tip.r - digSpot(s).r;
+          if (d > MOVE.rTol) return co('암을 당겨 가까이', '암 당기기');
+          if (-d > MOVE.rTol) return co('암을 펴서 멀리', '암 펴기');
+          return null;
+        },
       },
       ['boom', 'arm'],
     ),
