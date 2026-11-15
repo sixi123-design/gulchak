@@ -1359,6 +1359,11 @@ function dodgeBucket() {
   drillTop += (drillWant - drillTop) * Math.min(1, dt * 2.5);
   box.style.top = `${(drillTop * 100).toFixed(1)}%`;
   box.style.transform = 'none';
+  // 왼쪽 레버판(과 '▶ 선회' 이름표)에 글이 깔리지 않게, 레버판과 높이가 겹치면 그 오른쪽에서 시작한다
+  const pad = $('stick-l').getBoundingClientRect();
+  const b = box.getBoundingClientRect();
+  const left = pad.width && b.bottom > pad.top ? Math.max(0.16 * innerWidth, pad.right + 18) : 0.16 * innerWidth;
+  box.style.left = `${Math.round(left)}px`;
 }
 
 /**
@@ -1447,15 +1452,17 @@ function updateMeter() {
     // 교정이 먼저다. 반응("좋아요")이 떠 있는 동안 "붐을 더 내리기"가 가려지면 안 된다
     const d = tutor.demoState();
     // 시범 중에는 레버를 밀어도 안 먹는다. 가만히 있으면 "왜 안 되지"가 되니 그 말을 해 준다
-    const say = d !== 'user' && userPush > 0.12 ? '시범 중이에요 — 잠시 보세요' : (tutor.coach?.msg ?? h ?? '');
+    const say = tutor.current?.ask ? '' : d !== 'user' && userPush > 0.12 ? '시범 중이에요 — 잠시 보세요' : (tutor.coach?.msg ?? h ?? '');
     const t = tutor.current?.text ?? '';
     // 시범에는 배지(시범 중)가 이미 떠 있다. 부품 줄까지 띄우면 네 줄이 된다
     $('dr-part').textContent = !say && d === 'user' && part && !t.includes('레버') ? `${PART_NAME[part]} · ${LEVER_WAY[part]}` : '';
     updateGauge(part);
     const badge = $('dr-badge');
     // 두 줄 지시 + 작은 줄 + 배지 = 네 줄이다. 작은 줄이 있으면 배지는 숨긴다
-    badge.hidden = !!say || (d === 'user' && !tutor.current?.demo);
+    badge.hidden = !!say || (d === 'user' && !tutor.current?.demo) || !!tutor.current?.ask;
     badge.textContent = d === 'user' ? '직접 해보기' : '시범 중';
+    // 배속 버튼: 시범이 도는 단계와 '다시 볼까요?'에서만 (다시 보기 전에 느리게 고를 수 있게)
+    $('btn-slow').hidden = !(tutor.current?.ask || (tutor.current?.demo && d !== 'user'));
     $('dr-say').textContent = say;
     $('m-hold').hidden = true;
     const ok = tutor.bag.okN ?? 0;
@@ -1494,6 +1501,8 @@ function renderMission(intro = false) {
   if (!tutor) {
     m.hidden = true;
     $('drill').hidden = true;
+    $('dr-ask').hidden = true;
+    $('btn-slow').hidden = true;
     $('dr-part').textContent = '';
     $('dr-gauge').hidden = true;
     $('dr-badge').hidden = true;
@@ -1510,6 +1519,7 @@ function renderMission(intro = false) {
     $('drill').classList.remove('ok', 'bad');
     $('drill-fx').innerHTML = '';
     $('dr-text').textContent = tutor.notice ?? tutor.current?.text ?? '';
+    $('dr-ask').hidden = !tutor.current?.ask;
     for (const el of document.querySelectorAll('.lab')) el.classList.toggle('hint', new Set(tutor.current?.labels ?? []).has((el.textContent ?? '').replace(/ /g, ' ')));
     return;
   }
@@ -1607,6 +1617,41 @@ function onLessonFail(v: Violation) {
 $('btn-clear-next').onclick = () => startLesson(lessonIdx + 1);
 $('btn-clear-again').onclick = () => startLesson(lessonIdx, true, guideLv);
 $('btn-clear-less').onclick = () => startLesson(lessonIdx, true, Math.min(2, guideLv + 1));
+/** 시범 0.5배속 (켜 두면 다음 시범에도 유지 — 이 기기에만 기억) */
+let demoSlow = (() => {
+  try {
+    return localStorage.getItem('exc-demo-slow') === '1';
+  } catch {
+    return false;
+  }
+})();
+/** 0.5배속에서 이번 화면 프레임은 시범을 쉬는 프레임인가 */
+let slowHold = false;
+const paintSlow = () => {
+  $('btn-slow').classList.toggle('on', demoSlow);
+  $('btn-slow').setAttribute('aria-pressed', String(demoSlow));
+};
+paintSlow();
+$('btn-slow').onclick = () => {
+  demoSlow = !demoSlow;
+  sound.select();
+  paintSlow();
+  try {
+    localStorage.setItem('exc-demo-slow', demoSlow ? '1' : '0');
+  } catch {
+    /* 저장 못 해도 이번 판에는 그대로 */
+  }
+};
+// 시범 뒤 고르기: 다시 보기 / 다음
+const askPick = (again: boolean) => {
+  if (!tutor?.current?.ask) return;
+  sound.select();
+  tutor.choose(again);
+  if (tutor.cleared) onLessonClear();
+  else renderMission();
+};
+$('btn-replay').onclick = () => askPick(true);
+$('btn-ask-next').onclick = () => askPick(false);
 // 배우기 중 '다시': 흙·자세까지 이 미션 처음 상태로
 $('btn-restart').onclick = () => {
   if (lessonIdx < 0 || !tutor) return;
@@ -2438,8 +2483,12 @@ function frame(now: number) {
     rx: curve(clamp1(right.x + kb.rx + pad.rx)),
     ry: curve(clamp1(right.y + kb.ry + pad.ry)),
   };
-  // 앱이 레버를 대신 미는 시범 중에는 유저 입력을 무시하고, 화면 손잡이도 앱 값으로 움직인다
-  session.input = tutor ? tutor.drive(userInput) : userInput;
+  // 앱이 레버를 대신 미는 시범 중에는 유저 입력을 무시하고, 화면 손잡이도 앱 값으로 움직인다.
+  // 0.5배속: 시범 중에는 화면 두 프레임에 시범 한 프레임만 진행한다 (시뮬 시간도 절반 — 아래 acc).
+  // 쉬는 프레임에는 시범 입력을 그대로 두고 단계 판정(update)도 건너뛴다 — 시범 길이가 시뮬 시간과 어긋나지 않게
+  const slowNow = !drive && demoSlow && !!tutor && tutor.demoState() === 'demo';
+  slowHold = slowNow && !slowHold;
+  if (!slowHold) session.input = tutor ? tutor.drive(userInput) : userInput;
   // 시범 중에 손을 댔나 (입력은 무시되지만 **대답은 해야 한다**)
   userPush = Math.max(
     Math.hypot(left.x + kb.lx + pad.lx, left.y + kb.ly + pad.ly),
@@ -2462,7 +2511,7 @@ function frame(now: number) {
     driveFrame(dt, now);
     return;
   }
-  acc += dt;
+  acc += slowNow ? dt * 0.5 : dt;
   if (!$('settings').hidden || !$('why').hidden) acc = 0; // 설정·이론 카드 중에는 일시정지
   let n = 0;
   // 밀린 시간을 버리지 않고 따라잡는다 (저사양에서도 제한시간이 실제 시간과 일치)
@@ -2492,7 +2541,7 @@ function frame(now: number) {
   sound.active = operating();
   sound.update(session);
   const rw = tutor?.rewinds ?? 0;
-  if (tutor && $('why').hidden && tutor.update()) {
+  if (!slowHold && tutor && $('why').hidden && tutor.update()) {
     if (tutor.cleared) onLessonClear();
     else {
       sound.ding();

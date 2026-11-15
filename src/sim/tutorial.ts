@@ -45,6 +45,11 @@ export interface Step<S = DigSession> {
   meter?: (s: S, mem: Mem, bag: Mem) => Meter;
   /** 매 프레임 미션 박스에 띄울 짧은 한 줄 (세는 중 ●●○ · 멈춘 뒤 오차 cm) */
   hud?: (s: S, mem: Mem, bag: Mem) => string | null;
+  /**
+   * 고르는 단계: 화면에 '다시 보기 / 다음' 버튼을 띄우고 유저가 누를 때까지 기다린다.
+   * `replay`는 다시 보기를 누르면 돌아갈 단계 번호 (시범의 첫 단계). done은 쓰이지 않는다.
+   */
+  ask?: { replay: number };
 }
 
 /** 미션을 끝냈을 때의 평가: 별 개수와 한 줄 평 */
@@ -714,6 +719,15 @@ export class Tutor<S extends { flags: { autoEnd: boolean } } = DigSession> {
   restartStep(): void {
     this.enter();
   }
+  /** 고르는 단계(ask)에서 유저가 누른 것: again이면 시범 처음으로, 아니면 다음 단계로 */
+  choose(again: boolean): void {
+    const ask = this.current?.ask;
+    if (this.cleared || !ask) return;
+    this.step = again ? ask.replay : this.step + 1;
+    this.notice = null;
+    if (this.step >= this.lesson.steps.length) this.cleared = true;
+    else this.enter();
+  }
   /** 이번 프레임에 단계가 넘어갔으면 true */
   update(): boolean {
     if (this.cleared) return false;
@@ -733,6 +747,8 @@ export class Tutor<S extends { flags: { autoEnd: boolean } } = DigSession> {
       this.coach = c;
       this.coachHold = 30;
     } else if (this.coachHold > 0 && --this.coachHold === 0) this.coach = null;
+    // 고르는 단계는 버튼(choose)으로만 넘어간다
+    if (st.ask) return false;
     if (!st.done(this.s, this.mem, this.bag)) return false;
     this.step++;
     this.notice = null;

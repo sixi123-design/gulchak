@@ -7948,6 +7948,33 @@ body.flat-bg {
   }
 }
 
+/* 시범 뒤 고르기: 다시 보기 / 다음. #drill은 터치를 안 받으니 여기만 켠다 */
+#hud > .drill .dr-ask {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  pointer-events: auto;
+}
+#hud > .drill .dr-ask[hidden] {
+  display: none;
+}
+/* 배지 + 0.5배속 버튼 한 줄. 버튼만 터치를 받는다 */
+.dr-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+#hud > .drill .dr-slow {
+  pointer-events: auto;
+  margin-top: 6px;
+}
+#hud > .drill .dr-slow[hidden] {
+  display: none;
+}
+.dr-slow.on {
+  background: var(--ink);
+  color: var(--paper);
+}
 /* 시범 중 / 직접 해보기 */
 .dr-badge {
   margin-top: 6px;

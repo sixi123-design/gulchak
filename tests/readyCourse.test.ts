@@ -5,8 +5,7 @@ import { MODES } from '../src/core/ruleEngine';
 import { DigSession, type RulesFile } from '../src/sim/session';
 import { Tutor } from '../src/sim/tutorial';
 import { BASIC_LESSONS } from '../src/sim/leverSchool';
-import { ARC, MOVE, READY_ARM, READY_BOOM, wantAngle } from '../src/sim/moveCourse';
-import { digSpot } from '../src/sim/digCourse';
+import { ARC, READY_ARM, READY_BOOM, wantAngle } from '../src/sim/moveCourse';
 import { shapeOf, staticHits } from '../src/sim/judge';
 
 const R = rules as unknown as RulesFile;
@@ -35,12 +34,11 @@ function run(t: Tutor, inp: { lx?: number; ly?: number; rx?: number; ry?: number
     if (t.cleared) return;
   }
 }
-/** 길잡이를 따라가는 두 손 — 남은 거리만큼 암을 펴고, 남은 높이에 맞는 각도로 레버를 둔다 */
+/** 길잡이를 따라가는 오른손 — 남은 높이에 맞는 각도로 레버를 둔다 (암은 안 쓴다) */
 function follow(t: Tutor, n: number) {
   for (let i = 0; i < n; i++) {
     const a = wantAngle(t.s) * deg;
-    const need = digSpot(t.s).r - t.s.frame.tip.r;
-    const hand = { lx: 0, ly: Math.max(-1, Math.min(1, need * 1.5)), rx: Math.cos(a) * ARC.ring, ry: Math.sin(a) * ARC.ring };
+    const hand = { lx: 0, ly: 0, rx: Math.cos(a) * ARC.ring, ry: Math.sin(a) * ARC.ring };
     t.s.input = t.drive(hand);
     t.s.stick = t.s.input === hand ? hand : { lx: 0, ly: 0, rx: 0, ry: 0 };
     t.s.step();
@@ -48,11 +46,14 @@ function follow(t: Tutor, n: number) {
     if (t.cleared) return;
   }
 }
-/** 실습(원호 드릴) 단계의 번호 — 앞의 셋은 시범이다 */
+/** 실습(원호 드릴) 단계의 번호 — 앞의 둘은 시범, 셋째는 '다시 보기/다음' 고르기 */
 const ARC_STEP = 3;
-/** 시범 셋을 다 지나 실습 단계까지 */
+/** 시범을 다 보고 '다음'을 눌러 실습 단계까지 */
 function pastDemos(t: Tutor) {
-  for (let i = 0; i < 2400 && t.step < ARC_STEP; i++) run(t, {}, 1);
+  for (let i = 0; i < 2400 && t.step < ARC_STEP; i++) {
+    if (t.current?.ask) t.choose(false);
+    else run(t, {}, 1);
+  }
   expect(t.step, '시범이 끝나지 않았다').toBe(ARC_STEP);
 }
 
@@ -82,7 +83,28 @@ it('시범이 기계를 내려놓아도 실습은 같은 자세에서 시작한�
   expect(t.s.pose.bucket).toBeCloseTo(start.bucket, 3);
 });
 
-it('길잡이 점을 따라가면 파는 자리에 내려놓고 끝난다 (별 3개)', () => {
+it('시범 뒤에는 고를 때까지 기다리고, 다시 보기는 시범 처음으로 간다', () => {
+  const t = tutor();
+  for (let i = 0; i < 2400 && !t.current?.ask; i++) run(t, {}, 1);
+  const at = t.step;
+  expect(t.current?.ask, '고르는 단계가 없다').toBeTruthy();
+  // 가만히 있고 레버를 밀어도 넘어가지 않는다
+  run(t, { ly: 1, ry: 1 }, 600);
+  expect(t.step).toBe(at);
+  expect(t.s.pose.arm).toBeCloseTo(READY_ARM * deg, 2);
+  t.choose(true);
+  expect(t.step).toBe(0);
+  expect(t.demoState()).toBe('demo');
+});
+
+it('실습은 오른쪽 레버만 — 왼쪽 레버(암)는 지시하지 않는다', () => {
+  const t = tutor();
+  pastDemos(t);
+  expect(t.current?.labels ?? []).not.toContain('암 펴기');
+  expect(t.current?.text ?? '').toMatch(/오른쪽 레버만/);
+});
+
+it('길잡이 점을 따라가면 내려놓고 끝난다 (별 3개)', () => {
   const t = tutor();
   pastDemos(t);
   // 점을 따라 내려오고
@@ -91,8 +113,7 @@ it('길잡이 점을 따라가면 파는 자리에 내려놓고 끝난다 (별 3
   // 레버를 가운데로 놓아 멈춘다
   run(t, {}, 300);
   expect(t.cleared, '끝까지 못 갔다').toBe(true);
-  const { r } = digSpot(t.s);
-  expect(Math.abs(t.s.frame.tip.r - r), '파는 자리에서 벗어났다').toBeLessThan(MOVE.rTol);
+  expect(t.s.pose.arm, '암은 그대로').toBeCloseTo(READY_ARM * deg, 2);
   expect(ready().grade!(t.s, t.bag).stars).toBe(3);
 });
 

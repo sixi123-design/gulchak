@@ -43,8 +43,6 @@ export const DRILL = {
 } as const;
 
 type J = 'boom' | 'arm' | 'bucket';
-/** 그 관절을 움직이는 레버 값 (화면에서 민 방향 기준) */
-const leverOf = (s: DigSession, j: J) => (j === 'boom' ? -s.input.ry : j === 'arm' ? s.input.ly : s.input.rx);
 const anyLever = (s: DigSession) => Math.max(Math.abs(s.input.lx), Math.abs(s.input.ly), Math.abs(s.input.rx), Math.abs(s.input.ry));
 
 /** 처음 자세를 보관함에 한 번만 적는다 (setup은 bag을 못 받는다) */
@@ -202,29 +200,6 @@ const pressDown = (): Step =>
       mem.ask && anyLever(s) >= 0.08 ? co(mem.lifted ? '시험에서는 실격입니다. 레버에서 손을 떼세요' : '레버에서 손을 떼세요') : null,
   });
 
-/** 8 중간에서 멈추기 — 놓으면 멈춘다는 것을 한 번 확인 */
-const letGo = (): Step =>
-  wrap({
-    text: '붐을 올리다가 레버를 놓아 멈춰 보세요',
-    labels: ['붐 올림'],
-    begin: (s, mem) => {
-      mem.p = s.pose.boom;
-      mem.say = 0;
-    },
-    done: (s, mem, bag) => {
-      if (mem.say) {
-        mem.say++;
-        return mem.say > DRILL.cheer;
-      }
-      if (s.pose.boom - mem.p >= 10 * deg && Math.abs(leverOf(s, 'boom')) < 0.08 && Math.abs(s.vel.boom) < 0.01 * s.m.speeds.boom) {
-        mem.say = 1;
-        cheer(bag);
-      }
-      return false;
-    },
-    hud: (_s, mem) => (mem.say ? '레버를 놓으면 멈춥니다' : null),
-  });
-
 export const LEVER_DRILL: Lesson = {
   id: 'b-levers',
   tier: '기본기',
@@ -255,6 +230,5 @@ export const LEVER_DRILL: Lesson = {
     dir({ j: 'bucket', way: -1, text: '오른쪽 레버를 왼쪽으로', label: '버킷 오므림', said: '버킷이 오므라듭니다', keep: ['boom'] }),
     dir({ j: 'arm', way: -1, text: '왼쪽 레버를 아래로', label: '암 당기기', said: '암이 접힙니다 — 버킷이 몸 쪽으로', keep: ['boom'] }),
     dir({ j: 'arm', way: 1, text: '왼쪽 레버를 위로', label: '암 펴기', said: '암이 펴집니다 — 버킷이 멀어집니다', keep: ['boom'] }),
-    letGo(),
   ],
 };
