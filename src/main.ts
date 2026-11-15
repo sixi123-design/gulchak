@@ -1195,8 +1195,6 @@ function beginLesson(i: number, again = false, lv = 0) {
     session.ready();
     tutor = new Tutor(L, session);
   }
-  introduced.clear();
-  introStep = -1;
   renderMission(true);
 }
 /** 미션 도움 게이지: 막대(얼마나 왔나) 또는 바늘+목표 구간(각도 맞추기) */
@@ -1290,7 +1288,7 @@ function setHints(labels: string[]) {
 /** 처음 배우는 레버: 그 부위를 깜빡 강조하고 조이스틱 위까지 선으로 이어 줌 (2초) */
 type Part = 'boom' | 'arm' | 'bucket';
 const PART_OF = (l: string): Part | null => (l.startsWith('붐') ? 'boom' : l.startsWith('암') ? 'arm' : l.startsWith('버킷') ? 'bucket' : null);
-/** 부품 이름. 깜빡이는 곳이 무엇인지 글자로 알려 준다 (깜빡임만으로는 이름을 알 수 없다) */
+/** 부품 이름 (부품 줄에서 레버 방향과 함께 쓴다) */
 const PART_NAME: Record<Part, string> = { boom: '붐', arm: '암', bucket: '버킷' };
 /** 지금 지시가 가리키는 부품 (없으면 null) */
 const stepPart = (): Part | null => {
@@ -1302,6 +1300,8 @@ const stepPart = (): Part | null => {
 };
 /** 부품을 움직이는 레버 축 (3칸 표시가 어느 레버를 볼지) */
 const PART_AXIS: Record<Part, 'ly' | 'ry' | 'rx'> = { boom: 'ry', arm: 'ly', bucket: 'rx' };
+/** 그 부품을 움직이는 레버 (글자로) */
+const LEVER_WAY: Record<Part, string> = { boom: '오른쪽 레버 위아래', arm: '왼쪽 레버 위아래', bucket: '오른쪽 레버 좌우' };
 /**
  * 레버를 얼마나 밀었나를 칸 3개로 보여 준다. 글자는 0자다.
  * `Step.gauge`가 있는 구간에서만 띄운다 — 평소에는 화면을 어지럽히지 않는다.
@@ -1323,43 +1323,19 @@ function updateGauge(part: Part | null) {
   }
 }
 
-const introduced = new Set<Part>();
-let intro: { part: Part }[] = [];
-let introUntil = 0;
-let introStep = -1;
+/**
+ * 부품 깜빡임은 쓰지 않는다.
+ *
+ * 깜빡이는 곳을 **눌러야 하는 것으로** 읽힌다 (앱 주인 지적). 게다가 이 과정을 듣는
+ * 사람은 필기 합격자라 붐·암·버킷이 뭔지 이미 안다. 지시문이 레버를 직접 말하면 된다.
+ */
 function updateIntro() {
-  const now = performance.now();
-  const big = !!tutor?.lesson.big;
-  if (tutor && !tutor.cleared && tutor.step !== introStep) {
-    introStep = tutor.step;
-    const fresh: typeof intro = [];
-    for (const l of tutor.current?.labels ?? []) {
-      const part = PART_OF(l);
-      if (!part || fresh.some((f) => f.part === part)) continue;
-      // 배우기 미션들은 부품을 처음 쓸 때만 한 번. 레버 익히기는 매 지시마다
-      if (!big && introduced.has(part)) continue;
-      introduced.add(part);
-      fresh.push({ part });
-    }
-    if (fresh.length) {
-      intro = fresh;
-      // 레버 익히기: 그 지시를 해낼 때까지 계속 깜빡인다 (2.2초면 레버 찾다가 놓친다)
-      introUntil = big ? Infinity : now + 2200;
-    } else if (big) {
-      intro = [];
-      introUntil = 0;
-    }
+  if (intro) {
+    intro = false;
+    exc.highlight([]);
   }
-  const on = !!tutor && guideLv === 0 && now < introUntil && $('fail').hidden && $('clear').hidden;
-  if (!on) {
-    if (intro.length) {
-      intro = [];
-      exc.highlight([]);
-    }
-    return;
-  }
-  exc.highlight(Math.floor(now / 220) % 2 ? intro.map((x) => x.part) : []);
 }
+let intro = false;
 function updateMeter() {
   updateSay();
   updateIntro();
@@ -1376,13 +1352,17 @@ function updateMeter() {
   const h = tutor?.hud() ?? null;
   if (tutor?.lesson.big) {
     const part = stepPart();
-    $('dr-part').textContent = part ? `깜빡이는 곳 = ${PART_NAME[part]}` : '';
+    // 세 줄을 동시에 띄우지 않는다. 반응·코치가 있으면 그것만, 없을 때만 레버 방향을 말한다
+    // (지시문이 이미 레버를 말하고 있으면 부품 줄은 비운다)
+    const say = h ?? tutor.coach?.msg ?? '';
+    const t = tutor.current?.text ?? '';
+    $('dr-part').textContent = !say && part && !t.includes('레버') ? `${PART_NAME[part]} · ${LEVER_WAY[part]}` : '';
     updateGauge(part);
     const d = tutor.demoState();
     const badge = $('dr-badge');
     badge.hidden = d === 'user' && !tutor.current?.demo;
     badge.textContent = d === 'user' ? '직접 해보기' : '시범 중';
-    $('dr-say').textContent = h ?? tutor.coach?.msg ?? '';
+    $('dr-say').textContent = say;
     $('m-hold').hidden = true;
     const ok = tutor.bag.okN ?? 0;
     const bad = tutor.bag.badN ?? 0;

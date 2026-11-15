@@ -414,4 +414,5 @@ const allTogether: Lesson = {
 };
 
 // 레버 익히기가 맨 앞 — 레버를 쓸 줄 모르는 사람에게 미션을 줄 수 없다
-export const BASIC_LESSONS: Lesson[] = [LEVER_DRILL, SCOOP_LESSON, stopFirst, aimAt, bothLevers, allTogether];
+// 흙 퍼기는 4번째. 레버를 익히고 몸통 돌리기·높이 맞추기를 해 본 뒤에 흙을 판다
+export const BASIC_LESSONS: Lesson[] = [LEVER_DRILL, stopFirst, aimAt, SCOOP_LESSON, bothLevers, allTogether];

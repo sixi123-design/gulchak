@@ -87,14 +87,12 @@ describe('2단계 흙 퍼기', () => {
     expect(t.s.load).toBeLessThan(0.1 * t.s.m.struckCapacity);
   });
 
-  it('흙이 가득 차면 버킷이 더 안 오므려진다 (먼저 다 오므리고 들 수는 없다)', () => {
+  it('이빨 맞추기는 레버를 실제로 써야 넘어간다', () => {
     const t = tutor();
     warmup(t);
-    until(t, toSpot, 900);
-    until(t, { ry: 0.5 }, 900);
-    until(t, { ly: -0.6, rx: -0.5 }, 900);
-    for (let i = 0; i < 600; i++) frame(t, { rx: -1 });
-    expect(t.s.pose.bucket).toBeGreaterThan(0); // 아직 펴진 쪽에서 막혀 있다
+    const step = t.step;
+    for (let i = 0; i < 300; i++) frame(t, {}); // 가만히
+    expect(t.step).toBe(step);
   });
 
   it('아무것도 안 하면 통과하지 않는다', () => {

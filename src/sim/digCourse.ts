@@ -51,6 +51,9 @@ export const SCOOP_LESSON: Lesson = {
   title: '흙 퍼기',
   noFail: true,
   big: true,
+  // 한 톤 배경 + 밝은 장비. 실제 시험장 배경에서는 어두운 글자가 묻혀 안 읽힌다.
+  // 폴·줄이 필요한 것은 장애물을 넘는 단계부터다 — 흙 퍼기는 파는 자리만 보면 된다
+  flat: true,
   why: {
     title: '왜 손맛부터 하나',
     lines: [
@@ -70,17 +73,18 @@ export const SCOOP_LESSON: Lesson = {
   },
   setup: (s) => {
     const { swing, r } = digSpot(s);
-    pose(s, swing, r, 1.2, -20 * deg);
+    // 시범이 끝나도 이빨이 목표 높이보다 확실히 위에 있게 시작한다 (내려야 할 일이 남아야 한다)
+    pose(s, swing, r, 2.4, -20 * deg);
   },
   steps: [
     // ---- 손맛 시범 3회 ----
     // 올림 → 내림 → 올림으로 짜서 시범이 끝나면 처음 높이로 돌아온다
-    show('이만큼만 미세요', 70, () => ({ ry: -0.25 }), 1),
-    show('끝까지 미세요', 45, () => ({ ry: 1 }), 3, '붐 내림'),
-    show('레버를 가운데로 천천히', 110, (f) => ({ ry: f < 60 ? -0.25 : -0.25 * (1 - (f - 60) / 50) })),
+    show('오른쪽 레버를 아래로\n이만큼만', 70, () => ({ ry: -0.25 }), 1),
+    show('오른쪽 레버를 위로\n끝까지', 80, () => ({ ry: 1 }), 3, '붐 내림'),
+    show('레버를 가운데로\n천천히', 110, (f) => ({ ry: f < 60 ? -0.25 : -0.25 * (1 - (f - 60) / 50) })),
     // ---- 따라 하기 ----
     {
-      text: '같이 해보세요\n붐을 한 칸만 올리기',
+      text: '이제 직접\n오른쪽 레버를 아래로 한 칸만',
       gauge: 1,
       labels: ['붐 올림'],
       begin: (_s, mem) => ((mem.used = 0), (mem.ok = 0)),
@@ -104,10 +108,13 @@ export const SCOOP_LESSON: Lesson = {
       text: '이빨을 표시에 맞추세요',
       spot: digSpot,
       labels: ['붐 내림', '암 당기기'],
+      begin: (_s, mem) => (mem.used = 0),
       done: (s, mem) => {
+        // 레버를 실제로 써야 통과한다. 시작 자세가 우연히 맞아도 그냥 넘어가면 배울 게 없다
+        if (Math.abs(s.input.ry) > 0.05 || Math.abs(s.input.ly) > 0.05) mem.used = (mem.used ?? 0) + 1;
         const { r } = digSpot(s);
         const t = s.frame.tip;
-        const ok = Math.abs(t.r - r) < SCOOP.rTol && t.y > SCOOP.yLo && t.y < SCOOP.yHi;
+        const ok = (mem.used ?? 0) >= 20 && Math.abs(t.r - r) < SCOOP.rTol && t.y > SCOOP.yLo && t.y < SCOOP.yHi;
         return hold(mem, ok, 18);
       },
       coach: (s) => {

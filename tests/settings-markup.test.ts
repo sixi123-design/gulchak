@@ -187,13 +187,14 @@ it('#hud 안의 화면 덮는 층은 모두 터치를 통과시킨다', () => {
   }
 });
 
-it('깜빡이는 부품의 이름은 지시가 끝날 때까지 전용 줄에 남는다', () => {
-  // 붐이 번쩍거리는데 그게 붐이라는 걸 어디서도 말해 주지 않았다.
-  // 반응·코치와 같은 자리에 두면 서로 가리고, 2.2초만 띄우면 레버 찾다가 놓친다
-  expect([...html.matchAll(/id="dr-part"/g)].length).toBe(1);
-  expect(main).toMatch(/\$\('dr-part'\)\.textContent = part \? `깜빡이는 곳 = \$\{PART_NAME\[part\]\}`/);
-  // 레버 익히기는 그 지시를 해낼 때까지 계속 깜빡인다
-  expect(main).toMatch(/introUntil = big \? Infinity : now \+ 2200/);
-  // 작은 줄은 반응·코치만
-  expect(main).toMatch(/\$\('dr-say'\)\.textContent = h \?\? tutor\.coach\?\.msg \?\? ''/);
+it('부품을 깜빡이지 않는다 (누르라는 뜻으로 읽힌다)', () => {
+  // 깜빡이는 곳을 드래그해야 하는 것으로 읽힌다는 지적.
+  // 이 과정을 듣는 사람은 필기 합격자라 붐·암·버킷이 뭔지 이미 안다 — 지시문이 레버를 말하면 된다
+  expect(main).not.toMatch(/깜빡이는 곳 = /);
+  expect(main).not.toMatch(/introUntil/);
+  // 부품 줄은 레버 방향만 말하고, 지시문이 이미 레버를 말하면 비운다
+  expect(main).toMatch(/LEVER_WAY\[part\]/);
+  // 세 줄을 동시에 띄우지 않는다: 반응·코치가 있으면 부품 줄을 비운다
+  expect(main).toMatch(/const say = h \?\? tutor\.coach\?\.msg \?\? ''/);
+  expect(main).toMatch(/textContent = !say && part/);
 });
