@@ -32,6 +32,15 @@ export function tickSpan(s: DigSession, mem: Mem, joints: Joint[] = []): void {
   if (moving >= 2) mem.gCo = (mem.gCo ?? 0) + 1;
 }
 
+/**
+ * 충격 측정만 다시 연다 (같은 구간에서 다시 해 보는 경우).
+ * 구간 최대값은 한 번 올라가면 안 내려가므로, 한 번 덜컹하면 영영 못 통과한다 —
+ * 막다른 길이다. 다시 접근할 때마다 새로 재야 고쳐서 통과할 수 있다.
+ */
+export function retrySpan(s: DigSession): void {
+  s.maxJolt = 0;
+}
+
 /** 구간 동안의 최대 충격 */
 export function spanJolt(s: DigSession, _mem: Mem): number {
   return s.maxJolt;

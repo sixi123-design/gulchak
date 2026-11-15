@@ -98,8 +98,11 @@ let spot: SpotMark | null = null;
 /** 레버 익히기의 튜토리얼 공간 색 (바닥·먼 안개). 회색이 아니라 한 톤 */
 const TUTOR_FLOOR = 0xd7e3ec;
 const TUTOR_SKY = 0xeaf3f8;
-/** 흙 주변 다진 바닥 (원래 0x5e5a55 짙은 회갈색 — 글자가 묻힌다) */
-const TUTOR_GROUND = 0xa79c8e;
+/**
+ * 흙 주변 다진 바닥. 튜토리얼에서는 바닥색과 **같게** 둔다 —
+ * 흙 둘레에 네모난 판이 떠 보여서 어디까지가 흙인지 헷갈린다.
+ */
+const TUTOR_GROUND = TUTOR_FLOOR;
 /** 바닥 실격선 (원래 거의 검정 0x1d1b2e). 바닥이 밝으니 흰색은 안 보여 회색으로 */
 const TUTOR_LINE = 0x8d97a0;
 /** 잘했다·잘못했다 연출: 미션이 센 값이 늘어난 만큼만 재생한다 */
@@ -972,7 +975,7 @@ function updateCamera(dt: number) {
   for (const l of siteView.labels) l.visible = camMode !== 'cab';
   // 화각: 운전석은 넓게(가로 약 95°), 세로 화면이면 더 넓힘
   // 운전석: 가로 시야 약 90° (사람이 앞유리로 보는 범위). 화면 비율마다 세로 화각을 맞춤
-  const cabFov = camera.aspect >= 1 ? THREE.MathUtils.clamp((2 * Math.atan(Math.tan((46 * Math.PI) / 180) / camera.aspect) * 180) / Math.PI, 48, 62) : 85;
+  const cabFov = camera.aspect >= 1 ? THREE.MathUtils.clamp((2 * Math.atan(Math.tan((46 * Math.PI) / 180) / camera.aspect) * 180) / Math.PI, 48, 62) : 72;
   const wantFov = camMode === 'cab' ? cabFov : 55;
   if (Math.abs(camera.fov - wantFov) > 0.1) {
     camera.fov = wantFov;
@@ -1315,6 +1318,10 @@ const LEVER_WAY: Record<Part, string> = { boom: '오른쪽 레버 위아래', ar
 // 아래 자리는 버킷 게이지(화면 66% 부근)를 건드리지 않는 선까지만 내려간다
 const DRILL_SPOT = { high: 0.18, low: 0.48 };
 let drillTop = DRILL_SPOT.low;
+/** 가려졌을 때 옮겨 갈 자리 (가려지지 않으면 그대로 둔다 — 글자가 왔다 갔다 하면 더 어지럽다) */
+let drillWant = DRILL_SPOT.low;
+/** 이번 프레임에 손이 레버를 민 깊이 (0~1). 시범 중에도 잰다 */
+let userPush = 0;
 const bucketV = new THREE.Vector3();
 let dodgeT = performance.now();
 function dodgeBucket() {
@@ -1327,9 +1334,12 @@ function dodgeBucket() {
   bucketV.project(camera);
   const by = (1 - bucketV.y) / 2; // 0 = 화면 위
   const h = box.getBoundingClientRect().height / Math.max(1, innerHeight);
-  const hit = (top: number) => by > top - 0.06 && by < top + h + 0.06;
-  const want = hit(DRILL_SPOT.low) ? DRILL_SPOT.high : DRILL_SPOT.low;
-  drillTop += (want - drillTop) * Math.min(1, dt * 2.5);
+  const mid = (top: number) => top + h / 2;
+  // 지금 글자 자리가 버킷에 걸렸으면, 두 자리 중 **버킷에서 더 먼** 쪽으로 옮긴다.
+  // (예전에는 아래 자리만 보고 판단해서, 옮겨 간 위쪽에서 다시 가려도 모르고 있었다)
+  if (Math.abs(by - mid(drillTop)) < h / 2 + 0.05)
+    drillWant = Math.abs(by - mid(DRILL_SPOT.low)) > Math.abs(by - mid(DRILL_SPOT.high)) ? DRILL_SPOT.low : DRILL_SPOT.high;
+  drillTop += (drillWant - drillTop) * Math.min(1, dt * 2.5);
   box.style.top = `${(drillTop * 100).toFixed(1)}%`;
   box.style.transform = 'none';
 }
@@ -1418,13 +1428,16 @@ function updateMeter() {
     // 세 줄을 동시에 띄우지 않는다. 반응·코치가 있으면 그것만, 없을 때만 레버 방향을 말한다
     // (지시문이 이미 레버를 말하고 있으면 부품 줄은 비운다)
     // 교정이 먼저다. 반응("좋아요")이 떠 있는 동안 "붐을 더 내리기"가 가려지면 안 된다
-    const say = tutor.coach?.msg ?? h ?? '';
-    const t = tutor.current?.text ?? '';
-    $('dr-part').textContent = !say && part && !t.includes('레버') ? `${PART_NAME[part]} · ${LEVER_WAY[part]}` : '';
-    updateGauge(part);
     const d = tutor.demoState();
+    // 시범 중에는 레버를 밀어도 안 먹는다. 가만히 있으면 "왜 안 되지"가 되니 그 말을 해 준다
+    const say = d !== 'user' && userPush > 0.12 ? '시범 중이에요 — 잠시 보세요' : (tutor.coach?.msg ?? h ?? '');
+    const t = tutor.current?.text ?? '';
+    // 시범에는 배지(시범 중)가 이미 떠 있다. 부품 줄까지 띄우면 네 줄이 된다
+    $('dr-part').textContent = !say && d === 'user' && part && !t.includes('레버') ? `${PART_NAME[part]} · ${LEVER_WAY[part]}` : '';
+    updateGauge(part);
     const badge = $('dr-badge');
-    badge.hidden = d === 'user' && !tutor.current?.demo;
+    // 두 줄 지시 + 작은 줄 + 배지 = 네 줄이다. 작은 줄이 있으면 배지는 숨긴다
+    badge.hidden = !!say || (d === 'user' && !tutor.current?.demo);
     badge.textContent = d === 'user' ? '직접 해보기' : '시범 중';
     $('dr-say').textContent = say;
     $('m-hold').hidden = true;
@@ -2410,6 +2423,11 @@ function frame(now: number) {
   };
   // 앱이 레버를 대신 미는 시범 중에는 유저 입력을 무시하고, 화면 손잡이도 앱 값으로 움직인다
   session.input = tutor ? tutor.drive(userInput) : userInput;
+  // 시범 중에 손을 댔나 (입력은 무시되지만 **대답은 해야 한다**)
+  userPush = Math.max(
+    Math.hypot(left.x + kb.lx + pad.lx, left.y + kb.ly + pad.ly),
+    Math.hypot(right.x + kb.rx + pad.rx, right.y + kb.ry + pad.ry),
+  );
   // 손이 실제로 민 자리 (커브 전). 레버를 12시→3시로 옮기는 손놀림을 볼 때 쓴다
   session.stick = {
     lx: clamp1(left.x + kb.lx + pad.lx),

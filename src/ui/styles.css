@@ -7882,8 +7882,10 @@ body.flat-bg {
   color: color-mix(in srgb, var(--ink) 62%, transparent);
   letter-spacing: 0.02em;
 }
-/* 레버 길잡이: 어느 정도 깊이로(링), 어느 길로(원호) 움직여야 하는지 */
-.stick .guide {
+/* 레버 길잡이: 어느 정도 깊이로(링), 어느 길로(원호) 움직여야 하는지.
+   클래스 이름을 .guide로 쓰면 화면 아래 검은 안내 박스(.guide) 스타일을 물려받아
+   레버 둘레에 검은 사각형이 깔리고 버킷을 가린다 — 그래서 .lguide다 */
+.stick .lguide {
   position: absolute;
   inset: 14%;
   pointer-events: none;
@@ -7891,7 +7893,7 @@ body.flat-bg {
   /* 손잡이 위에 그린다 — 밑에 깔리면 길잡이가 안 보인다 */
   z-index: 3;
 }
-.stick .guide[hidden] {
+.stick .lguide[hidden] {
   display: none;
 }
 .g-ring {
@@ -7915,8 +7917,9 @@ body.flat-bg {
   stroke-linecap: round;
   opacity: 0.5;
 }
+/* 지시문이 '노란 점'이라고 부른다 — 실제로 노랗게 (흰 점이면 못 찾는다) */
 .g-dot {
-  fill: var(--paper);
+  fill: var(--sun);
   stroke: var(--ink);
   stroke-width: 3;
 }

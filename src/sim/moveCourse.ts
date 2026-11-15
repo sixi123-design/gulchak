@@ -1,5 +1,5 @@
 import { bucketLow, co, hold, pose, ropeClear, SC, fill, type Grade, type Lesson, type Step } from './tutorial';
-import { SMOOTH_MAX, spanCo, spanJolt, startSpan, tickSpan, type Joint } from './gauge';
+import { retrySpan, SMOOTH_MAX, spanCo, spanJolt, startSpan, tickSpan, type Joint } from './gauge';
 import { digSpot } from './digCourse';
 import type { DigSession } from './session';
 
@@ -56,25 +56,84 @@ export const ARC = {
   ring: 0.6,
   /** 깊이 허용 폭 */
   ringTol: 0.22,
-  /** 각도 허용 폭 (도) — 이보다 벗어나면 길잡이 원호를 띄운다 */
+  /** 각도 허용 폭 (도) — 이보다 벗어나면 길잡이가 빨개진다 */
   angTol: 22,
   /** 각도를 한 프레임에 이만큼 넘게 꺾으면 '거칠다' (도/프레임) */
   jerkDeg: 4,
+  /**
+   * 레버 각도를 재기 전에 거치는 저역 필터 (0~1, 작을수록 둔하다).
+   * 키보드는 좌우 키가 따로 올라와서 각도가 계단처럼 흔들린다 — 부드럽게 굴려도
+   * 한 프레임에 6°씩 튀어 '꺾었다'로 잡혔다. 필터를 거치면 흔들림은 1° 아래로 줄고,
+   * 정말 한 번에 꺾은 것(한 프레임 90°)은 18°로 남아 그대로 걸린다.
+   */
+  smooth: 0.2,
   /** 끝났다고 보는 각도 (3시 근처) */
   endAng: 12,
+  /** 버킷 바닥이 이 높이에 닿을 때 레버가 3시에 와 있어야 한다 (m) */
+  land: 0.25,
+  /** 이 높이부터 레버를 3시로 굴리기 시작한다 (land + roll) */
+  roll: 1.5,
 } as const;
 
+const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
+
 /**
- * 12시(붐 내림) → 3시(버킷 펴기) 로 레버를 부드럽게 옮기는 한 동작.
+ * 남은 높이에 맞는 레버 각도 (도). 땅이 멀면 12시(붐 내림), 가까워지면 3시(버킷 펴기).
  *
- * 암은 건드리지 않는다. 붐을 내리던 힘을 서서히 줄이면서 버킷이 서서히 펴져,
- * 흙 파기 직전 자세로 **끊김 없이** 이어진다. 이 손놀림 하나가 2단계의 전부다.
+ * 내려오는 높이에 맞춰 레버를 굴리면 붐이 서서히 멈추고 버킷이 서서히 펴져서,
+ * 흙 파기 직전 자세로 끊김 없이 이어진다.
+ */
+export const wantAngle = (s: DigSession) => 90 * clamp01((s.groundGap() - ARC.land) / ARC.roll);
+
+/** 각도(도)와 깊이로 오른쪽 레버값 */
+const stickAt = (a: number, m: number = ARC.ring) => ({ rx: Math.cos(a * deg) * m, ry: Math.sin(a * deg) * m });
+
+/** 파는 자리까지 아직 남은 거리 (m). +면 암을 더 펴야 한다 */
+const armNeed = (s: DigSession) => digSpot(s).r - s.frame.tip.r;
+
+/**
+ * 선회해서 돌아온 자세 `[측정]`.
+ *
+ * **붐 48°** — 앞 주인 기준은 핀-핀 각도가 아니라 **붐 실린더 각도 80~90°**다.
+ * 실린더 각은 붐각을 따라간다: 붐 42°→80° · 48°→84° · 55°→89° · 57°→91° · 67°→98°.
+ * 즉 붐을 끝까지(67°) 올리면 실린더가 98°로 지나친다. 48°가 실린더 84°다.
+ *
+ * **암 −80°** — 붐 48°에서 암을 −85°보다 더 접으면 버킷 최저점이 B 장애물 줄
+ * (2.76m)에 닿는다. −80°면 최저점 2.98m, 날 끝 r 4.50m로 ⓔ·ⓕ 폴 통과구역
+ * (3.16~6.64m) 안을 지난다. 판정기(staticHits)로 직접 확인했다.
+ *
+ * 여기서 암을 펴면서 레버를 12시→3시로 굴리면 **3.6초**에 파는 자리에 닿는다 (오차 5cm).
+ */
+export const READY_BOOM = 48;
+export const READY_ARM = -80;
+
+const readyPose = () => ({
+  swing: Math.PI,
+  boom: READY_BOOM * deg,
+  arm: READY_ARM * deg,
+  bucket: -120 * deg,
+});
+/** 시범이 기계를 내려놓아도 실습은 늘 같은 자세에서 시작한다 */
+const reready = (s: DigSession) => s.teleport(readyPose());
+
+/** 시범이 사람처럼 암을 펴며 레버를 굴린다 (유저가 할 일을 그대로 보여 준다) */
+const showMove = (s: DigSession) => ({
+  ly: Math.max(-1, Math.min(1, armNeed(s) * 1.5)),
+  ...stickAt(wantAngle(s)),
+});
+
+/**
+ * 선회해서 온 자세 → 흙 파기 직전 자세. 두 손이 같이 움직이는 **연속동작**이다.
+ *
+ * 왼손은 암을 펴 파는 자리까지 뻗고, 오른손은 12시(붐 내림)에서 3시(버킷 펴기)로 굴린다.
+ * 노란 점이 '지금 레버가 있어야 할 자리'를 남은 높이로 알려 준다.
  */
 const arcStep = (): Step => ({
-  text: '노란 점을 따라\n레버를 12시에서 3시로',
-  labels: ['붐 내림', '버킷 펴기'],
+  text: '암을 펴면서\n레버를 12시에서 3시로',
+  labels: ['암 펴기', '붐 내림', '버킷 펴기'],
   spot: digSpot,
   begin: (s, mem, bag) => {
+    reready(s);
     startSpan(s, mem);
     mem.ang = 90;
     mem.rough = 0;
@@ -84,44 +143,67 @@ const arcStep = (): Step => ({
   },
   guide: (s) => {
     const m = stickMag(s);
+    const want = wantAngle(s);
     const a = m > 0.12 ? stickAngle(s) : 90;
-    const off = Math.abs(a - (90 - (90 - Math.max(ARC.endAng, Math.min(90, a)))));
     return {
       ring: ARC.ring,
       from: 90,
       to: 0,
-      // 지금 가야 할 자리: 레버가 범위 안이면 그 자리, 벗어났으면 되돌아갈 자리
-      at: Math.max(0, Math.min(90, a)),
-      rough: off > ARC.angTol || Math.abs(m - ARC.ring) > ARC.ringTol,
+      // 지금 가야 할 자리 — 남은 높이가 정한다
+      at: want,
+      rough: (m > 0.12 && Math.abs(a - want) > ARC.angTol) || Math.abs(m - ARC.ring) > ARC.ringTol,
     };
   },
   hud: (s, mem) => {
     const m = stickMag(s);
-    if (m < 0.12) return '레버를 12시로 (위로) 밀기';
-    if (Math.abs(m - ARC.ring) > ARC.ringTol) return m > ARC.ring ? '너무 깊어요 — 점선 안으로' : '조금 더 밀어 점선까지';
-    if (mem.rough) return '한 번에 꺾지 말고 천천히 돌리기';
-    return '노란 점을 따라 3시로';
+    if (m < 0.12) return '오른쪽 레버를 12시로 밀기';
+    const a = stickAngle(s);
+    // 12시~3시 사분면 밖 = 반대로 밀고 있다 (9시·6시). 높이 탓으로 설명하면 안 된다
+    if (a > 120 || a < -30) return '반대쪽이에요 — 12시에서 3시로';
+    if (Math.abs(m - ARC.ring) > ARC.ringTol) return m > ARC.ring ? '너무 깊어요 — 점선 고리 안으로' : '점선 고리까지 더 밀기';
+    if (mem.rough) return '한 번에 꺾지 말고 천천히 굴리기';
+    const want = wantAngle(s);
+    // want가 크면(90=12시) 아직 내릴 높이가 남았다는 뜻이다
+    if (want - a > ARC.angTol) return '아직 높아요 — 레버를 12시 쪽으로';
+    if (a - want > ARC.angTol) return '땅이 가까워요 — 레버를 3시 쪽으로';
+    const need = armNeed(s);
+    if (need > MOVE.rTol) return '왼쪽 레버로 암을 더 펴기';
+    if (need < -MOVE.rTol) return '지나쳤어요 — 암을 조금 당기기';
+    // 잘 따라오는 동안에도 답을 준다 (맞게 움직이는데 화면이 조용하면 맞는지 모른다)
+    const g = s.groundGap();
+    return g > 1 ? '좋아요 — 점을 따라 그대로' : `버킷 바닥까지 ${Math.max(0, Math.round(g * 100))}cm`;
   },
+  coach: (s) => (s.groundGap() <= 0.02 ? co('너무 깊어요 — 붐을 조금 올리기', '붐 올림') : null),
   done: (s, mem, bag) => {
-    tickSpan(s, mem, ['boom', 'bucket']);
+    tickSpan(s, mem, ['arm', 'boom', 'bucket']);
     const m = stickMag(s);
     const a = stickAngle(s);
     if (m > 0.12) {
-      // 12시 근처에서 출발했는가
-      if (a >= 90 - ARC.angTol) mem.started = 1;
+      // 12시 근처에서 출발했는가 (여기는 손이 실제로 둔 자리를 본다)
+      if (a >= 90 - ARC.angTol && a <= 90 + ARC.angTol) mem.started = 1;
+      // 점을 얼마나 따라갔는가 — 별점의 재료 (통과만 보면 '지나가며' 지나갈 수 있다).
+      // 평균이 아니라 **벗어난 프레임의 비율**이다 — 맞는 자리에서 오래 기다려도 희석되지 않게
+      if (mem.started) {
+        bag.offN = (bag.offN ?? 0) + 1;
+        if (Math.abs(a - wantAngle(s)) > ARC.angTol) bag.offBad = (bag.offBad ?? 0) + 1;
+      }
+      const prev = mem.ang;
+      mem.ang = prev + (a - prev) * ARC.smooth;
       // 한 번에 확 꺾으면 거칠다. 한 번의 꺾음을 한 번으로만 센다
-      const d = Math.abs(a - mem.ang);
-      if (d > ARC.jerkDeg) {
+      if (Math.abs(mem.ang - prev) > ARC.jerkDeg) {
         if (!mem.rough) bag.rough = (bag.rough ?? 0) + 1;
         mem.rough = 20;
       }
       // 12시에서 3시로 내려온 만큼만 쌓는다 (되돌아간 것은 안 센다)
-      if (mem.ang - a > 0) mem.swept += mem.ang - a;
-      mem.ang = a;
+      if (prev - mem.ang > 0) mem.swept += prev - mem.ang;
     }
     if (mem.rough > 0) mem.rough--;
-    // **원호를 실제로 그려야** 통과한다. 3시에 레버를 툭 놓는 것으로는 안 된다
-    return mem.started > 0 && mem.swept > 60 && m > 0.12 && a <= ARC.endAng && s.groundGap() < 0.5;
+    // 원호를 실제로 그리고, 파는 자리 위에 와야 한다. 3시에 레버를 툭 놓는 것으로는 안 된다.
+    // (암 레버가 있으니 자리가 어긋나도 되돌릴 수 있다 — 막다른 길이 아니다)
+    const ok = m > 0.12 && a <= ARC.endAng && a >= -ARC.angTol && s.groundGap() < 0.5 && Math.abs(armNeed(s)) < MOVE.rTol;
+    if (ok) bag.co = spanCo(mem);
+    // 한 프레임 스치고 지나가면 안 된다 — 그 자세로 잠깐은 있어야 한다
+    return mem.started > 0 && mem.swept > 60 && hold(mem, ok, 10);
   },
 });
 
@@ -134,54 +216,63 @@ export const READY_LESSON: Lesson = {
   big: true,
   flat: true,
   why: {
-    title: '레버 하나로 이어 가기',
+    title: '두 손이 같이 가야 한 동작',
     lines: [
-      '붐을 내리고 버킷을 펴는 것은 <b>따로 하는 두 동작이 아닙니다</b>.',
-      '오른쪽 레버를 <b>12시에서 3시로</b> 천천히 돌리면 한 동작이 됩니다.',
+      '흙을 푸기 <b>직전 자세</b>를 만드는 연습입니다.',
+      '선회해서 돌아오면 붐은 올라가 있고 암은 접혀 있습니다.',
+      '왼손으로 <b>암을 펴면서</b>, 오른손 레버는 <b>12시에서 3시로</b>.',
       '붐이 내려가는 힘이 줄면서 버킷이 펴집니다.',
-      '암은 건드리지 않습니다.',
+      '하나씩 하면 끊기고, 같이 하면 한 동작이 됩니다.',
     ],
   },
-  grade: (_s, bag): Grade => {
+  grade: (s, bag): Grade => {
     const r = bag.rough ?? 0;
-    if (r === 0) return { stars: 3, note: '12시에서 3시까지 끊김 없이 돌렸습니다' };
-    if (r <= 3) return { stars: 2, note: '몇 번 끊겼어요. 레버를 멈추지 말고 돌려 보세요' };
-    return { stars: 1, note: '레버를 꺾어 썼어요. 원을 그리듯 천천히 옮기세요' };
+    // 점에서 벗어난 프레임 비율 + 두 손을 겹쳐 쓴 비율
+    const off = bag.offN ? (bag.offBad ?? 0) / bag.offN : 0;
+    const c = bag.co ?? 0;
+    const miss = Math.abs(s.frame.tip.r - digSpot(s).r);
+    if (r === 0 && off < 0.05 && c >= MOVE.co && miss < MOVE.rTol) return { stars: 3, note: '두 손을 같이 써서 끊김 없이 내려놨습니다' };
+    if (r <= 3 && off < 0.25) return { stars: 2, note: '조금 끊겼어요. 암과 레버를 같이 움직여 보세요' };
+    return { stars: 1, note: '하나씩 했어요. 암을 펴면서 레버를 굴려 보세요' };
   },
   setup: (s) => {
-    // 암을 미리 펴 둔 자세. 여기서 레버를 12시→3시로 돌리면 파는 자리에 닿는다 (측정)
-    s.teleport({ swing: Math.PI, boom: 45 * deg, arm: -65 * deg, bucket: -110 * deg });
+    s.teleport(readyPose());
   },
   steps: [
     // ---- 시범: 무엇을 움직이고 무엇을 조심할지 ----
     {
-      text: '레버를 12시로' + '\n' + '붐이 내려갑니다',
-      labels: ['붐 내림'],
-      demo: (f) => (f < 80 ? { ry: ARC.ring } : null),
-      guide: () => ({ ring: ARC.ring, from: 90, to: 0, at: 90, rough: false }),
-      begin: (_s, mem) => (mem.t = 0),
-      done: (_s, mem) => ++mem.t > 120,
-    },
-    {
-      text: '3시로 옮기면' + '\n' + '버킷이 펴집니다',
-      labels: ['버킷 펴기'],
-      demo: (f) => {
-        if (f >= 150) return null;
-        const t = f / 149;
-        const a = ((Math.PI / 2) * (1 - t));
-        return { rx: Math.cos(a) * ARC.ring, ry: Math.sin(a) * ARC.ring };
+      // 시범이다 — 명령으로 읽히지 않게 '밀면'으로 끝낸다
+      text: '왼쪽 레버를 밀면' + '\n' + '암이 펴집니다',
+      labels: ['암 펴기'],
+      demo: (f) => (f < 110 ? { ly: 0.6 } : null),
+      begin: (s, mem) => {
+        reready(s);
+        mem.t = 0;
       },
-      guide: (s) => ({ ring: ARC.ring, from: 90, to: 0, at: Math.max(0, Math.min(90, stickMag(s) > 0.12 ? stickAngle(s) : 90)), rough: false }),
-      begin: (_s, mem) => (mem.t = 0),
-      done: (_s, mem) => ++mem.t > 190,
+      done: (_s, mem) => ++mem.t > 140,
     },
     {
-      text: '한 번에 꺾으면' + '\n' + '덜컹하고 흙이 튑니다',
+      text: '같이 — 오른쪽은' + '\n' + '12시에서 3시로',
+      labels: ['암 펴기', '붐 내림', '버킷 펴기'],
+      // 남은 높이와 남은 거리에 맞춰 두 손을 같이 — 유저가 할 일을 그대로 보여 준다
+      demo: (f, s) => (f < 400 && s.groundGap() > ARC.land ? showMove(s) : null),
+      guide: (s) => ({ ring: ARC.ring, from: 90, to: 0, at: wantAngle(s), rough: false }),
+      begin: (s, mem) => {
+        reready(s);
+        mem.t = 0;
+      },
+      done: (s, mem) => ++mem.t > 30 && (s.groundGap() <= ARC.land + 0.2 || mem.t > 440),
+    },
+    {
+      text: '한 번에 꺾으면' + '\n' + '덜컹합니다',
       labels: ['붐 내림', '버킷 펴기'],
-      demo: (f) => (f < 20 ? { ry: ARC.ring } : f < 60 ? { rx: ARC.ring } : null),
+      demo: (f) => (f < 20 ? stickAt(90) : f < 70 ? stickAt(0) : null),
       guide: () => ({ ring: ARC.ring, from: 90, to: 0, at: 45, rough: true }),
-      begin: (_s, mem) => (mem.t = 0),
-      done: (_s, mem) => ++mem.t > 110,
+      begin: (s, mem) => {
+        reready(s);
+        mem.t = 0;
+      },
+      done: (_s, mem) => ++mem.t > 100,
     },
     // ---- 직접 ----
     arcStep(),
@@ -192,23 +283,32 @@ export const READY_LESSON: Lesson = {
         labels: ['붐 내림'],
         hud: (s) => {
           const g = s.groundGap();
-          if (g > MOVE.gapLo && g < MOVE.gapHi) return '여기! 레버를 가운데로 놓기';
+          if (g > MOVE.gapLo && g < MOVE.gapHi)
+            return stickMag(s) > 0.12 || Math.hypot(s.stick.lx, s.stick.ly) > 0.12
+              ? '레버가 아직 밀려 있어요'
+              : still(s)
+                ? '멈추는 중 — 그대로'
+                : '여기! 레버를 가운데로 놓기';
           if (g <= MOVE.gapLo) return '너무 깊어요 — 붐을 조금 올리기';
           return `조금 더 — 버킷 바닥까지 ${Math.round(g * 100)}cm`;
         },
         done: (s, mem, bag) => {
           const g = s.groundGap();
-          const ok = g > MOVE.gapLo && g < MOVE.gapHi && still(s) && smooth(s, mem);
+          const inWin = g > MOVE.gapLo && g < MOVE.gapHi;
+          // 범위 밖으로 나가면 '다시 내려오는 중'이다 — 충격을 새로 잰다 (덜컹 한 번에 막히지 않게)
+          if (!inWin) retrySpan(s);
+          // 레버를 실제로 놓아야 한다 — 이 단계가 가르치는 것이 '놓아서 멈추기'다
+          const hands = stickMag(s) < 0.12 && Math.hypot(s.stick.lx, s.stick.ly) < 0.12;
+          const ok = inWin && hands && still(s) && smooth(s, mem);
           if (ok) bag.rough = bag.rough ?? 0;
           return hold(mem, ok, 15);
         },
-        coach: (s, mem) => (!smooth(s, mem) ? co('덜컹했어요 — 레버를 천천히 가운데로') : null),
+        coach: (s, mem) => (!smooth(s, mem) ? co('덜컹했어요 — 붐을 조금 올렸다 다시 내리기', '붐 올림') : null),
       },
       ['boom', 'bucket'],
     ),
   ],
 };
-
 // ---------------------------------------------------------------- 3단계
 export const DUMP_LESSON: Lesson = {
   id: 'b-dump',

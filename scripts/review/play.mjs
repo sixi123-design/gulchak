@@ -20,7 +20,7 @@ const KEY_OF_LABEL = {
   '▶ 선회': 'KeyD',
 };
 /** 지금 반짝이는 라벨들 */
-const HINTS = `[...document.querySelectorAll('.stick .lab.hint')].map(e=>e.textContent.trim())`;
+const HINTS = `[...document.querySelectorAll('.stick .lab.hint')].map(e=>e.textContent.replace(/\s+/g,' ').trim())`;
 /** 자리를 맞추는 구간인가 (반짝임만으로는 '어디까지'를 알 수 없다) */
 const AIMING = /멈추기|맞추세요/;
 /** 레버 길잡이 (12시→3시 원호를 그리라는 구간) */
@@ -84,18 +84,25 @@ export async function playLesson({ url, title, maxSteps = 140 }) {
     const keys = hints.map((l) => KEY_OF_LABEL[l]).filter(Boolean);
     const guide = await b.js(GUIDE);
     const gauge = await b.js(GAUGE);
-    if (guide && /12시에서 3시|노란 점을 따라/.test(text)) {
-      // 원호 드릴: 12시에서 3시로 조금씩 옮긴다. 키보드로는 두 키의 길이를 바꿔 흉내낸다
-      const t = Math.min(1, (arcT += 0.04));
-      const a = (Math.PI / 2) * (1 - t);
-      const up = Math.round(Math.sin(a) * 150) + 20; // 12시(붐 내림) = KeyI
-      const right = Math.round(Math.cos(a) * 150) + 20; // 3시(버킷 펴기) = KeyL
+    if (guide && /12시에서 3시|노란 점을 따라|암을 펴면서/.test(text)) {
+      // 원호 드릴: **노란 점이 있는 각도**로 레버를 둔다 (유저가 할 일과 똑같이).
+      // 점은 남은 높이가 정한다 — 시간으로 흉내내면 너무 일찍 3시로 간다
+      arcT++;
+      const a = Math.atan2(-guide.ay, guide.at); // 0 = 3시, 90° = 12시
+      const up = Math.round(Math.max(0, Math.sin(a)) * 180) + 15; // 12시(붐 내림) = KeyI
+      const right = Math.round(Math.max(0, Math.cos(a)) * 180) + 15; // 3시(버킷 펴기) = KeyL
+      // 왼손: 파는 자리까지 남은 만큼 암을 편다 (두 손이 같이 가는 단계다)
+      const st = await b.js(STATE);
+      const need = st.target - st.r;
+      const arm = need > 0.3 ? 'KeyW' : need < -0.3 ? 'KeyS' : null;
+      if (arm) await b.key(arm, 'keyDown', 'x');
       await b.key('KeyI', 'keyDown', 'x');
       await b.key('KeyL', 'keyDown', 'x');
       await b.sleep(Math.max(up, right));
       await b.key(up < right ? 'KeyI' : 'KeyL', 'keyUp');
       await b.sleep(Math.abs(up - right));
       await b.key(up < right ? 'KeyL' : 'KeyI', 'keyUp');
+      if (arm) await b.key(arm, 'keyUp');
       await b.sleep(40);
     } else if (gauge && keys.length) {
       // '한 칸만' 같은 구간: 길게 누르면 끝까지 간다. 톡톡 눌러 목표 칸에 맞추고 놓는다

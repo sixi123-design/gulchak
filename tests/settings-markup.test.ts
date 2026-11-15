@@ -196,6 +196,8 @@ it('부품을 깜빡이지 않는다 (누르라는 뜻으로 읽힌다)', () => 
   expect(main).toMatch(/LEVER_WAY\[part\]/);
   // 세 줄을 동시에 띄우지 않는다: 반응·코치가 있으면 부품 줄을 비운다
   // 교정(coach)이 반응(hud)보다 먼저다 — "좋아요"가 떠 있는 동안 "붐을 더 내리기"가 가려지면 안 된다
-  expect(main).toMatch(/const say = tutor\.coach\?\.msg \?\? h \?\? ''/);
-  expect(main).toMatch(/textContent = !say && part/);
+  expect(main).toMatch(/\(tutor\.coach\?\.msg \?\? h \?\? ''\)/);
+  expect(main).toMatch(/textContent = !say && d === 'user' && part/);
+  // 시범 중에 손을 대면 그 말을 해 준다 (입력은 무시되지만 대답은 한다)
+  expect(main).toMatch(/시범 중이에요/);
 });

@@ -22,7 +22,7 @@ export interface Step<S = DigSession> {
    * 앱이 레버를 대신 미는 시범. 단계가 시작된 뒤 지난 프레임 수를 받아 밀 값을 돌려준다.
    * `null`을 돌려주면 시범이 끝난 것이다 (영상으로 못 배우는 손맛을 먼저 보여 주는 장치).
    */
-  demo?: (frame: number) => Partial<Sticks> | null;
+  demo?: (frame: number, s: S) => Partial<Sticks> | null;
   /** 이 단계가 시작될 때 운전석에서 시선을 내려 땅을 한 번 보여 줄까 */
   peek?: boolean;
   /** 땅에 "여기" 표식을 놓을 자리 (없으면 표식 없음) */
@@ -668,7 +668,7 @@ export class Tutor<S extends { flags: { autoEnd: boolean } } = DigSession> {
    * 시범이 끝나면 노브를 가운데로 되돌리고 0.5초 쉰 뒤에 조작을 넘긴다.
    */
   drive(user: Sticks): Sticks {
-    const d = this.cleared ? null : (this.current?.demo?.(this.demoFrame) ?? null);
+    const d = this.cleared ? null : (this.current?.demo?.(this.demoFrame, this.s) ?? null);
     if (d) {
       this.demoFrame++;
       return { lx: 0, ly: 0, rx: 0, ry: 0, ...d };
@@ -681,7 +681,7 @@ export class Tutor<S extends { flags: { autoEnd: boolean } } = DigSession> {
   }
   /** 지금 화면이 무엇을 보여 줘야 하나 (배지·노브 모양) */
   demoState(): 'demo' | 'rest' | 'user' {
-    if (!this.cleared && this.current?.demo?.(this.demoFrame)) return 'demo';
+    if (!this.cleared && this.current?.demo?.(this.demoFrame, this.s)) return 'demo';
     return this.demoFrame > 0 && this.demoRest > 0 ? 'rest' : 'user';
   }
   /** 이 단계를 처음부터 다시 (시범도 다시 돈다) */
