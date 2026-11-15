@@ -1,3 +1,4 @@
+import type { SoundState } from './ui/audio';
 /**
  * 코스운전(주행) 화면·조작: 세션 + 코스 바닥 + 장비 + 왼쪽 사이드미러 + 카메라 + HUD.
  * main.ts가 종목이 '주행'일 때 굴착 대신 이것을 돌린다.
@@ -201,18 +202,24 @@ export class DriveApp {
   }
 
   /** 엔진음용 (굴착 세션과 같은 필드 이름) */
-  soundState() {
+  soundState(): SoundState {
     const s = this.s;
     const a = s.input.accel;
     return {
       engineOn: true,
-      phase: 'working',
+      phase: 'working' as const,
       rpm: 0.12 + 0.55 * a,
       engineLoad: a * (s.parking ? 0.9 : 0.4),
       reliefLevel: 0,
       motionLevel: Math.abs(s.speed) / 2.5,
       pourRate: 0,
       landRate: 0,
+      // MachineSound.update가 유압음 계산에 읽는 굴착 필드 (주행 중엔 작업장치가 안 움직임). 빠지면 undefined.speeds로 게임 루프가 멈춘다
+      m: s.m,
+      vel: { boom: 0, arm: 0, bucket: 0, swing: 0 },
+      load: 0,
+      heapedCap: 1,
+      effortRate: 0,
     };
   }
 

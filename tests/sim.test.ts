@@ -24,10 +24,11 @@ describe('기하', () => {
     expect(segSegDist2(v3(0, 0, 0), v3(1, 0, 0), v3(0, 1, 0), v3(1, 1, 0))).toBeCloseTo(1);
     expect(segSegDist2(v3(0, 0, 0), v3(1, 0, 0), v3(0.5, -1, 1), v3(0.5, 1, 1))).toBeCloseTo(1);
   });
-  it('최대 도달거리는 14t급 실측(약 7.8m) 근처', () => {
+  it('ⓐ 도달거리는 시험장 3사 기본 사양(2.1m 암) 지면최대굴삭반경 7.37m 근처', () => {
+    // HW145+ 7.37 · DX140W-7 7.375. ⓐ는 버킷을 일직선으로 둔 자세라 카탈로그 최대값보다 조금 짧다
     const reach = groundReach(MACHINE);
-    expect(reach).toBeGreaterThan(7.5);
-    expect(reach).toBeLessThan(8.2);
+    expect(reach).toBeGreaterThan(7.1);
+    expect(reach).toBeLessThan(7.45);
   });
 });
 
@@ -239,7 +240,8 @@ describe('굴착 세션', () => {
   it('유압: 빠르게 움직이다 레버를 즉시 놓으면 덜컹(W-JOLT), 서서히 놓으면 없음', () => {
     const run = (release: (t: number) => number) => {
       const s = startedSession();
-      s.setPose({ boom: 0.9, arm: -1.6, bucket: -1.0 });
+      // 암을 반쯤 편 자세 (암 핀 반경 약 5m)
+      s.setPose({ boom: 0.9, arm: -1.2, bucket: -1.0 });
       for (let i = 0; i < 180; i++) {
         const t = i / 60;
         s.input = { lx: t < 1.5 ? -1 : -release(t - 1.5), ly: 0, rx: 0, ry: 0 };

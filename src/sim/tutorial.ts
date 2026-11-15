@@ -1,4 +1,4 @@
-import { shapeOf, staticHits } from './judge';
+import { PASS_MARGIN, shapeOf, staticHits } from './judge';
 import type { Site } from './site';
 import { bucketUnderside, ik, toWorld } from './kinematics';
 import type { DigSession, Sticks } from './session';
@@ -143,6 +143,18 @@ export function pose(s: DigSession, swing: number, r: number, y: number, bucketA
   }
 }
 const tipStation =(s: DigSession) => s.stationOf(toWorld(s.pose.swing, s.frame.tip))?.name ?? null;
+/**
+ * 버킷(날 끝·힐)이 C 작업구역 폭 안 위에 있나. tipStation은 구역 옆 0.8m까지 C로 쳐서, 거기서 쏟으면
+ * 버킷을 펴는 동안 흙이 구덩이 옆(흙 격자 밖)으로 떨어진다 (실측: 선회 24°에서 쏟으면 0.45m³ 중 0.2~0.3m³)
+ */
+const overC = (s: DigSession) => {
+  const C = s.site.stations.find((x) => x.name === 'C')!;
+  return [s.frame.tip, s.frame.heel].every((q) => {
+    const p = toWorld(s.pose.swing, q);
+    const rho = p.x * C.axis.x + p.z * C.axis.z;
+    return rho > C.zoneIn && rho < C.zoneOut && Math.abs(p.z) < C.zoneHalfW;
+  });
+};
 /** 흙에 닿은 채 dir(1 = 바깥, -1 = 몸 쪽)으로 움직인 거리 누적 */
 /** 버킷 바닥(힐→이빨)이 수평(이빨이 몸 쪽)에서 기운 각(°, +면 이빨이 위) */
 const contactTravel = (s: DigSession, mem: Record<string, number>, dir: 1 | -1) => {
@@ -219,6 +231,18 @@ const betweenPoles = (s: DigSession) => s.frame.tip.r > s.site.B.rE + 0.3 && s.f
 const clearsB = (s: DigSession) => {
   const site = { ...s.site, poles: s.site.poles.filter((p) => p.name.startsWith('B-')), stations: [] as unknown as Site['stations'] };
   return staticHits(site, shapeOf(s.m, s.frame, Math.PI / 2), -Infinity).length === 0;
+};
+/**
+ * 지금 자세 그대로 B(선회 π/2)를 지날 때 버킷이 통과구역(ⓔ~ⓕ 가상통과제한선 사이, 줄 위)을 지나는가.
+ * 판정기(passHits)와 같은 버킷 꼭짓점·여유로 보고, 0.1m 더 여유를 둔다. 고칠 레버를 돌려준다
+ */
+const passFix = (s: DigSession): Coach | null => {
+  const b = shapeOf(s.m, s.frame, Math.PI / 2).bucket;
+  const m = PASS_MARGIN + 0.1;
+  if (Math.max(...b.map((p) => p.z)) >= s.site.B.rF - m) return co('버킷이 바깥 폴 쪽 선에 닿아요 → 암 당기기', '암 당기기');
+  if (Math.min(...b.map((p) => p.z)) <= s.site.B.rE + m) return co('버킷이 안쪽 폴 쪽 선에 닿아요 → 암 펴기', '암 펴기');
+  if (Math.min(...b.map((p) => p.y)) <= s.site.B.ropeY + m) return co('줄보다 낮아요 → 붐 올림', '붐 올림');
+  return null;
 };
 const readyToCarry = (s: DigSession) => bucketLow(s) >= ropeClear(s) && betweenPoles(s) && clearsB(s);
 /** 버킷에서 가장 먼 점의 반경 (등·힐·날 끝·핀) */
@@ -451,7 +475,7 @@ export const LESSONS: Lesson[] = [
       {
         text: '두 폴 사이, 줄 위로 지나 C까지 선회',
         labels: ['▶ 선회', '선회 ◀'],
-        done: (s) => tipStation(s) === 'C' && s.load >= 0.5 * s.m.struckCapacity,
+        done: (s) => overC(s) && s.load >= 0.5 * s.m.struckCapacity,
       },
       {
         text: 'C 구덩이 위에서 버킷을 펴 쏟기',
@@ -462,6 +486,8 @@ export const LESSONS: Lesson[] = [
         text: '다시 줄 위로 지나 A로 돌아오기',
         labels: ['선회 ◀', '▶ 선회'],
         done: (s) => tipStation(s) === 'A',
+        // 쏟느라 버킷을 끝까지 펴면 날 끝이 바깥 가상통과제한선(ⓕ폴 쪽)까지 나간다. B에 닿기 전에 고치게
+        coach: (s) => (s.pose.swing < Math.PI / 2 ? passFix(s) : null),
       },
     ],
   },

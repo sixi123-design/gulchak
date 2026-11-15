@@ -23,9 +23,14 @@ export const SCOOP = {
    * '먼저 끝까지 오므린 뒤에 들기'는 안 된다 — 흙이 가득 차면 버킷이 +23°에서 막힌다.
    */
   keep: 0.6,
-  /** 들어 올렸다고 보는 이빨 높이 */
-  lift: 0.2,
 } as const;
+
+/**
+ * 들어 올렸다고 보는 높이: 버킷 최저점이 B 장애물 줄 위로 (선회해 B를 지나려면 이만큼 들어야 한다).
+ * 2.1m 암 장비에서는 암을 깊이 당긴 채 퍼서, 오므리지 않고 들어도 20cm까지는 흙이 거의 남는다 `[측정]`.
+ * 그냥 들면 줄 높이에 오기 전에 다 쏟고, 오므리며 들면 남는다.
+ */
+export const liftedClear = (s: DigSession) => Math.min(s.frame.tip.y, s.frame.heel.y, s.frame.P2.y) > s.site.B.ropeY;
 
 /** 파는 자리 (A 굴착구역 한가운데) */
 export const digSpot = (s: DigSession) => {
@@ -151,7 +156,7 @@ export const SCOOP_LESSON: Lesson = {
       done: (s, _mem, bag) => {
         bag.keep = s.load / SC(s);
         bag.kept = bag.peak ? bag.keep / bag.peak : 0;
-        return s.frame.tip.y > SCOOP.lift && bag.keep >= SCOOP.keep * bag.peak;
+        return liftedClear(s) && bag.keep >= SCOOP.keep * bag.peak;
       },
       coach: (s, _mem, bag) => (s.load / SC(s) < SCOOP.keep * (bag.peak ?? 1) ? co('버킷을 더 오므리기', '버킷 오므림') : null),
     },

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { MACHINE } from '../src/config/machine';
 import rules from '../src/config/rules.json';
 import { PRACTICE } from '../src/core/ruleEngine';
-import { bucketOutline, fk, ik, toWorld } from '../src/sim/kinematics';
+import { bucketOutline, fk, groundReach, ik, toWorld } from '../src/sim/kinematics';
 import { DigSession, type RulesFile, type Sticks } from '../src/sim/session';
 
 /**
@@ -145,8 +145,8 @@ describe('흙은 압축되지 않는다', () => {
 
   it('바닥을 흙에 댄 채 암을 당겨 누르면 막히고 과부하·차체 들림', () => {
     const s = sess();
-    // 암 당김이 버킷을 아래로 끌어내리는 먼 자리
-    const rho = 6.0;
+    // 암 당김이 버킷을 아래로 끌어내리는 먼 자리 (ⓐ 도달거리의 75%)
+    const rho = 0.75 * groundReach(MACHINE);
     flatPose(s, rho);
     const f0 = fk(MACHINE, s.pose);
     const f1 = fk(MACHINE, { ...s.pose, arm: s.pose.arm - 0.02 });

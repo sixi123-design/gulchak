@@ -1024,6 +1024,23 @@ addEventListener('pointerdown', () => (peekT = 0), true);
 // 굴착 배우기: 기본기 과정이 먼저, 그 뒤가 기존 기초·숙련
 const DIG_LESSONS: Lesson<any>[] = [...BASIC_LESSONS, ...LESSONS];
 const curLessons = (): Lesson<any>[] => (kindKey === 'drive' ? DRIVE_LESSONS : DIG_LESSONS);
+// ?debug: 브라우저 자동 플레이 검증용으로 상태를 읽게 함 (입력은 실제 화면 레버·키·포인터로 넣는다)
+if (debug)
+  (window as unknown as { __app: unknown }).__app = {
+    get tutor() {
+      return tutor;
+    },
+    get session() {
+      return session;
+    },
+    get drive() {
+      return drive;
+    },
+    get kind() {
+      return kindKey;
+    },
+    lessons: () => curLessons().map((l) => l.id),
+  };
 let lessonIdx = -1;
 const loadCleared = (): string[] => {
   try {
@@ -2552,7 +2569,7 @@ function driveFrame(dt: number, _now: number) {
   } else if (tutor && tutor.rewinds !== rw) onRewind();
   updateMeter();
   sound.active = operating();
-  sound.update(d.soundState() as unknown as DigSession);
+  sound.update(d.soundState());
   d.camera(camera, camMode, eyeOffset(), dt, examLookAt);
   d.hud();
   if (examiners) {

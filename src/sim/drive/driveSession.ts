@@ -544,7 +544,8 @@ export class DriveSession {
   }
   /** 뒷차축이 중심선 위 거리 d(출발선 0, 음수는 출발선 뒤 직선, 길이 넘으면 도착선 너머 직선)에 오도록 놓음.
    *  조향은 그 자리 곡선에 맞춤. 배우기 미션 시작용 */
-  placeOnCourse(d: number, o: { stage?: DriveStage; gear?: Gear; parking?: boolean; stopped?: boolean } = {}) {
+  /** side: 중심선에서 왼쪽(+)·오른쪽(−)으로 비켜 선 거리(m), yaw: 중심선 방향에서 돌아간 각(rad, 반시계 +) */
+  placeOnCourse(d: number, o: { stage?: DriveStage; gear?: Gear; parking?: boolean; stopped?: boolean; side?: number; yaw?: number } = {}) {
     const c = this.c;
     const len = courseLength(c);
     const arc = len / 2;
@@ -563,6 +564,8 @@ export class DriveSession {
       h = Math.atan2(q.dir.z, q.dir.x);
       steer = (d < arc ? 1 : -1) * Math.atan(this.m.wheelbase / c.rc);
     }
+    if (o.side) p = { x: p.x + Math.sin(h) * o.side, z: p.z - Math.cos(h) * o.side };
+    if (o.yaw) h += o.yaw;
     this.teleport(p, h, steer);
     // 핸들도 그 조향각만큼 감긴 자리에서 시작
     this.wheelAngle = this.steer * this.p.steerRatio;
@@ -589,7 +592,8 @@ export class DriveSession {
    * 배우기 게이지용: 코스 가운데를 따라가려면 지금 맞출 바퀴 각(rad, +왼쪽).
    * 뒷차축 앞(후진이면 뒤) Ld m의 중심선 점을 향하는 순수 추종
    */
-  guideSteer(back = false, Ld = 2.2) {
+  guideSteer(back = false, Ld = 0.85 * this.m.wheelbase) {
+    // 앞보기 거리는 축간거리에 비례 (코스·회전반경이 모두 E에 비례하므로). E 2.6m에서 2.2m였다
     const c = this.c;
     const len = courseLength(c);
     const at = (d: number): P => (d < 0 ? { x: c.startMid.x, z: c.startMid.z + d } : d > len ? { x: c.arriveMid.x, z: c.arriveMid.z + (d - len) } : centerline(c, d).p);

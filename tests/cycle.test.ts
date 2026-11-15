@@ -55,7 +55,7 @@ function runCycle(s: DigSession, d: ReturnType<typeof driver>, c = 0) {
   d.tip(r0, surf + 0.3, -1.0, 40); // A 구덩이 위 (버킷 날을 앞으로 숙임)
   d.tip(r0, surf - 0.2, -1.0, 40); // 비스듬히 꽂기 (20cm: 더 깊이 억지로 밀어 넣으면 차체가 크게 들림)
   d.pull(Math.max(A.pitIn + 0.5, r0 - 1.6), surf - 0.25, -1.5, 100); // 반쯤 오므린 채 암으로 당겨 쓸어 담기 (끝까지 오므림은 들 때)
-  d.tip(A.pitIn + 0.6, 1.2, CURL, 40); // 오므리며 들어 올리기
+  d.pull(A.pitIn + 0.6, 1.2, CURL, 40); // 오므리며 들어 올리기 (날 끝을 곧게 끌어올림: 관절각 보간은 2.1m 암에서 버킷이 땅을 한 번 누르고 지나간다)
   d.to({ boom: 1.0, arm: -1.9, bucket: -1.4 }, 40); // B 통과 자세 (붐 높이 들기)
   d.to({ swing: 0 }, 160); // A → B → C (왼쪽 선회)
   d.tip(C.pitIn, 1.2, CURL, 40); // C 구덩이 안쪽 위

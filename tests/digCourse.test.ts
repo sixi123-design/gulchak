@@ -5,6 +5,7 @@ import { MODES } from '../src/core/ruleEngine';
 import { DigSession, type RulesFile, type Sticks } from '../src/sim/session';
 import { Tutor } from '../src/sim/tutorial';
 import { digSpot, SCOOP, SCOOP_LESSON } from '../src/sim/digCourse';
+import { ik } from '../src/sim/kinematics';
 
 const R = rules as unknown as RulesFile;
 const deg = Math.PI / 180;
@@ -53,7 +54,17 @@ describe('2단계 흙 퍼기', () => {
     expect(r).toBeGreaterThan(A.zoneIn);
     expect(r).toBeLessThan(A.zoneOut);
     // 이 자리에 이빨을 지면 가까이 둘 수 있나
-    t.s.teleport({ swing: Math.PI, boom: 13 * deg, arm: -100 * deg, bucket: 67 * deg });
+    // 이빨 끝을 그 자리 지면 15cm 위에 두는 자세를 역기구학으로 찾는다 (장비 치수가 바뀌어도 그대로 쓰도록)
+    const L = MACHINE.limits;
+    const inLim = (p: { boom: number; arm: number; bucket: number }) =>
+      (['boom', 'arm', 'bucket'] as const).every((j) => p[j] >= L[j][0] && p[j] <= L[j][1]);
+    let pose: { boom: number; arm: number; bucket: number } | null = null;
+    for (let k = -170; k <= 10 && !pose; k += 2) {
+      const q = ik(MACHINE, r, 0.15, k * deg);
+      if (q && inLim(q)) pose = q;
+    }
+    expect(pose, '그 자리에 이빨을 둘 수 있는 자세가 관절 한계 안에 없다').not.toBeNull();
+    t.s.teleport({ swing: Math.PI, ...pose! });
     expect(t.s.pose.bucket).toBeLessThanOrEqual(MACHINE.limits.bucket[1]);
     expect(Math.abs(t.s.frame.tip.r - r)).toBeLessThan(SCOOP.rTol);
     expect(t.s.frame.tip.y).toBeLessThan(SCOOP.yHi);

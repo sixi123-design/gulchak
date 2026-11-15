@@ -1,6 +1,15 @@
 import type { DigSession } from '../sim/session';
 
 /**
+ * 소리 계산에 쓰는 장비 상태. 굴착 세션은 그대로 넘기고, 주행(DriveApp.soundState)은 이 모양을 채워 넘긴다.
+ * 예전엔 주행 쪽을 DigSession으로 강제 변환해 넘겨, 여기서 새 필드(m.speeds 등)를 읽기 시작하자 주행 화면 게임 루프가 멈췄다
+ */
+export type SoundState = Pick<
+  DigSession,
+  'landRate' | 'engineOn' | 'phase' | 'rpm' | 'engineLoad' | 'reliefLevel' | 'vel' | 'load' | 'heapedCap' | 'motionLevel' | 'pourRate' | 'effortRate'
+> & { m: { speeds: DigSession['m']['speeds'] } };
+
+/**
  * 장비 소리. 엔진·흙 쏟는 소리는 실제 녹음(public/sfx, CC0)을 반복 재생, 나머지는 Web Audio 합성
  *  - 엔진: 공회전 녹음 ↔ 작업 회전수 녹음을 rpm에 따라 섞고 재생 속도로 높낮이, 부하가 걸리면 처지고 거칠어짐
  *    출처(freesound.org, CC0): SieuAmThanh #770430 (공회전), itinerantmonk108 #737208 (작업 회전수),
@@ -230,7 +239,7 @@ export class MachineSound {
   /** 매 프레임: 세션 상태를 소리에 반영 */
   /** 운전 화면일 때만 true (main.ts가 매 프레임 정함) */
   active = false;
-  update(s: DigSession) {
+  update(s: SoundState) {
     const ctx = this.ctx;
     if (!ctx) return;
     if (this.active) this.wake();

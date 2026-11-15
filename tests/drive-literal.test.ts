@@ -58,6 +58,9 @@ const PRE: Record<string, ((s: DriveSession) => void)[]> = {
   'd-park': [() => {}, () => {}, (s) => (s.setGear('N'), s.setParking(true))],
 };
 
+/** 코치 안내 한 번에 돌리는 핸들 양 (바퀴) */
+const NUDGE = 0.25;
+
 function play(id: string, v: V) {
   const l = DRIVE_LESSONS.find((x) => x.id === id)!;
   const s = new DriveSession(MACHINE, MODES.tutorial);
@@ -82,17 +85,21 @@ function play(id: string, v: V) {
     let brake = c.brake ?? 0;
     // 코치 문구가 있으면 그 라벨대로 고침
     const co = t.coach;
-    // 새 안내를 보면 그쪽으로 핸들을 조금(0.4초) 돌리고 다시 원래대로 (사람처럼 한 번 보고 고침)
-    if (co && co.msg !== seen) (seen = co.msg), (nudge = 24), (cyc = 0);
-    // 같은 안내가 계속 떠 있으면 잠깐 보고 또 조금 (0.4초 돌리고 0.4초 봄)
-    if (co && nudge === 0 && ++cyc >= 24) (nudge = 24), (cyc = 0);
+    // 새 안내를 보면 그쪽으로 핸들을 1/4바퀴 돌리고 다시 원래대로 (사람처럼 한 번 보고 고침).
+    // 보정은 시간이 아니라 양 기준: 손이 빠른 사람도 한 번에 1/4바퀴 (아스트라 2026-11-15. 0.4초 기준이면 2.5바퀴/초에서 한 번에 0.6바퀴를 휘두름)
+    if (co && co.msg !== seen) (seen = co.msg), (nudge = NUDGE), (cyc = 0);
+    // 같은 안내가 계속 떠 있으면 잠깐(0.4초) 보고 또 1/4바퀴
+    if (co && nudge === 0 && ++cyc >= 24) (nudge = NUDGE), (cyc = 0);
     if (!co) seen = '';
     if (co) {
       if (!log.includes(co.msg)) log.push(co.msg);
       if (nudge > 0) {
-        nudge--;
-        if (co.labels.includes('▶ 핸들')) wheel = -0.6;
-        if (co.labels.includes('핸들 ◀')) wheel = 0.6;
+        // 이번 프레임에 돌릴 양 (바퀴) — 남은 보정량을 넘지 않게
+        const a = Math.min(0.6, nudge / (v.rate / 60));
+        nudge = Math.max(0, nudge - a * (v.rate / 60));
+        if (nudge < 1e-6) nudge = 0;
+        if (co.labels.includes('▶ 핸들')) wheel = -a;
+        if (co.labels.includes('핸들 ◀')) wheel = a;
       } else if (co.msg.includes('끝까지')) {
         // '끝까지' 안내는 끝까지 감음
         if (co.labels.includes('▶ 핸들')) wheel = -1;

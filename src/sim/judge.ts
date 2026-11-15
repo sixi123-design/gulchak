@@ -88,7 +88,7 @@ export function staticHits(site: Site, s: Shape, workHeight: number): Hit[] {
 }
 
 /** 버킷 두께만큼 제한선 접촉을 넉넉히 본다 (접촉도 위반) */
-const PASS_MARGIN = 0.05;
+export const PASS_MARGIN = 0.05;
 /** 버킷 꼭짓점이 B 평면(x=0)을 가로지를 때의 판정 */
 export function passHits(site: Site, prev: V3[], cur: V3[]): Hit[] {
   const hits: Hit[] = [];

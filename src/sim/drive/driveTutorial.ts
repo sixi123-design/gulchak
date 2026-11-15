@@ -35,17 +35,23 @@ const WN = ['왼쪽 앞바퀴', '오른쪽 앞바퀴', '왼쪽 뒷바퀴', '오�
  * 선에 가까운 바퀴 안내 (후진 땐 사이드미러로 보는 것과 같음).
  * 선 반대쪽으로 핸들을 돌리면 그 바퀴가 선에서 멀어짐. 단 후진 중 앞바퀴는 거꾸로(선 쪽으로 핸들)
  */
-const lineCoach = (s: DriveSession, thr = 0.3, back = false): Coach | null => {
+const lineCoach = (s: DriveSession, thr = 0.3, back = false, wheels = [0, 1, 2, 3]): Coach | null => {
   if (s.speed === 0) return null;
   const gs = s.wheelGaps();
   let k = -1;
-  for (let i = 0; i < 4; i++) if (gs[i] && gs[i]!.gap < thr && (k < 0 || gs[i]!.gap < gs[k]!.gap)) k = i;
+  for (const i of wheels) if (gs[i] && gs[i]!.gap < thr && (k < 0 || gs[i]!.gap < gs[k]!.gap)) k = i;
   if (k < 0) return null;
   // 후진 땐 앞바퀴가 핸들 반대쪽으로 움직임 (뒷바퀴가 먼저 가고 앞이 따라 돎)
   const toLeft = back && k < 2 ? gs[k]!.side > 0 : gs[k]!.side < 0;
   return co(`${WN[k]}가 선에 가까워요 → 핸들 ${toLeft ? '왼쪽' : '오른쪽'}으로`, toLeft ? '핸들 ◀' : '▶ 핸들');
 };
 const backCoach = (s: DriveSession) => lineCoach(s, 0.25, true);
+/**
+ * 마지막 곡선(왼쪽 끝까지 감고 후진)용: 뒷바퀴만 본다 (아스트라 2026-11-15).
+ * 끝까지 감은 채 가면 앞 바깥바퀴가 0.25m까지 붙었다가 다시 벌어진다(브라우저 실측). 여기서 앞바퀴 경고로 핸들을 풀게 하면
+ * '끝까지 감기'와 번갈아 떠 풀었다 감는 사이 선을 밟았다
+ */
+const rearCoach = (s: DriveSession) => lineCoach(s, 0.25, true, [2, 3]);
 /**
  * 정지선에서 둘째 곡선으로 넘어갈 때 맞출 바퀴 각 (게이지 초록 칸): 코스 가운데를 따라가는 각을 실시간으로.
  * 대략: 첫 곡선 각 그대로 조금 가다가 서서히 풀어 뒷바퀴가 정지선에 올 때 곧게, 이어서 2m쯤 동안 오른쪽 끝까지.
@@ -151,7 +157,7 @@ export const DRIVE_LESSONS: Lesson<DriveSession>[] = [
     id: 'd-arrive',
     icon: 'kDrive',
     title: '도착선 통과',
-    setup: (s) => s.placeOnCourse(ARC(s) - 2.6, { stage: 'GO', gear: 'F', parking: false, stopped: true }),
+    setup: (s) => s.placeOnCourse(ARC(s) - s.m.wheelbase, { stage: 'GO', gear: 'F', parking: false, stopped: true }),
     steps: [
       {
         // 정지선에 서면 앞바퀴는 이미 둘째 곡선 입구, 뒷바퀴는 아직 첫 곡선 안.
@@ -165,7 +171,7 @@ export const DRIVE_LESSONS: Lesson<DriveSession>[] = [
       {
         text: '이어서 오른쪽으로 계속 감기 · 오른쪽 끝까지',
         labels: ['가속', '▶ 핸들'],
-        done: (s) => s.steer <= -s.p.maxSteer + 2 * deg || s.progress() >= ARC(s) + 3.2,
+        done: (s) => s.steer <= -s.p.maxSteer + 2 * deg || s.progress() >= ARC(s) + 1.23 * s.m.wheelbase,
         meter: sMeter,
         coach: sCoach,
       },
@@ -190,8 +196,11 @@ export const DRIVE_LESSONS: Lesson<DriveSession>[] = [
     id: 'd-back',
     icon: 'kDrive',
     title: 'S자 후진',
-    // 뒷바퀴가 도착선을 막 빠져나온 자리 (뒷차축이 선 너머 0.6m)
-    setup: (s) => s.placeOnCourse(courseLength(s.c) + 0.6, { stage: 'ARRIVE', gear: 'N', parking: false, stopped: true }),
+    // 앞 레슨('도착선 통과')을 오른쪽 끝까지 감고 끝낸 실제 자리 `[측정]`: 뒷차축이 선 너머 약 1m,
+    // 중심선 오른쪽 0.5~0.57m, 차체가 17~19° 돌아감. 중심선에 곧게 세우는 자리는 실제로 나오지 않는다
+    // (E 2.8m에서는 그 자리에서 끝까지 감고 후진하면 안쪽 뒷바퀴가 선에 닿는다)
+    setup: (s) =>
+      s.placeOnCourse(courseLength(s.c) + 1.0, { stage: 'ARRIVE', gear: 'N', parking: false, stopped: true, side: -0.5, yaw: 17 * deg }),
     steps: [
       { text: 'R(후진) 기어 넣기', done: (s) => s.gear === 'R' },
       {
@@ -204,12 +213,12 @@ export const DRIVE_LESSONS: Lesson<DriveSession>[] = [
         text: '끝까지 감은 채 · 사이드미러 보며 후진',
         labels: ['가속', '▶ 핸들'],
         // 둘째 곡선 대부분을 끝까지 감은 채로 (뒷차축이 정지선 3.5m 앞까지. 더 가면 이음점에서 오른쪽 뒷바퀴가 선에 닿음)
-        done: (s) => s.progress() <= ARC(s) + 3.5,
+        done: (s) => s.progress() <= ARC(s) + 1.35 * s.m.wheelbase,
         coach: (s) =>
           backCoach(s) ??
           (s.speed !== 0 && s.steer > -s.p.maxSteer + 3 * deg
             ? co('핸들 오른쪽 끝까지 계속 감기', '▶ 핸들')
-            : s.progress() < ARC(s) + 5 && Math.abs(s.speed) > 0.6
+            : s.progress() < ARC(s) + 1.92 * s.m.wheelbase && Math.abs(s.speed) > 0.6
               ? co('정지선 가까워요 → 천천히 (곧 핸들 풀어야 해요)', '브레이크')
               : null),
       },
@@ -224,7 +233,7 @@ export const DRIVE_LESSONS: Lesson<DriveSession>[] = [
       {
         text: '이어서 왼쪽으로 계속 감기 · 왼쪽 끝까지',
         labels: ['가속', '핸들 ◀'],
-        done: (s) => s.steer >= s.p.maxSteer - 2 * deg || s.progress() <= ARC(s) - 3.2,
+        done: (s) => s.steer >= s.p.maxSteer - 2 * deg || s.progress() <= ARC(s) - 1.23 * s.m.wheelbase,
         meter: bMeter,
         coach: bCoach,
       },
@@ -232,8 +241,8 @@ export const DRIVE_LESSONS: Lesson<DriveSession>[] = [
         text: '왼쪽 끝까지 감은 채 후진 · 미러로 바퀴와 선 보며 · 앞바퀴가 출발선을 넘을 때까지',
         labels: ['가속', '핸들 ◀'],
         done: (s) => s.stage === 'FINISH' || s.stage === 'DONE',
-        meter: (s) => ({ v: clamp01(1 - frontD(s) / (ARC(s) + 2.6)) }),
-        coach: (s) => backCoach(s) ?? (s.speed !== 0 && frontD(s) > 3 && s.steer < s.p.maxSteer - 3 * deg ? co('바퀴가 풀렸어요 → 왼쪽 끝까지 계속 감기', '핸들 ◀') : null),
+        meter: (s) => ({ v: clamp01(1 - frontD(s) / (ARC(s) + s.m.wheelbase)) }),
+        coach: (s) => rearCoach(s) ?? (s.speed !== 0 && frontD(s) > 3 && s.steer < s.p.maxSteer - 3 * deg ? co('바퀴가 풀렸어요 → 왼쪽 끝까지 계속 감기', '핸들 ◀') : null),
       },
     ],
   },

@@ -99,15 +99,29 @@ describe('배우기', () => {
     const g = t.s.soil.grids.find((x) => x.name === 'C')!;
     const vol = () => g.h.reduce((a, h, i) => a + h - g.h0[i], 0) * g.cell * g.cell;
     const v0 = vol();
-    expect(drive(t, () => ({ ly: -1, ry: -1 }), 600), '암 당기고 붐 올림').toBe(true);
+    // 암은 버킷이 두 폴 사이(통과구역 가운데)에 올 때까지만 당긴다 — 끝까지 당기면 안쪽 폴 쪽으로 너무 들어온다
+    const Bmid = (t.s.site.B.rE + t.s.site.B.rF) / 2;
+    expect(drive(t, (s) => ({ ly: s.frame.tip.r > Bmid ? -1 : 0, ry: -1 }), 600), '암 당기고 붐 올림').toBe(true);
     // A(π) → B(π/2) → C(0): 각도가 줄어드는 쪽
     // 흙을 실으면 붐이 굼떠 암이 먼저 다 당겨짐 → 선회하며 암을 조금 펴서 C 위에 맞춤
     const Cst = t.s.site.stations[1];
-    expect(drive(t, (s) => ({ lx: -1, ly: s.frame.tip.r < (Cst.zoneIn + Cst.zoneOut) / 2 ? 0.6 : 0 }), 900), 'C로 선회').toBe(true);
+    // 암은 B를 다 지난 뒤에 편다 (B 안에서 펴면 ⓕ폴 쪽 가상통과제한선을 넘는다)
+    const pastB = (s: DigSession) => s.pose.swing < Math.PI / 2 - 0.35;
+    expect(drive(t, (s) => ({ lx: -1, ly: pastB(s) && s.frame.tip.r < (Cst.zoneIn + Cst.zoneOut) / 2 ? 0.6 : 0 }), 900), 'C로 선회').toBe(true);
     expect(drive(t, () => ({ rx: 1 }), 600), '쏟기').toBe(true);
     expect(vol() - v0).toBeGreaterThan(0.35);
-    expect(drive(t, () => ({ lx: 1 }), 900), 'A로 돌아옴').toBe(true);
+    // 쏟느라 끝까지 편 버킷 그대로 돌면 날 끝이 ⓕ폴 쪽 가상통과제한선에 닿는다 (브라우저 실측 5번 중 4번 실격).
+    // 화면 안내(라벨)대로 선회하면서 고치면 통과해야 한다
+    const seen: string[] = [];
+    const ret = () => {
+      const c = t.coach;
+      if (c && !seen.includes(c.msg)) seen.push(c.msg);
+      const L = c?.labels ?? [];
+      return { lx: 1, ly: L.includes('암 당기기') ? -0.6 : L.includes('암 펴기') ? 0.6 : 0, ry: L.includes('붐 올림') ? -0.6 : 0 };
+    };
+    expect(drive(t, ret, 900), 'A로 돌아옴').toBe(true);
+    expect(seen.join(' / ')).toContain('암 당기기');
     expect(t.cleared).toBe(true);
-    expect(t.s.engine.disqualifications()).toEqual([]);
+    expect(t.s.engine.disqualifications().map((d) => `${d.id} ${d.detail}`)).toEqual([]);
   });
 });

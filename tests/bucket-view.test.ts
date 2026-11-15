@@ -35,7 +35,7 @@ function dug(fill: number) {
 }
 
 type Hit = 'soil' | 'steel' | 'terrain' | 'ext' | 'other' | 'none';
-async function measure(s: DigSession) {
+async function measure(s: DigSession, noBoom = false) {
   const { ExcavatorView } = await import('../src/render/excavatorView');
   const { SoilView } = await import('../src/render/siteView');
   const v = new ExcavatorView(MACHINE, 'A') as any;
@@ -68,6 +68,13 @@ async function measure(s: DigSession) {
     if ((o as THREE.Mesh).isMesh && o.visible) {
       let vis = true;
       for (let p: THREE.Object3D | null = o; p; p = p.parent) if (!p.visible) vis = false;
+      // 붐·암 가림 제외 (버킷 흙 메시만 판정. 아스트라 2026-11-15: 버킷이 운전석에 가까워지면 붐이 입구를 가려 남은 표본이 흙 쪽으로 치우침)
+      if (noBoom && vis) {
+        let inBucket = false;
+        let inBoom = false;
+        for (let p: THREE.Object3D | null = o; p; p = p.parent) (inBucket ||= p === v.bucket), (inBoom ||= p === v.boom);
+        if (inBoom && !inBucket && !soilSet.has(o) && !extSet.has(o)) vis = false;
+      }
       if (vis) objs.push(o);
     }
   });
@@ -110,6 +117,7 @@ async function measure(s: DigSession) {
     sur: s.surcharge / SC,
     facing,
     cnt,
+    seen,
     soilFrac: seen > 0 ? cnt.soil / seen : NaN,
     steelFrac: seen > 0 ? cnt.steel / seen : NaN,
     anySoilFrac: seen > 0 ? (cnt.soil + cnt.ext + cnt.terrain) / seen : NaN,
@@ -132,10 +140,11 @@ function poseTilt(s: DigSession, r: number, y: number, tiltDeg: number) {
  * 아스트라 최종 합격 기준 (2차 판정). dig = 실제 굴착 자세(입구가 운전석 쪽·약간 아래): 시선이 버킷 안 흙 면에 먼저 닿아
  * 첫 충돌 비율로는 양을 가릴 수 없으므로 입구 밖 돌출(outMax, 꽉 찬 돔)로 막고, 양의 구분은 들어 올린 두 자세에서 본다.
  */
-const CRIT: Record<string, Record<number, { outMax?: number; soilMax?: number; steelMin?: number; soilMin?: number }>> = {
-  dig: { 0.3: { outMax: 0.02 }, 0.6: { outMax: 0.035 }, 0.95: { outMax: 0.08 } },
-  'lift-54': { 0.3: { soilMax: 0.65, steelMin: 0.35 }, 0.6: { soilMax: 0.75, steelMin: 0.25 }, 0.95: { soilMin: 0.85 } },
-  lift0: { 0.3: { soilMax: 0.45, steelMin: 0.55 }, 0.6: { soilMax: 0.55, steelMin: 0.45 }, 0.95: { soilMin: 0.75 } },
+const CRIT: Record<string, Record<number, { outMax?: number; soilMax?: number; steelMin?: number; soilMin?: number; minSeen?: number }>> = {
+  // 3차 판정 (2026-11-15, 장비 HW145+ 표준 구성으로 변경 후): lift는 붐·암 가림을 빼고 재고 판정 표본 80/112 이상, dig 30% outMax 0.02→0.025
+  dig: { 0.3: { outMax: 0.025 }, 0.6: { outMax: 0.035 }, 0.95: { outMax: 0.08 } },
+  'lift-54': { 0.3: { minSeen: 80, soilMax: 0.65, steelMin: 0.35 }, 0.6: { minSeen: 80, soilMax: 0.75, steelMin: 0.25 }, 0.95: { minSeen: 80, soilMin: 0.85 } },
+  lift0: { 0.3: { minSeen: 80, soilMax: 0.45, steelMin: 0.55 }, 0.6: { minSeen: 80, soilMax: 0.55, steelMin: 0.45 }, 0.95: { minSeen: 80, soilMin: 0.75 } },
 };
 
 for (const fill of [0.3, 0.6, 0.95])
@@ -144,14 +153,15 @@ for (const fill of [0.3, 0.6, 0.95])
     const rows: [string, Awaited<ReturnType<typeof measure>>][] = [['dig', await measure(s)]];
     for (const t of [-54, 0]) {
       poseTilt(s, s.digTarget.rho - 0.6, 1.0, t);
-      rows.push([`lift${t}`, await measure(s)]);
+      rows.push([`lift${t}`, await measure(s, true)]);
     }
     for (const [name, r] of rows) {
       const c = CRIT[name][fill];
-      const tag = `${name} ${JSON.stringify({ soil: r.soilFrac, steel: r.steelFrac, out: r.outMax })}`;
+      const tag = `${name} ${JSON.stringify({ soil: r.soilFrac, steel: r.steelFrac, out: r.outMax, seen: r.seen })}`;
       expect(r.fill, tag).toBeGreaterThan(fill - 0.03);
       expect(r.fill, tag).toBeLessThan(fill + 0.03);
       expect(r.terrIn, tag).toBe(0);
+      if (c.minSeen !== undefined) expect(r.seen, tag).toBeGreaterThanOrEqual(c.minSeen);
       if (c.outMax !== undefined) expect(r.outMax, tag).toBeLessThanOrEqual(c.outMax);
       if (c.soilMax !== undefined) expect(r.soilFrac, tag).toBeLessThanOrEqual(c.soilMax);
       if (c.steelMin !== undefined) expect(r.steelFrac, tag).toBeGreaterThanOrEqual(c.steelMin);
