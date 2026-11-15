@@ -205,9 +205,9 @@ const skimCoach = (s: DigSession, mem: Record<string, number>, pull: boolean): C
   return null;
 };
 /** 버킷 하부에서 가장 낮은 점의 높이 */
-const bucketLow = (s: DigSession) => Math.min(...bucketUnderside(s.frame).map((q) => q.y), s.frame.tip.y);
+export const bucketLow = (s: DigSession) => Math.min(...bucketUnderside(s.frame).map((q) => q.y), s.frame.tip.y);
 /** 줄(B 장애물선)을 여유 있게 넘는 높이 */
-const ropeClear = (s: DigSession) => s.site.B.ropeY + 0.3;
+export const ropeClear = (s: DigSession) => s.site.B.ropeY + 0.3;
 /** 버킷 끝이 B 두 폴 사이 반경 안 */
 const betweenPoles = (s: DigSession) => s.frame.tip.r > s.site.B.rE + 0.3 && s.frame.tip.r < s.site.B.rF - 0.3;
 /** 지금 자세 그대로 B(선회 π/2)를 지나면 폴·줄에 안 닿는가 */

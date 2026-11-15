@@ -7,6 +7,7 @@
  */
 import { co, fill, hold, pose, type Grade, type Lesson, type Step } from './tutorial';
 import { SCOOP_LESSON } from './digCourse';
+import { DUMP_LESSON, READY_LESSON } from './moveCourse';
 import { LEVER_DRILL } from './leverDrill';
 import type { DigSession } from './session';
 
@@ -187,7 +188,7 @@ const aimStep = (round: number, key = `err${round + 1}`, of: number = AIM.target
   };
 };
 
-const aimAt: Lesson = {
+export const aimAt: Lesson = {
   id: 'b-aim',
   tier: '기본기',
   icon: 'stAim',
@@ -317,7 +318,7 @@ const bothLevers: Lesson = {
   ],
 };
 
-const stopFirst: Lesson = {
+export const stopFirst: Lesson = {
   id: 'b-stop',
   tier: '기본기',
   icon: 'stStop',
@@ -414,5 +415,11 @@ const allTogether: Lesson = {
 };
 
 // 레버 익히기가 맨 앞 — 레버를 쓸 줄 모르는 사람에게 미션을 줄 수 없다
-// 흙 퍼기는 4번째. 레버를 익히고 몸통 돌리기·높이 맞추기를 해 본 뒤에 흙을 판다
-export const BASIC_LESSONS: Lesson[] = [LEVER_DRILL, stopFirst, aimAt, SCOOP_LESSON, bothLevers, allTogether];
+/**
+ * 기본기 과정.
+ * 멈춘 상태의 기술(흙 퍼기)을 하기 전에, 그 사이를 잇는 **옮겨 가는 동작** 둘을 먼저 익힌다.
+ *
+ * `stopFirst`·`aimAt`은 이 둘로 갈음됐다. 아직 지우지 않고 내보내 둔다 —
+ * 나머지 단계(5~7)가 다 차면 옛 미션을 한꺼번에 걷어낸다.
+ */
+export const BASIC_LESSONS: Lesson[] = [LEVER_DRILL, READY_LESSON, DUMP_LESSON, SCOOP_LESSON, bothLevers, allTogether];
