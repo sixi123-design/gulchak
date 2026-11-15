@@ -1306,6 +1306,64 @@ const PART_AXIS: Record<Part, 'ly' | 'ry' | 'rx'> = { boom: 'ry', arm: 'ly', buc
 /** 그 부품을 움직이는 레버 (글자로) */
 const LEVER_WAY: Record<Part, string> = { boom: '오른쪽 레버 위아래', arm: '왼쪽 레버 위아래', bucket: '오른쪽 레버 좌우' };
 /**
+ * 지시문이 **버킷을 가리지 않게** 자리를 옮긴다.
+ *
+ * 버킷은 조작에 따라 화면을 오르내린다. 고정된 자리는 언젠가 반드시 겹친다.
+ * 버킷이 글자 띠에 들어오면 반대쪽으로 비켜 주되, 0.4초에 걸쳐 미끄러지듯 옮겨
+ * 읽는 중에 글자가 튀지 않게 한다.
+ */
+// 아래 자리는 버킷 게이지(화면 66% 부근)를 건드리지 않는 선까지만 내려간다
+const DRILL_SPOT = { high: 0.18, low: 0.48 };
+let drillTop = DRILL_SPOT.low;
+const bucketV = new THREE.Vector3();
+let dodgeT = performance.now();
+function dodgeBucket() {
+  const box = $('drill');
+  const now = performance.now();
+  const dt = Math.min(0.1, (now - dodgeT) / 1000);
+  dodgeT = now;
+  if (box.hidden) return;
+  exc.bucketWorld(bucketV.set(0.55, -0.1, 0));
+  bucketV.project(camera);
+  const by = (1 - bucketV.y) / 2; // 0 = 화면 위
+  const h = box.getBoundingClientRect().height / Math.max(1, innerHeight);
+  const hit = (top: number) => by > top - 0.06 && by < top + h + 0.06;
+  const want = hit(DRILL_SPOT.low) ? DRILL_SPOT.high : DRILL_SPOT.low;
+  drillTop += (want - drillTop) * Math.min(1, dt * 2.5);
+  box.style.top = `${(drillTop * 100).toFixed(1)}%`;
+  box.style.transform = 'none';
+}
+
+/**
+ * 레버 길잡이를 그린다 (오른쪽 스틱 위).
+ * 가동범위 링 = 이 정도 깊이로, 원호 = 12시에서 3시로, 점 = 지금 가야 할 자리.
+ */
+function updateGuide() {
+  const g = tutor && !tutor.cleared ? (tutor.current?.guide?.(session) ?? null) : null;
+  const box = $('guide-r');
+  const stick = $('stick-r');
+  // <svg>는 HTMLElement가 아니라 `.hidden` 프로퍼티가 속성을 바꾸지 않는다.
+  // 속성을 직접 넣고 빼야 한다 — 안 그러면 영영 숨어 있다
+  if (!g) {
+    box.setAttribute('hidden', '');
+    stick.classList.remove('rough');
+    return;
+  }
+  box.removeAttribute('hidden');
+  if (g.rough) stick.classList.add('rough');
+  else stick.classList.remove('rough');
+  const R = 50 * g.ring;
+  const pt = (d: number) => `${(Math.cos((d * Math.PI) / 180) * R).toFixed(1)} ${(-Math.sin((d * Math.PI) / 180) * R).toFixed(1)}`;
+  box.querySelector('.g-ring')?.setAttribute('r', String(R));
+  const d = `M ${pt(g.from)} A ${R} ${R} 0 0 1 ${pt(g.to)}`;
+  $('g-arc-bg').setAttribute('d', d);
+  $('g-arc').setAttribute('d', d);
+  const dot = $('g-dot');
+  dot.setAttribute('cx', (Math.cos((g.at * Math.PI) / 180) * R).toFixed(1));
+  dot.setAttribute('cy', (-Math.sin((g.at * Math.PI) / 180) * R).toFixed(1));
+}
+
+/**
  * 레버를 얼마나 밀었나를 칸 3개로 보여 준다. 글자는 0자다.
  * `Step.gauge`가 있는 구간에서만 띄운다 — 평소에는 화면을 어지럽히지 않는다.
  */
@@ -1347,6 +1405,8 @@ function updateMeter() {
     peekStep = tutor.step;
     if (tutor.current?.peek) peekGround();
   }
+  updateGuide();
+  dodgeBucket();
   // 땅 표식 ("여기를 파세요")
   const sp = tutor && !tutor.cleared ? (tutor.current?.spot?.(session) ?? null) : null;
   if (sp) spot?.put(sp.swing, sp.r);
@@ -1975,6 +2035,8 @@ function warmToasts() {
 /** 첫 삽 위치 피드백: 목표(ⓑ선 안쪽 30cm, 중심) 대비 앞뒤·좌우 */
 function showEntry(e: DigEntry) {
   if (!session.flags.feedback) return;
+  // 가운데 글자로 가르치는 미션에서는 이 토스트가 끼어들면 안 된다 (지시와 경쟁한다)
+  if (tutor?.lesson.big) return;
   const cm = (v: number) => Math.round(Math.abs(v) * 100);
   const fb = Math.abs(e.dr) < 0.02 ? '앞뒤 정확' : e.dr > 0 ? `ⓑ선 쪽 ${cm(e.dr)}cm` : `장비 쪽 ${cm(e.dr)}cm`;
   const lr = Math.abs(e.dl) < 0.02 ? '좌우 정확' : `${e.dl > 0 ? 'B 쪽' : 'B 반대쪽'} ${cm(e.dl)}cm`;
@@ -2348,6 +2410,13 @@ function frame(now: number) {
   };
   // 앱이 레버를 대신 미는 시범 중에는 유저 입력을 무시하고, 화면 손잡이도 앱 값으로 움직인다
   session.input = tutor ? tutor.drive(userInput) : userInput;
+  // 손이 실제로 민 자리 (커브 전). 레버를 12시→3시로 옮기는 손놀림을 볼 때 쓴다
+  session.stick = {
+    lx: clamp1(left.x + kb.lx + pad.lx),
+    ly: clamp1(left.y + kb.ly + pad.ly),
+    rx: clamp1(right.x + kb.rx + pad.rx),
+    ry: clamp1(right.y + kb.ry + pad.ry),
+  };
   const demo = tutor?.demoState() ?? 'user';
   document.body.classList.toggle('demo', demo !== 'user');
   if (demo !== 'user') {

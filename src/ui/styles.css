@@ -7686,8 +7686,8 @@ body.stage-on #precheck .mode-pick {
 #hud > .drill {
   position: absolute;
   left: 16%;
-  top: 50%;
-  transform: translateY(-50%);
+  /* 자리는 main.ts가 매 프레임 정한다 (버킷을 가리지 않게 비킨다) */
+  top: 48%;
   width: min(56%, 280px);
   text-align: left;
   pointer-events: none;
@@ -7882,6 +7882,69 @@ body.flat-bg {
   color: color-mix(in srgb, var(--ink) 62%, transparent);
   letter-spacing: 0.02em;
 }
+/* 레버 길잡이: 어느 정도 깊이로(링), 어느 길로(원호) 움직여야 하는지 */
+.stick .guide {
+  position: absolute;
+  inset: 14%;
+  pointer-events: none;
+  overflow: visible;
+  /* 손잡이 위에 그린다 — 밑에 깔리면 길잡이가 안 보인다 */
+  z-index: 3;
+}
+.stick .guide[hidden] {
+  display: none;
+}
+.g-ring {
+  fill: none;
+  stroke: color-mix(in srgb, var(--ink) 35%, transparent);
+  stroke-width: 2.5;
+  stroke-dasharray: 5 4;
+}
+.g-arc {
+  fill: none;
+  stroke: var(--sun);
+  stroke-width: 6;
+  stroke-linecap: round;
+}
+/* 빨간 노브 위에서도 보이게 어두운 밑줄을 깔고 그 위에 노란 선을 긋는다
+   (drop-shadow 필터는 필터 영역이 커져 화면에 검은 사각형이 생긴다) */
+.g-arc-bg {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 10;
+  stroke-linecap: round;
+  opacity: 0.5;
+}
+.g-dot {
+  fill: var(--paper);
+  stroke: var(--ink);
+  stroke-width: 3;
+}
+/* 거칠게 움직이면 레버가 빨개지고 흔들린다 */
+.stick.rough .ring {
+  border-color: #ff4d5e;
+  background: #ff4d5e22;
+}
+.stick.rough .knob {
+  background: #ff4d5e;
+}
+.stick.rough {
+  animation: stickShake 0.3s;
+}
+@keyframes stickShake {
+  25% {
+    transform: translateX(-4px);
+  }
+  75% {
+    transform: translateX(4px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stick.rough {
+    animation: none;
+  }
+}
+
 /* 시범 중 / 직접 해보기 */
 .dr-badge {
   margin-top: 6px;

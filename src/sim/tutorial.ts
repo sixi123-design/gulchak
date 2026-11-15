@@ -27,6 +27,11 @@ export interface Step<S = DigSession> {
   peek?: boolean;
   /** 땅에 "여기" 표식을 놓을 자리 (없으면 표식 없음) */
   spot?: (s: S) => { swing: number; r: number } | null;
+  /**
+   * 레버 길잡이. 오른쪽 스틱 위에 **어느 깊이로(ring), 어느 길로(arc)** 움직여야 하는지 그린다.
+   * `at`은 지금 가야 할 각도(도, 0=3시·90=12시), `rough`면 레버가 빨개지고 흔들린다.
+   */
+  guide?: (s: S) => { ring: number; from: number; to: number; at: number; rough: boolean } | null;
   /** 이 단계가 시작될 때의 상태 기록 */
   begin?: (s: S, mem: Mem, bag: Mem) => void;
   done: (s: S, mem: Mem, bag: Mem) => boolean;

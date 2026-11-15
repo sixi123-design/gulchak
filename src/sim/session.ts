@@ -208,6 +208,12 @@ export class DigSession {
   /** 관절별 실제 이동 비율 (흙 저항·릴리프 반영, 0~1). 덜컹 충격 크기에 사용 */
   private velEff = { swing: 1, boom: 1, arm: 1, bucket: 1 };
   input: Sticks = { lx: 0, ly: 0, rx: 0, ry: 0 };
+  /**
+   * 커브를 먹이기 **전**의 레버 위치 (손이 실제로 민 자리, -1~1).
+   * 기계에 들어가는 값은 `input`이고, 이건 "레버를 12시에서 3시로 옮겼나" 같은
+   * **손놀림**을 볼 때 쓴다. 커브(|v|^2.2)를 먹인 값으로는 각도가 일그러진다.
+   */
+  stick: Sticks = { lx: 0, ly: 0, rx: 0, ry: 0 };
   frame: Frame;
   load = 0;
   /** 버킷 안쪽(바닥)까지 밀려 들어간 흙. 나머지(load - loadBack)는 입구 쪽에 수북한 흙 */

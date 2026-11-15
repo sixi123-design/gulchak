@@ -23,6 +23,12 @@ const KEY_OF_LABEL = {
 const HINTS = `[...document.querySelectorAll('.stick .lab.hint')].map(e=>e.textContent.trim())`;
 /** 자리를 맞추는 구간인가 (반짝임만으로는 '어디까지'를 알 수 없다) */
 const AIMING = /멈추기|맞추세요/;
+/** 레버 길잡이 (12시→3시 원호를 그리라는 구간) */
+const GUIDE = `(()=>{const g=document.getElementById('guide-r');
+  if(!g||g.hidden) return null;
+  const d=document.getElementById('g-dot');
+  return { at: +d.getAttribute('cx'), ay: +d.getAttribute('cy'), rough: document.getElementById('stick-r').className.includes('rough') }})()`;
+
 /** 3칸 표시 상태 (레버를 얼마나 밀라는 구간) */
 const GAUGE = `(()=>{const g=document.getElementById('dr-gauge');
   if(!g||g.hidden) return null;
@@ -56,6 +62,7 @@ export async function playLesson({ url, title, maxSteps = 140 }) {
   const facts = [];
   let last = '';
   let cleared = false;
+  let arcT = 0;
   const press = async (ks, ms) => {
     for (const k of ks) await b.key(k, 'keyDown', 'x');
     await b.sleep(ms);
@@ -75,8 +82,22 @@ export async function playLesson({ url, title, maxSteps = 140 }) {
     }
     const hints = await b.js(HINTS);
     const keys = hints.map((l) => KEY_OF_LABEL[l]).filter(Boolean);
+    const guide = await b.js(GUIDE);
     const gauge = await b.js(GAUGE);
-    if (gauge && keys.length) {
+    if (guide && /12시에서 3시|노란 점을 따라/.test(text)) {
+      // 원호 드릴: 12시에서 3시로 조금씩 옮긴다. 키보드로는 두 키의 길이를 바꿔 흉내낸다
+      const t = Math.min(1, (arcT += 0.04));
+      const a = (Math.PI / 2) * (1 - t);
+      const up = Math.round(Math.sin(a) * 150) + 20; // 12시(붐 내림) = KeyI
+      const right = Math.round(Math.cos(a) * 150) + 20; // 3시(버킷 펴기) = KeyL
+      await b.key('KeyI', 'keyDown', 'x');
+      await b.key('KeyL', 'keyDown', 'x');
+      await b.sleep(Math.max(up, right));
+      await b.key(up < right ? 'KeyI' : 'KeyL', 'keyUp');
+      await b.sleep(Math.abs(up - right));
+      await b.key(up < right ? 'KeyL' : 'KeyI', 'keyUp');
+      await b.sleep(40);
+    } else if (gauge && keys.length) {
       // '한 칸만' 같은 구간: 길게 누르면 끝까지 간다. 톡톡 눌러 목표 칸에 맞추고 놓는다
       await press(keys, gauge.on < gauge.want ? 170 : 60);
       await b.sleep(450);

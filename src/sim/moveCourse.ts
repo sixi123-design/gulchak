@@ -44,6 +44,87 @@ const still = (s: DigSession) =>
   (['boom', 'arm', 'bucket', 'swing'] as const).every((j) => Math.abs(s.vel[j]) < 0.02 * s.m.speeds[j]);
 
 // ---------------------------------------------------------------- 2단계
+
+/** 오른쪽 레버의 각도 (도). 0 = 3시(버킷 펴기), 90 = 12시(붐 내림) */
+const stickAngle = (s: DigSession) => (Math.atan2(s.stick.ry, s.stick.rx) * 180) / Math.PI;
+/** 오른쪽 레버를 민 깊이 (0~1) */
+const stickMag = (s: DigSession) => Math.hypot(s.stick.rx, s.stick.ry);
+
+/** 12시 → 3시 원호 드릴의 기준값 */
+export const ARC = {
+  /** 레버를 이 깊이로 민다 (가동범위 링) */
+  ring: 0.6,
+  /** 깊이 허용 폭 */
+  ringTol: 0.22,
+  /** 각도 허용 폭 (도) — 이보다 벗어나면 길잡이 원호를 띄운다 */
+  angTol: 22,
+  /** 각도를 한 프레임에 이만큼 넘게 꺾으면 '거칠다' (도/프레임) */
+  jerkDeg: 4,
+  /** 끝났다고 보는 각도 (3시 근처) */
+  endAng: 12,
+} as const;
+
+/**
+ * 12시(붐 내림) → 3시(버킷 펴기) 로 레버를 부드럽게 옮기는 한 동작.
+ *
+ * 암은 건드리지 않는다. 붐을 내리던 힘을 서서히 줄이면서 버킷이 서서히 펴져,
+ * 흙 파기 직전 자세로 **끊김 없이** 이어진다. 이 손놀림 하나가 2단계의 전부다.
+ */
+const arcStep = (): Step => ({
+  text: '노란 점을 따라\n레버를 12시에서 3시로',
+  labels: ['붐 내림', '버킷 펴기'],
+  spot: digSpot,
+  begin: (s, mem, bag) => {
+    startSpan(s, mem);
+    mem.ang = 90;
+    mem.rough = 0;
+    mem.swept = 0;
+    mem.started = 0;
+    bag.rough = bag.rough ?? 0;
+  },
+  guide: (s) => {
+    const m = stickMag(s);
+    const a = m > 0.12 ? stickAngle(s) : 90;
+    const off = Math.abs(a - (90 - (90 - Math.max(ARC.endAng, Math.min(90, a)))));
+    return {
+      ring: ARC.ring,
+      from: 90,
+      to: 0,
+      // 지금 가야 할 자리: 레버가 범위 안이면 그 자리, 벗어났으면 되돌아갈 자리
+      at: Math.max(0, Math.min(90, a)),
+      rough: off > ARC.angTol || Math.abs(m - ARC.ring) > ARC.ringTol,
+    };
+  },
+  hud: (s, mem) => {
+    const m = stickMag(s);
+    if (m < 0.12) return '레버를 12시로 (위로) 밀기';
+    if (Math.abs(m - ARC.ring) > ARC.ringTol) return m > ARC.ring ? '너무 깊어요 — 점선 안으로' : '조금 더 밀어 점선까지';
+    if (mem.rough) return '한 번에 꺾지 말고 천천히 돌리기';
+    return '노란 점을 따라 3시로';
+  },
+  done: (s, mem, bag) => {
+    tickSpan(s, mem, ['boom', 'bucket']);
+    const m = stickMag(s);
+    const a = stickAngle(s);
+    if (m > 0.12) {
+      // 12시 근처에서 출발했는가
+      if (a >= 90 - ARC.angTol) mem.started = 1;
+      // 한 번에 확 꺾으면 거칠다. 한 번의 꺾음을 한 번으로만 센다
+      const d = Math.abs(a - mem.ang);
+      if (d > ARC.jerkDeg) {
+        if (!mem.rough) bag.rough = (bag.rough ?? 0) + 1;
+        mem.rough = 20;
+      }
+      // 12시에서 3시로 내려온 만큼만 쌓는다 (되돌아간 것은 안 센다)
+      if (mem.ang - a > 0) mem.swept += mem.ang - a;
+      mem.ang = a;
+    }
+    if (mem.rough > 0) mem.rough--;
+    // **원호를 실제로 그려야** 통과한다. 3시에 레버를 툭 놓는 것으로는 안 된다
+    return mem.started > 0 && mem.swept > 60 && m > 0.12 && a <= ARC.endAng && s.groundGap() < 0.5;
+  },
+});
+
 export const READY_LESSON: Lesson = {
   id: 'b-ready',
   tier: '기본기',
@@ -53,92 +134,77 @@ export const READY_LESSON: Lesson = {
   big: true,
   flat: true,
   why: {
-    title: '왜 옮겨 가는 동작부터 하나',
+    title: '레버 하나로 이어 가기',
     lines: [
-      '흙을 푸는 시간보다 <b>자세를 잡는 시간</b>이 깁니다.',
-      '레버를 하나씩 쓰면 그만큼 느려집니다.',
-      '붐을 내리면서 암을 펴고 버킷도 같이 여는 것 — <b>연속 동작</b>입니다.',
-      '여기서는 흙을 안 팝니다. 자세만 잡습니다.',
+      '붐을 내리고 버킷을 펴는 것은 <b>따로 하는 두 동작이 아닙니다</b>.',
+      '오른쪽 레버를 <b>12시에서 3시로</b> 천천히 돌리면 한 동작이 됩니다.',
+      '붐이 내려가는 힘이 줄면서 버킷이 펴집니다.',
+      '암은 건드리지 않습니다.',
     ],
   },
   grade: (_s, bag): Grade => {
-    const c = bag.co ?? 0;
-    if (c >= 0.5) return { stars: 3, note: '레버를 겹쳐 써서 한 번에 자세를 잡았습니다' };
-    if (c >= MOVE.co) return { stars: 2, note: '조금 겹쳐 썼어요. 붐·암·버킷을 더 같이 움직여 보세요' };
-    return { stars: 1, note: '레버를 하나씩 썼어요. 두 개를 같이 밀어야 빨라집니다' };
+    const r = bag.rough ?? 0;
+    if (r === 0) return { stars: 3, note: '12시에서 3시까지 끊김 없이 돌렸습니다' };
+    if (r <= 3) return { stars: 2, note: '몇 번 끊겼어요. 레버를 멈추지 말고 돌려 보세요' };
+    return { stars: 1, note: '레버를 꺾어 썼어요. 원을 그리듯 천천히 옮기세요' };
   },
   setup: (s) => {
-    // 흙을 쏟고 선회해서 돌아온 자세 (붐 높이·암 접힘·버킷 오므림).
-    // 여기서 세 레버를 같이 쓰면 3초쯤에 굴착 자세에 닿는다 — 측정으로 잡은 값
-    s.teleport({ swing: Math.PI, boom: 45 * deg, arm: -120 * deg, bucket: -110 * deg });
+    // 암을 미리 펴 둔 자세. 여기서 레버를 12시→3시로 돌리면 파는 자리에 닿는다 (측정)
+    s.teleport({ swing: Math.PI, boom: 45 * deg, arm: -65 * deg, bucket: -110 * deg });
   },
   steps: [
+    // ---- 시범: 무엇을 움직이고 무엇을 조심할지 ----
     {
-      text: '노란 표식이 파는 자리입니다',
-      peek: true,
-      spot: digSpot,
+      text: '레버를 12시로' + '\n' + '붐이 내려갑니다',
+      labels: ['붐 내림'],
+      demo: (f) => (f < 80 ? { ry: ARC.ring } : null),
+      guide: () => ({ ring: ARC.ring, from: 90, to: 0, at: 90, rough: false }),
       begin: (_s, mem) => (mem.t = 0),
-      // 표식을 알아보고 조작을 시작했는데 타이머가 발목을 잡으면 안 된다
-      done: (s, mem) => {
-        mem.t++;
-        // 레버를 건드리면 **즉시** 넘어간다. 표식을 알아본 사람을 기다리게 하지 않는다
-        const touched = Math.abs(s.input.ry) + Math.abs(s.input.ly) + Math.abs(s.input.rx) > 0.05;
-        return touched || mem.t > 130;
-      },
+      done: (_s, mem) => ++mem.t > 120,
     },
-    span(
-      {
-        text: '세 동작을 겹쳐 표식까지',
-        spot: digSpot,
-        labels: ['붐 내림', '암 펴기', '버킷 펴기'],
-        // 맨숫자(42%)는 무엇을 재는지도, 올려야 하는지도 알 수 없다 (초심자 검수)
-        hud: (_s, mem) => (spanCo(mem) >= MOVE.co ? '좋아요 — 그대로 표식까지' : '한 번에 하나씩 쓰고 있어요'),
-        done: (s, mem, bag) => {
-          // 구간 전체 비율로 본다. 매 프레임 최고값을 쌓으면 초반에 잠깐 겹친 것만으로 별 3개가 된다
-          const ok = Math.abs(s.frame.tip.r - digSpot(s).r) < 1 && s.groundGap() < 0.7 && spanCo(mem) >= MOVE.coMin;
-          if (ok) bag.co = spanCo(mem);
-          return ok;
-        },
-        coach: (s, mem) =>
-          spanCo(mem) < MOVE.co
-            ? co('세 레버를 같이 밀기', '붐 내림', '암 펴기')
-            : s.groundGap() > 1.5
-              ? co('붐을 더 내리기', '붐 내림')
-              : null,
+    {
+      text: '3시로 옮기면' + '\n' + '버킷이 펴집니다',
+      labels: ['버킷 펴기'],
+      demo: (f) => {
+        if (f >= 150) return null;
+        const t = f / 149;
+        const a = ((Math.PI / 2) * (1 - t));
+        return { rx: Math.cos(a) * ARC.ring, ry: Math.sin(a) * ARC.ring };
       },
-      ['boom', 'arm', 'bucket'],
-    ),
+      guide: (s) => ({ ring: ARC.ring, from: 90, to: 0, at: Math.max(0, Math.min(90, stickMag(s) > 0.12 ? stickAngle(s) : 90)), rough: false }),
+      begin: (_s, mem) => (mem.t = 0),
+      done: (_s, mem) => ++mem.t > 190,
+    },
+    {
+      text: '한 번에 꺾으면' + '\n' + '덜컹하고 흙이 튑니다',
+      labels: ['붐 내림', '버킷 펴기'],
+      demo: (f) => (f < 20 ? { ry: ARC.ring } : f < 60 ? { rx: ARC.ring } : null),
+      guide: () => ({ ring: ARC.ring, from: 90, to: 0, at: 45, rough: true }),
+      begin: (_s, mem) => (mem.t = 0),
+      done: (_s, mem) => ++mem.t > 110,
+    },
+    // ---- 직접 ----
+    arcStep(),
     span(
       {
-        text: '표식 위에서 멈추기',
+        text: '레버를 가운데로 놓아\n멈추기',
         spot: digSpot,
-        labels: ['붐 내림', '암 당기기'],
+        labels: ['붐 내림'],
         hud: (s) => {
           const g = s.groundGap();
-          const near = Math.abs(s.frame.tip.r - digSpot(s).r) < MOVE.rTol;
-          // 멈출 자리에 왔는지를 말해 준다. 숫자만으로는 언제 멈출지 모른다 (초심자 검수)
-          if (near && g > MOVE.gapLo && g < MOVE.gapHi) return '여기! 레버를 가운데로';
-          return `버킷 바닥까지 ${Math.round(g * 100)}cm`;
+          if (g > MOVE.gapLo && g < MOVE.gapHi) return '여기! 레버를 가운데로 놓기';
+          if (g <= MOVE.gapLo) return '너무 깊어요 — 붐을 조금 올리기';
+          return `조금 더 — 버킷 바닥까지 ${Math.round(g * 100)}cm`;
         },
-        done: (s, mem) => {
+        done: (s, mem, bag) => {
           const g = s.groundGap();
-          const ok =
-            Math.abs(s.frame.tip.r - digSpot(s).r) < MOVE.rTol &&
-            g > MOVE.gapLo &&
-            g < MOVE.gapHi &&
-            still(s) &&
-            smooth(s, mem);
+          const ok = g > MOVE.gapLo && g < MOVE.gapHi && still(s) && smooth(s, mem);
+          if (ok) bag.rough = bag.rough ?? 0;
           return hold(mem, ok, 15);
         },
-        coach: (s, mem) => {
-          if (!smooth(s, mem)) return co('덜컹했어요 — 레버를 천천히 가운데로');
-          const d = s.frame.tip.r - digSpot(s).r;
-          if (d > MOVE.rTol) return co('암을 당겨 가까이', '암 당기기');
-          if (-d > MOVE.rTol) return co('암을 펴서 멀리', '암 펴기');
-          return null;
-        },
+        coach: (s, mem) => (!smooth(s, mem) ? co('덜컹했어요 — 레버를 천천히 가운데로') : null),
       },
-      ['boom', 'arm'],
+      ['boom', 'bucket'],
     ),
   ],
 };
