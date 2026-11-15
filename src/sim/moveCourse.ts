@@ -7,8 +7,13 @@ const deg = Math.PI / 180;
 
 /** 연속동작 두 단계의 기준값 */
 export const MOVE = {
-  /** 두 관절 이상이 같이 움직인 시간 비율 */
+  /** 별 3개 기준: 두 관절 이상이 같이 움직인 시간 비율 */
   co: 0.3,
+  /**
+   * 통과 최소선. '겹쳐 쓰라'고 시켜 놓고 하나씩 써도 통과하면 지시가 거짓말이 된다.
+   * 다만 위치와 정지를 해낸 초보를 실패 화면에 묶어 두지 않도록 낮게 잡는다 (기획자 의견).
+   */
+  coMin: 0.12,
   /** 이빨을 파는 자리에 맞출 때 허용 오차 */
   rTol: 0.6,
   /** 버킷 하부와 지면 사이 (이빨 높이가 아니라 이걸로 본다 — 구덩이가 지면 아래라서) */
@@ -69,27 +74,28 @@ export const READY_LESSON: Lesson = {
   },
   steps: [
     {
-      text: '노란 표식이 파는 자리입니다\n거기까지 갑니다',
+      text: '노란 표식이 파는 자리입니다',
       peek: true,
       spot: digSpot,
       begin: (_s, mem) => (mem.t = 0),
       // 표식을 알아보고 조작을 시작했는데 타이머가 발목을 잡으면 안 된다
       done: (s, mem) => {
         mem.t++;
+        // 레버를 건드리면 **즉시** 넘어간다. 표식을 알아본 사람을 기다리게 하지 않는다
         const touched = Math.abs(s.input.ry) + Math.abs(s.input.ly) + Math.abs(s.input.rx) > 0.05;
-        return (mem.t > 45 && touched) || mem.t > 130;
+        return touched || mem.t > 130;
       },
     },
     span(
       {
-        text: '붐 내리고 암 펴고 버킷 열기\n세 레버를 같이',
+        text: '세 동작을 겹쳐 표식까지',
         spot: digSpot,
         labels: ['붐 내림', '암 펴기', '버킷 펴기'],
         // 맨숫자(42%)는 무엇을 재는지도, 올려야 하는지도 알 수 없다 (초심자 검수)
         hud: (_s, mem) => (spanCo(mem) >= MOVE.co ? '좋아요 — 그대로 표식까지' : '한 번에 하나씩 쓰고 있어요'),
         done: (s, mem, bag) => {
           // 구간 전체 비율로 본다. 매 프레임 최고값을 쌓으면 초반에 잠깐 겹친 것만으로 별 3개가 된다
-          const ok = Math.abs(s.frame.tip.r - digSpot(s).r) < 1 && s.groundGap() < 0.7;
+          const ok = Math.abs(s.frame.tip.r - digSpot(s).r) < 1 && s.groundGap() < 0.7 && spanCo(mem) >= MOVE.coMin;
           if (ok) bag.co = spanCo(mem);
           return ok;
         },
@@ -104,7 +110,7 @@ export const READY_LESSON: Lesson = {
     ),
     span(
       {
-        text: '이빨을 파는 자리 위에\n부드럽게 멈추기',
+        text: '표식 위에서 멈추기',
         spot: digSpot,
         labels: ['붐 내림', '암 당기기'],
         hud: (s) => {
@@ -170,18 +176,18 @@ export const DUMP_LESSON: Lesson = {
   },
   steps: [
     {
-      text: '버킷을 천천히 펴서\n흙을 쏟으세요',
+      text: '버킷을 펴서 흙 쏟기',
       labels: ['버킷 펴기'],
       hud: (s) => `버킷에 남은 흙 ${Math.round((s.load / SC(s)) * 100)}%`,
       done: (s) => s.load < MOVE.empty * SC(s),
     },
     span(
       {
-        text: '버킷을 오므리면서\n붐을 올리기',
+        text: '오므리며 붐 올리기',
         labels: ['버킷 오므림', '붐 올림'],
         hud: (_s, mem) => (spanCo(mem) >= MOVE.co ? '좋아요 — 계속 접으며 올리기' : '한 번에 하나씩 쓰고 있어요'),
         done: (s, mem, bag) => {
-          const ok = -s.pose.bucket / deg >= MOVE.curl && bucketLow(s) >= ropeClear(s);
+          const ok = -s.pose.bucket / deg >= MOVE.curl && bucketLow(s) >= ropeClear(s) && spanCo(mem) >= MOVE.coMin;
           if (ok) bag.co = spanCo(mem);
           return ok;
         },
@@ -196,7 +202,7 @@ export const DUMP_LESSON: Lesson = {
     ),
     span(
       {
-        text: '그 자세로\n부드럽게 멈추기',
+        text: '그 자세로 멈추기',
         labels: ['붐 올림'],
         done: (s, mem) => hold(mem, bucketLow(s) >= ropeClear(s) && still(s) && smooth(s, mem), 15),
         coach: (s, mem) => (!smooth(s, mem) ? co('덜컹했어요 — 레버를 천천히 가운데로') : null),

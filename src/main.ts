@@ -1283,7 +1283,10 @@ function setHints(labels: string[]) {
   if (key === hintKey) return;
   hintKey = key;
   const want = new Set(labels);
-  for (const el of document.querySelectorAll('.lab')) el.classList.toggle('hint', want.has((el.textContent ?? '').replace(/ /g, ' ')));
+  // 라벨이 두 줄로 접히면 textContent에 줄바꿈이 들어간다 (버킷 / 펴기).
+  // 공백을 한 칸으로 눌러 비교하지 않으면 그 라벨은 영영 반짝이지 않는다
+  const flat = (t: string) => t.replace(/\s+/g, ' ').trim();
+  for (const el of document.querySelectorAll('.lab')) el.classList.toggle('hint', want.has(flat(el.textContent ?? '')));
 }
 /** 처음 배우는 레버: 그 부위를 깜빡 강조하고 조이스틱 위까지 선으로 이어 줌 (2초) */
 type Part = 'boom' | 'arm' | 'bucket';
