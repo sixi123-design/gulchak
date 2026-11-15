@@ -1354,7 +1354,8 @@ function updateMeter() {
     const part = stepPart();
     // 세 줄을 동시에 띄우지 않는다. 반응·코치가 있으면 그것만, 없을 때만 레버 방향을 말한다
     // (지시문이 이미 레버를 말하고 있으면 부품 줄은 비운다)
-    const say = h ?? tutor.coach?.msg ?? '';
+    // 교정이 먼저다. 반응("좋아요")이 떠 있는 동안 "붐을 더 내리기"가 가려지면 안 된다
+    const say = tutor.coach?.msg ?? h ?? '';
     const t = tutor.current?.text ?? '';
     $('dr-part').textContent = !say && part && !t.includes('레버') ? `${PART_NAME[part]} · ${LEVER_WAY[part]}` : '';
     updateGauge(part);

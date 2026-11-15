@@ -34,6 +34,9 @@ const span = (st: Step, joints: Joint[]): Step => ({
 });
 
 const smooth = (s: DigSession, mem: Record<string, number>) => spanJolt(s, mem) < SMOOTH_MAX;
+/** 정말로 서 있나 (최고 속도의 2% 아래). 없으면 목표 범위를 지나가며 통과해 버린다 */
+const still = (s: DigSession) =>
+  (['boom', 'arm', 'bucket', 'swing'] as const).every((j) => Math.abs(s.vel[j]) < 0.02 * s.m.speeds[j]);
 
 // ---------------------------------------------------------------- 2단계
 export const READY_LESSON: Lesson = {
@@ -66,22 +69,29 @@ export const READY_LESSON: Lesson = {
   },
   steps: [
     {
-      text: '흙을 쏟고 돌아온 자세입니다\n여기서 파는 자리까지 갑니다',
+      text: '노란 표식이 파는 자리입니다\n거기까지 갑니다',
       peek: true,
       spot: digSpot,
       begin: (_s, mem) => (mem.t = 0),
-      done: (_s, mem) => ++mem.t > 130,
+      // 표식을 알아보고 조작을 시작했는데 타이머가 발목을 잡으면 안 된다
+      done: (s, mem) => {
+        mem.t++;
+        const touched = Math.abs(s.input.ry) + Math.abs(s.input.ly) + Math.abs(s.input.rx) > 0.05;
+        return (mem.t > 45 && touched) || mem.t > 130;
+      },
     },
     span(
       {
         text: '붐 내리고 암 펴고 버킷 열기\n세 레버를 같이',
         spot: digSpot,
         labels: ['붐 내림', '암 펴기', '버킷 펴기'],
-        hud: (_s, mem) => `같이 쓴 시간 ${Math.round(spanCo(mem) * 100)}%`,
+        // 맨숫자(42%)는 무엇을 재는지도, 올려야 하는지도 알 수 없다 (초심자 검수)
+        hud: (_s, mem) => (spanCo(mem) >= MOVE.co ? '좋아요 — 그대로 표식까지' : '한 번에 하나씩 쓰고 있어요'),
         done: (s, mem, bag) => {
-          bag.co = Math.max(bag.co ?? 0, spanCo(mem));
-          // 파는 자리 가까이 내려오면 다음 (측정: 세 레버를 같이 쓰면 3초쯤)
-          return Math.abs(s.frame.tip.r - digSpot(s).r) < 1 && s.groundGap() < 0.7;
+          // 구간 전체 비율로 본다. 매 프레임 최고값을 쌓으면 초반에 잠깐 겹친 것만으로 별 3개가 된다
+          const ok = Math.abs(s.frame.tip.r - digSpot(s).r) < 1 && s.groundGap() < 0.7;
+          if (ok) bag.co = spanCo(mem);
+          return ok;
         },
         coach: (s, mem) =>
           spanCo(mem) < MOVE.co
@@ -97,12 +107,22 @@ export const READY_LESSON: Lesson = {
         text: '이빨을 파는 자리 위에\n부드럽게 멈추기',
         spot: digSpot,
         labels: ['붐 내림', '암 당기기'],
-        hud: (s) => `바닥까지 ${Math.round(s.groundGap() * 100)}cm`,
+        hud: (s) => {
+          const g = s.groundGap();
+          const near = Math.abs(s.frame.tip.r - digSpot(s).r) < MOVE.rTol;
+          // 멈출 자리에 왔는지를 말해 준다. 숫자만으로는 언제 멈출지 모른다 (초심자 검수)
+          if (near && g > MOVE.gapLo && g < MOVE.gapHi) return '여기! 레버를 가운데로';
+          return `버킷 바닥까지 ${Math.round(g * 100)}cm`;
+        },
         done: (s, mem) => {
           const g = s.groundGap();
           const ok =
-            Math.abs(s.frame.tip.r - digSpot(s).r) < MOVE.rTol && g > MOVE.gapLo && g < MOVE.gapHi && smooth(s, mem);
-          return hold(mem, ok, 14);
+            Math.abs(s.frame.tip.r - digSpot(s).r) < MOVE.rTol &&
+            g > MOVE.gapLo &&
+            g < MOVE.gapHi &&
+            still(s) &&
+            smooth(s, mem);
+          return hold(mem, ok, 15);
         },
         coach: (s, mem) => {
           if (!smooth(s, mem)) return co('덜컹했어요 — 레버를 천천히 가운데로');
@@ -152,17 +172,18 @@ export const DUMP_LESSON: Lesson = {
     {
       text: '버킷을 천천히 펴서\n흙을 쏟으세요',
       labels: ['버킷 펴기'],
-      hud: (s) => `남은 흙 ${Math.round((s.load / SC(s)) * 100)}%`,
+      hud: (s) => `버킷에 남은 흙 ${Math.round((s.load / SC(s)) * 100)}%`,
       done: (s) => s.load < MOVE.empty * SC(s),
     },
     span(
       {
         text: '버킷을 오므리면서\n붐을 올리기',
         labels: ['버킷 오므림', '붐 올림'],
-        hud: (_s, mem) => `같이 쓴 시간 ${Math.round(spanCo(mem) * 100)}%`,
+        hud: (_s, mem) => (spanCo(mem) >= MOVE.co ? '좋아요 — 계속 접으며 올리기' : '한 번에 하나씩 쓰고 있어요'),
         done: (s, mem, bag) => {
-          bag.co = Math.max(bag.co ?? 0, spanCo(mem));
-          return -s.pose.bucket / deg >= MOVE.curl && bucketLow(s) >= ropeClear(s);
+          const ok = -s.pose.bucket / deg >= MOVE.curl && bucketLow(s) >= ropeClear(s);
+          if (ok) bag.co = spanCo(mem);
+          return ok;
         },
         coach: (s, mem) =>
           -s.pose.bucket / deg < MOVE.curl
@@ -177,7 +198,7 @@ export const DUMP_LESSON: Lesson = {
       {
         text: '그 자세로\n부드럽게 멈추기',
         labels: ['붐 올림'],
-        done: (s, mem) => hold(mem, bucketLow(s) >= ropeClear(s) && smooth(s, mem), 16),
+        done: (s, mem) => hold(mem, bucketLow(s) >= ropeClear(s) && still(s) && smooth(s, mem), 15),
         coach: (s, mem) => (!smooth(s, mem) ? co('덜컹했어요 — 레버를 천천히 가운데로') : null),
       },
       ['boom', 'bucket'],

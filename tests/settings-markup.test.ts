@@ -195,6 +195,7 @@ it('부품을 깜빡이지 않는다 (누르라는 뜻으로 읽힌다)', () => 
   // 부품 줄은 레버 방향만 말하고, 지시문이 이미 레버를 말하면 비운다
   expect(main).toMatch(/LEVER_WAY\[part\]/);
   // 세 줄을 동시에 띄우지 않는다: 반응·코치가 있으면 부품 줄을 비운다
-  expect(main).toMatch(/const say = h \?\? tutor\.coach\?\.msg \?\? ''/);
+  // 교정(coach)이 반응(hud)보다 먼저다 — "좋아요"가 떠 있는 동안 "붐을 더 내리기"가 가려지면 안 된다
+  expect(main).toMatch(/const say = tutor\.coach\?\.msg \?\? h \?\? ''/);
   expect(main).toMatch(/textContent = !say && part/);
 });
