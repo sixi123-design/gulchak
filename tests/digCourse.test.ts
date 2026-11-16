@@ -1,47 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import { MACHINE } from '../src/config/machine';
-import rules from '../src/config/rules.json';
-import { MODES } from '../src/core/ruleEngine';
-import { DigSession, type RulesFile, type Sticks } from '../src/sim/session';
-import { Tutor } from '../src/sim/tutorial';
+import type { Sticks } from '../src/sim/session';
+import type { Tutor } from '../src/sim/tutorial';
+import { frame, tutorFor, until } from './harness';
 import { digSpot, SCOOP, SCOOP_LESSON } from '../src/sim/digCourse';
 import { ik } from '../src/sim/kinematics';
 
-const R = rules as unknown as RulesFile;
 const deg = Math.PI / 180;
-const ZERO: Sticks = { lx: 0, ly: 0, rx: 0, ry: 0 };
 
-function tutor() {
-  const s = new DigSession(MACHINE, R, MODES.tutorial);
-  s.belt = true;
-  s.leverUnlocked = true;
-  s.rpm = 1;
-  s.ready();
-  for (let i = 0; i < 60; i++) s.step();
-  return new Tutor(SCOOP_LESSON, s);
-}
-/** 시범까지 포함해 한 프레임을 돈다 (main.ts와 같은 순서) */
-function frame(t: Tutor, user: Partial<Sticks>) {
-  t.s.input = t.drive({ ...ZERO, ...user });
-  t.s.step();
-  t.update();
-}
-/** 지금 단계가 넘어갈 때까지 (최대 n프레임). user가 함수면 매 프레임 판단한다 */
-function until(t: Tutor, user: Partial<Sticks> | ((t: Tutor) => Partial<Sticks>), n = 900) {
-  const from = t.step;
-  for (let i = 0; i < n; i++) {
-    frame(t, typeof user === 'function' ? user(t) : user);
-    if (t.step !== from || t.cleared) return true;
-  }
-  return false;
-}
+const tutor = () => tutorFor(SCOOP_LESSON);
 /** 이빨이 목표 높이에 들어오면 레버를 놓는다 (사람이 하는 것처럼) */
 const toSpot = (t: Tutor): Partial<Sticks> => (t.s.frame.tip.y > SCOOP.yHi ? { ry: 0.4 } : {});
 
 /** 시범 3회 → 따라 하기(한 칸 밀었다 놓기) → 파는 자리 보기 까지 */
 function warmup(t: Tutor) {
   for (let i = 0; i < 3; i++) expect(until(t, {}, 400)).toBe(true);
-  for (let i = 0; i < 40; i++) frame(t, { ry: -0.3 }); // 한 칸만 민다
+  for (let i = 0; i < 40; i++) frame(t, { ry: -0.3 }); // 한 칸만 민다 (손 자리)
   expect(until(t, {}, 200)).toBe(true); // 놓으면 넘어간다
   expect(until(t, {}, 400)).toBe(true); // 파는 자리 보여주기 (시간이 지나면 넘어감)
 }
@@ -88,14 +62,44 @@ describe('2단계 흙 퍼기', () => {
     expect(SCOOP_LESSON.grade!(t.s, t.bag).stars).toBeGreaterThanOrEqual(2);
   });
 
-  it('오므리지 않고 그냥 들면 다 쏟아서 못 넘어간다', () => {
+  it('오므리지 않고 그냥 들면 다 쏟아서 못 넘어가고, 다시 퍼기로 되돌아간다 (막다른 길 아님)', () => {
+    const t = tutor();
+    warmup(t);
+    const aim = t.step;
+    until(t, toSpot, 900);
+    until(t, { ry: 0.5 }, 900);
+    until(t, { ly: -0.6, rx: -0.5 }, 900);
+    const lift = t.step;
+    until(t, { ry: -0.5 }, 600);
+    expect(t.cleared, '쏟았는데 통과했다').toBe(false);
+    expect(t.step, '이빨 맞추기로 돌아가야 한다').toBe(aim);
+    expect(lift).toBeGreaterThan(aim);
+    expect(t.notice ?? '').toMatch(/흘렀/);
+  });
+
+  it('채우기에서 버킷만 오므려 흙에 막히면 암을 당기라고 알려 준다', () => {
     const t = tutor();
     warmup(t);
     until(t, toSpot, 900);
     until(t, { ry: 0.5 }, 900);
-    until(t, { ly: -0.6, rx: -0.5 }, 900);
-    expect(until(t, { ry: -0.5 }, 600)).toBe(false);
-    expect(t.s.load).toBeLessThan(0.1 * t.s.m.struckCapacity);
+    const fill = t.step;
+    for (let i = 0; i < 500 && t.step === fill; i++) frame(t, { rx: -0.8 });
+    if (t.step !== fill) return; // 버킷만으로도 찼다면 막힌 게 아니다
+    expect(t.coach?.msg ?? '').toMatch(/암을 당기/);
+    // 그 말대로 하면 찬다
+    expect(until(t, { ly: -0.6, rx: -0.5 }, 900)).toBe(true);
+  });
+
+  it('채우기에서 암을 끝까지 당겼는데 덜 차면 이빨 맞추기로 되돌아간다 (막다른 길 아님)', () => {
+    const t = tutor();
+    warmup(t);
+    const aim = t.step;
+    // 흙에 넣지 않고(공중에서) 채우기 단계로 건너가 암만 끝까지 — 흙이 안 담긴다
+    while (!t.current?.text.startsWith('버킷 오므리며')) t.step++;
+    (t as unknown as { enter(): void }).enter();
+    for (let i = 0; i < 1500 && !t.notice; i++) frame(t, { ly: -1 });
+    expect(t.step).toBe(aim);
+    expect(t.notice ?? '').toMatch(/덜 찼/);
   });
 
   it('이빨 맞추기는 레버를 실제로 써야 넘어간다', () => {
@@ -112,4 +116,17 @@ describe('2단계 흙 퍼기', () => {
     // 이빨 맞추기부터는 가만히 있으면 안 넘어간다
     expect(until(t, {}, 400)).toBe(false);
   });
+});
+
+it('흙에 넣기에는 진행 막대가 있다 — 내려갈수록 찬다', () => {
+  const t = tutor();
+  warmup(t);
+  until(t, toSpot, 900);
+  const vs: number[] = [];
+  for (let i = 0; i < 900 && t.current?.text.startsWith('이빨을 흙에'); i++) {
+    vs.push(t.meter()?.v ?? -1);
+    frame(t, { ry: 0.5 });
+  }
+  expect(vs[0]).toBeLessThan(0.1);
+  expect(Math.max(...vs)).toBeGreaterThan(0.8);
 });

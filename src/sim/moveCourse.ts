@@ -42,6 +42,14 @@ const smooth = (s: DigSession, mem: Record<string, number>) => spanJolt(s, mem) 
 const still = (s: DigSession) =>
   (['boom', 'arm', 'bucket', 'swing'] as const).every((j) => Math.abs(s.vel[j]) < 0.02 * s.m.speeds[j]);
 
+/** 레버를 아직 잡고 있나 (손 자리) */
+const handOn = (s: DigSession) => Math.hypot(s.stick.rx, s.stick.ry) > 0.12 || Math.hypot(s.stick.lx, s.stick.ly) > 0.12;
+/** 얼마나 섰나 (0~1). 최고 속도의 100%면 0, still() 기준(2%) 아래면 1 — 로그로 고르게 */
+const settled = (s: DigSession) => {
+  const f = Math.max(...(['boom', 'arm', 'bucket', 'swing'] as const).map((j) => Math.abs(s.vel[j]) / (0.02 * s.m.speeds[j])));
+  return f <= 1 ? 1 : Math.max(0, 1 - Math.log(f) / Math.log(50));
+};
+
 // ---------------------------------------------------------------- 2단계
 
 /** 오른쪽 레버의 각도 (도). 0 = 3시(버킷 펴기), 90 = 12시(붐 내림) */
@@ -114,11 +122,20 @@ const readyPose = () => ({
 /** 시범이 기계를 내려놓아도 실습은 늘 같은 자세에서 시작한다 */
 const reready = (s: DigSession) => s.teleport(readyPose());
 
-/** 시범이 사람처럼 오른쪽 레버를 굴린다 (유저가 할 일을 그대로 보여 준다 — 암은 안 쓴다) */
-const showMove = (s: DigSession, m: number = ARC.ring) => stickAt(wantAngle(s), m);
 
-/** 시범 속도: 글 읽을 시간 · 레버 깊이(얕게 = 느리게) · 결과 볼 시간 (60Hz 프레임) */
-const DEMO = { pre: 75, lever: 0.42, post: 75 } as const;
+/**
+ * 시범 속도: 글 읽을 시간 · 레버 깊이 · 결과 볼 시간 (60Hz 프레임).
+ * 레버 깊이는 실습과 같은 점선 고리(ARC.ring) — 시범에서 본 손 자리 그대로 따라 하게.
+ */
+const DEMO = { pre: 75, lever: ARC.ring, post: 75 } as const;
+/**
+ * 레버 자리(손이 민 곳) → 기계에 들어가는 값. 화면의 레버 곡선(main.ts curve, 2.2제곱)과 같다.
+ * 시범은 기계 값을 내야 하는데, 길잡이 고리·점은 레버 자리로 그려진다. 레버 자리로 짜고 여기서 바꾼다.
+ */
+const toMachine = (k: { rx: number; ry: number }) => ({
+  rx: Math.sign(k.rx) * Math.abs(k.rx) ** 2.2,
+  ry: Math.sign(k.ry) * Math.abs(k.ry) ** 2.2,
+});
 
 /**
  * 선회해서 온 자세 → 흙 파기 직전 자세. **오른쪽 레버 하나**로 붐 내림과 버킷 펴기를 잇는다.
@@ -202,6 +219,137 @@ const arcStep = (): Step => ({
   },
 });
 
+/**
+ * 퍼기 준비 시범 — **구분동작** (기획자가 짠 순서, 2026-11-16).
+ *
+ * 한 번에 굴리면 무엇을 언제 하는지 안 보인다. 단계마다 글을 바꿔 가며 레버를 옮긴다:
+ * 1) 서서히 12시로 → 2) 움직이기 시작하면 더 밀기 → 3) 붐이 내려가기 시작하면 조금씩 3시 쪽으로
+ * → 4) 내려가며 버킷이 열림 → 5) 중간쯤 오면 더 3시 가깝게 → 6) 목표 높이에서 3시로,
+ * 암과 버킷이 일직선이 될 때까지만 → 레버 놓기.
+ *
+ * 레버 자리(각도·깊이)는 단계를 넘어가도 이어져야 한다 — 단계 메모(mem)는 매번 지워지므로 여기 둔다.
+ */
+interface RdState {
+  /** 지금 레버 자리 (도, 0~1) */
+  a: number;
+  m: number;
+  /** 이 단계가 시작될 때의 레버 자리 (여기서 목표까지 서서히 옮긴다) */
+  a0: number;
+  m0: number;
+  /** 시범 시작 높이 (중간 지점 계산) */
+  g0: number;
+}
+/** 세션마다 따로 (모듈 전역이면 세션 둘이 — 테스트·다시 시작 — 서로의 레버 자리를 덮어쓴다. 개발 검토) */
+const RDS = new WeakMap<DigSession, RdState>();
+const rd = (s: DigSession): RdState => {
+  let v = RDS.get(s);
+  if (!v) RDS.set(s, (v = { a: 90, m: 0, a0: 90, m0: 0, g0: s.groundGap() }));
+  return v;
+};
+/** 목표 높이: 버킷 바닥이 땅에서 이만큼 (m) */
+const RD_LAND = 0.6;
+/** 암과 버킷이 일직선 (버킷 상대각 0°) 으로 본다 */
+const RD_LINE = -3 * deg;
+const rdMid = (s: DigSession) => (rd(s).g0 + RD_LAND) / 2;
+/** 시작 높이에서 목표까지 k만큼 내려온 높이 */
+const rdAt = (s: DigSession, k: number) => rd(s).g0 + (RD_LAND - rd(s).g0) * k;
+
+interface Phase {
+  text: string;
+  labels: string[];
+  /** 옮겨 갈 레버 자리 */
+  a: number;
+  m: number;
+  /** 거기까지 옮기는 프레임 */
+  ramp: number;
+  /** 최소한 이만큼은 보여 준다 (글 읽을 시간) */
+  min: number;
+  /** 다음으로 넘어갈 조건 (없으면 min만) */
+  until?: (s: DigSession) => boolean;
+}
+const phaseStep = (ph: Phase, first = false): Step => ({
+  text: ph.text,
+  labels: ph.labels,
+  demo: (f, s) => {
+    const RD = rd(s);
+    const k = Math.min(1, f / Math.max(1, ph.ramp));
+    // 서서히: 처음과 끝을 부드럽게 (손이 확 꺾이지 않게)
+    const e = k * k * (3 - 2 * k);
+    RD.a = RD.a0 + (ph.a - RD.a0) * e;
+    RD.m = RD.m0 + (ph.m - RD.m0) * e;
+    return RD.m < 0.01 ? {} : toMachine(stickAt(RD.a, RD.m));
+  },
+  guide: (s) => ({ ring: Math.max(0.2, rd(s).m), from: 90, to: 0, at: rd(s).a, rough: false }),
+  begin: (s, mem) => {
+    const RD = rd(s);
+    if (first) {
+      reready(s);
+      RD.a = 90;
+      RD.m = 0;
+      RD.g0 = s.groundGap();
+    }
+    RD.a0 = RD.a;
+    RD.m0 = RD.m;
+    mem.t = 0;
+  },
+  // 조건이 끝내 안 오면(저사양 등) 10초에 넘어간다 — 시범이 멈춰 서면 안 된다
+  done: (s, mem) => ++mem.t >= Math.max(ph.min, ph.ramp) && (!ph.until || ph.until(s) || mem.t > 600),
+});
+const readyDemo = (): Step[] => [
+  phaseStep(
+    { text: '오른쪽 레버를\n서서히 12시로', labels: ['붐 내림'], a: 90, m: 0.32, ramp: 70, min: 140 },
+    true,
+  ),
+  phaseStep({
+    text: '붐이 움직이기 시작하면\n조금 더 밀기',
+    labels: ['붐 내림'],
+    a: 90,
+    m: 0.5,
+    ramp: 45,
+    min: 70,
+    until: (s) => s.groundGap() < rdAt(s, 0.12),
+  }),
+  phaseStep({
+    text: '붐이 내려가기 시작 —\n조금씩 3시 쪽으로',
+    labels: ['붐 내림', '버킷 펴기'],
+    a: 62,
+    m: 0.6,
+    ramp: 50,
+    min: 70,
+    until: (s) => s.groundGap() < rdAt(s, 0.3),
+  }),
+  phaseStep({
+    text: '붐이 내려가면서\n버킷이 열립니다',
+    labels: ['붐 내림', '버킷 펴기'],
+    a: 62,
+    m: 0.6,
+    ramp: 1,
+    min: 45,
+    until: (s) => s.groundGap() <= rdMid(s),
+  }),
+  phaseStep({
+    text: '중간쯤 왔으면\n더 3시 가깝게',
+    labels: ['붐 내림', '버킷 펴기'],
+    // 레버 곡선이 축마다 걸려서, 3시에 너무 붙이면 붐이 거의 멈춘다 — 40°·조금 깊게
+    a: 40,
+    m: 0.7,
+    ramp: 50,
+    min: 60,
+    // 버킷이 먼저 다 열리면 일직선을 지나친다 — 그 전에 3시로 넘어간다
+    until: (s) => s.groundGap() <= RD_LAND || s.pose.bucket >= -35 * deg,
+  }),
+  phaseStep({
+    text: '목표 높이 — 3시로\n암과 버킷이 일직선이 될 때까지',
+    labels: ['버킷 펴기'],
+    a: 0,
+    m: 0.8,
+    ramp: 25,
+    min: 60,
+    until: (s) => s.pose.bucket >= RD_LINE,
+  }),
+  phaseStep({ text: '일직선이면\n레버를 놓아 멈춤', labels: [], a: 0, m: 0, ramp: 20, min: 100 }),
+];
+
 export const READY_LESSON: Lesson = {
   id: 'b-ready',
   tier: '기본기',
@@ -214,9 +362,8 @@ export const READY_LESSON: Lesson = {
     title: '레버 하나로 이어지는 동작',
     lines: [
       '흙을 푸기 <b>직전 자세</b>를 만드는 연습입니다.',
-      '선회해서 돌아오면 붐은 올라가 있고 버킷은 오므려져 있습니다.',
-      '오른쪽 레버 하나를 <b>12시(붐 내림)에서 3시(버킷 펴기)로</b> 굴립니다.',
-      '붐이 내려가는 힘이 줄면서 버킷이 펴집니다.',
+      '오른쪽 레버 하나로 <b>붐을 내리면서 버킷을 엽니다</b>.',
+      '레버를 위(12시·붐 내림)에서 시작해, 내려갈수록 오른쪽(3시·버킷 펴기)으로 조금씩 옮깁니다.',
       '이번에는 <b>오른쪽 레버만</b> 씁니다. 암은 그대로 두세요.',
     ],
   },
@@ -237,28 +384,11 @@ export const READY_LESSON: Lesson = {
     // 글을 먼저 읽고(DEMO.pre) → 천천히 움직이고 → 결과를 보고(DEMO.post) 넘어간다.
     // 시범은 단계가 끝날 때까지 빈 입력({})을 내서 '시범 중'을 유지한다 (보는 동안 손이 섞이지 않게).
     // 실제 속도로 보여 주면 2초 안에 지나가 무엇을 했는지 모른다 (실사용 피드백)
-    {
-      // 시범이다 — 명령으로 읽히지 않게 '굴리면'으로 끝낸다
-      text: '오른쪽 레버를 12시에서 3시로 굴리면'+'\n'+'내려가며 버킷이 펴집니다',
-      labels: ['붐 내림', '버킷 펴기'],
-      // 남은 높이에 맞춰 레버를 굴린다 — 유저가 할 일을 그대로, 천천히 보여 준다
-      demo: (f, s) => (f >= DEMO.pre && f < DEMO.pre + 900 && s.groundGap() > ARC.land ? showMove(s, DEMO.lever) : {}),
-      guide: (s) => ({ ring: DEMO.lever, from: 90, to: 0, at: wantAngle(s), rough: false }),
-      begin: (s, mem) => {
-        reready(s);
-        mem.t = 0;
-        mem.end = 0;
-      },
-      done: (s, mem) => {
-        mem.t++;
-        if (!mem.end && mem.t > DEMO.pre + 30 && (s.groundGap() <= ARC.land + 0.2 || mem.t > DEMO.pre + 940)) mem.end = mem.t;
-        return mem.end > 0 && mem.t > mem.end + DEMO.post;
-      },
-    },
+    ...readyDemo(),
     {
       text: '한 번에 꺾으면' + '\n' + '덜컹합니다',
       labels: ['붐 내림', '버킷 펴기'],
-      demo: (f) => (f < DEMO.pre ? {} : f < DEMO.pre + 30 ? stickAt(90) : f < DEMO.pre + 80 ? stickAt(0) : {}),
+      demo: (f) => (f < DEMO.pre ? {} : f < DEMO.pre + 30 ? toMachine(stickAt(90)) : f < DEMO.pre + 80 ? toMachine(stickAt(0)) : {}),
       guide: () => ({ ring: ARC.ring, from: 90, to: 0, at: 45, rough: true }),
       begin: (s, mem) => {
         reready(s);
@@ -278,7 +408,8 @@ export const READY_LESSON: Lesson = {
     span(
       {
         text: '레버를 가운데로 놓아\n멈추기',
-        labels: ['붐 내림'],
+        // 멈추는 단계에서 방향 이름표를 깜빡이면 '계속 밀라'로 읽힌다 (검토)
+        labels: [],
         hud: (s) => {
           const g = s.groundGap();
           if (g > MOVE.gapLo && g < MOVE.gapHi)
@@ -349,6 +480,26 @@ export const DUMP_LESSON: Lesson = {
       {
         text: '오므리며 붐 올리기',
         labels: ['버킷 오므림', '붐 올림'],
+        // 다시 할 때 돌아올 자세 (쏟은 직후)
+        begin: (s, _mem, bag) => {
+          if (bag.dumpRetry) {
+            s.teleport({ boom: bag.dB, arm: bag.dA, bucket: bag.dK });
+            bag.dumpRetry = 0;
+          } else {
+            bag.dB = s.pose.boom;
+            bag.dA = s.pose.arm;
+            bag.dK = s.pose.bucket;
+          }
+        },
+        // 하나씩 끝까지 써 버리면 더 움직일 수가 없어 비율이 영영 안 오른다 — 막다른 길. 쏟은 자세로 되돌려 다시
+        fail: (s, mem, bag) => {
+          const lim = s.m.limits;
+          const atEnd = s.pose.boom >= lim.boom[1] - 2 * deg || s.pose.bucket <= lim.bucket[0] + 2 * deg;
+          mem.stuck = atEnd && still(s) && spanCo(mem) < MOVE.coMin ? (mem.stuck ?? 0) + 1 : 0;
+          if (mem.stuck < 40) return null;
+          bag.dumpRetry = 1;
+          return { to: 1, msg: '같이 움직여야 해요 — 다시' };
+        },
         hud: (_s, mem) => (spanCo(mem) >= MOVE.co ? '좋아요 — 계속 접으며 올리기' : '한 번에 하나씩 쓰고 있어요'),
         done: (s, mem, bag) => {
           const ok = -s.pose.bucket / deg >= MOVE.curl && bucketLow(s) >= ropeClear(s) && spanCo(mem) >= MOVE.coMin;
@@ -367,9 +518,24 @@ export const DUMP_LESSON: Lesson = {
     span(
       {
         text: '그 자세로 멈추기',
-        labels: ['붐 올림'],
-        done: (s, mem) => hold(mem, bucketLow(s) >= ropeClear(s) && still(s) && smooth(s, mem), 15),
-        coach: (s, mem) => (!smooth(s, mem) ? co('덜컹했어요 — 레버를 천천히 가운데로') : null),
+        labels: [],
+        done: (s, mem) => {
+          // 덜컹은 한 번 올라가면 안 내려간다 — 레버를 다시 잡으면 새로 잰다 (안 그러면 막다른 길)
+          if (handOn(s)) retrySpan(s);
+          return hold(mem, bucketLow(s) >= ropeClear(s) && still(s) && smooth(s, mem), 15);
+        },
+        coach: (s, mem) => {
+          if (!smooth(s, mem)) return co('덜컹했어요 — 레버를 살짝 다시 밀었다 천천히 놓기');
+          // 줄보다 낮으면 멈춰도 안 넘어간다 — 말해 주지 않으면 막대만 차고 끝이 안 난다
+          if (!handOn(s) && bucketLow(s) < ropeClear(s)) return co('버킷이 줄보다 낮아요 — 붐 올리기', '붐 올림');
+          return null;
+        },
+        hud: (s) => (handOn(s) ? '레버를 천천히 가운데로' : null),
+        // 진행: 레버를 놓으면 기계가 서는 만큼 차고, 다 서면 끝까지
+        meter: (s, mem) => {
+          if (handOn(s)) return { v: 0 };
+          return { v: Math.min(1, 0.85 * settled(s) + 0.15 * Math.min(1, (mem.hold ?? 0) / 15)) };
+        },
       },
       ['boom', 'bucket'],
     ),

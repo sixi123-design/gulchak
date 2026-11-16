@@ -85,7 +85,7 @@ export type Tier = '기본기' | '기초' | '숙련';
  * 기본기는 처음 온 사람이 가야 할 곳이라 맨 위 가로 전체(wide)를 쓴다.
  */
 export const TIERS: readonly { key: Tier; sub: string; wide?: boolean }[] = [
-  { key: '기본기', sub: '시험 전에 손에 붙여야 하는 네 가지', wide: true },
+  { key: '기본기', sub: '시험 전에 손에 붙여야 하는 기본 조작', wide: true },
   { key: '기초', sub: '한 사이클 익히기' },
   { key: '숙련', sub: '시험처럼 매끄럽게' },
 ];

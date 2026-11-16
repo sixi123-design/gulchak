@@ -26,9 +26,11 @@ export function startSpan(s: DigSession, mem: Mem): void {
 
 /** 매 프레임 부른다. `joints`에 적은 관절 중 둘 이상이 움직인 프레임을 센다 */
 export function tickSpan(s: DigSession, mem: Mem, joints: Joint[] = []): void {
-  mem.gN = (mem.gN ?? 0) + 1;
   let moving = 0;
   for (const j of joints) if (Math.abs(s.vel[j]) > MOVING * s.m.speeds[j]) moving++;
+  // 분모는 '하나라도 움직인 프레임'. 가만히 있던 시간(지시문 읽기·멈춰 생각하기)까지 세면
+  // 완벽하게 같이 써도 비율이 떨어지고, 늦게 시작하면 영영 기준을 못 넘는다 (개발 검토)
+  if (moving >= 1) mem.gN = (mem.gN ?? 0) + 1;
   if (moving >= 2) mem.gCo = (mem.gCo ?? 0) + 1;
 }
 

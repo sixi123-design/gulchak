@@ -111,7 +111,8 @@ function dir(o: {
 }): Step {
   const amount = o.amount ?? (o.j === 'bucket' ? DRILL.moveBucket : DRILL.move);
   return wrap({
-    text: o.text,
+    // 방향만 말하면 '아래로 당기는데 붐이 올라간다'에서 멈칫한다 — 깜빡이는 이름표와 같은 말을 같이 쓴다 (검토)
+    text: `${o.text}\n→ ${o.label}`,
     labels: [o.label],
     begin: (s, mem) => {
       mem.p = s.pose[o.j];
@@ -172,7 +173,7 @@ const toGround = (): Step =>
 /** 3 눌러 보기 — 왜 실격인지 몸으로. 우리가 시킨 일이므로 벌을 주지 않는다 */
 const pressDown = (): Step =>
   wrap({
-    text: '일부러 조금 더 눌러 보세요',
+    text: '바닥에 닿은 채로\n오른쪽 레버를 위로 더 밀어 보기',
     labels: ['붐 내림'],
     begin: (_s, mem) => {
       mem.t = 0;
@@ -194,10 +195,11 @@ const pressDown = (): Step =>
     hud: (_s, mem) => {
       if (!mem.ask) return null;
       // 시킨 대로 했는데 '실격'이라고 판정하면 억울하다. 일어난 일과 규칙을 나눠 말한다
-      return mem.lifted ? '차체가 들렸습니다 — 이게 무리한 힘입니다' : '살살 눌렀네요. 그게 맞습니다';
+      // 안 들렸는데 '그게 맞다'고 칭찬하면 시킨 것과 반대다 — 무엇을 보여 주려 했는지만 말한다 (검토)
+      return mem.lifted ? '차체가 들렸습니다 — 시험에서는 실격입니다' : '더 세게 누르면 차체가 들립니다 — 시험에서는 실격';
     },
     coach: (s, mem) =>
-      mem.ask && anyLever(s) >= 0.08 ? co(mem.lifted ? '시험에서는 실격입니다. 레버에서 손을 떼세요' : '레버에서 손을 떼세요') : null,
+      mem.ask && anyLever(s) >= 0.08 ? co(mem.lifted ? '실격 자세예요 — 레버에서 손을 떼세요' : '레버에서 손을 떼세요') : null,
   });
 
 export const LEVER_DRILL: Lesson = {
@@ -221,7 +223,7 @@ export const LEVER_DRILL: Lesson = {
     s.teleport({ ...DRILL_START });
   },
   // 익히는 자리다. 끝까지 오면 별 3개 — 깎지 않는다
-  grade: () => ({ stars: 3, note: '붐으로 높이 · 버킷으로 각도 · 암으로 거리. 왼쪽 레버 좌우는 몸통 돌리기 — 다음 미션에서' }),
+  grade: () => ({ stars: 3, note: '붐으로 높이 · 버킷으로 각도 · 암으로 거리. 왼쪽 레버 좌우는 몸통 돌리기 — 「선회·흙 쏟기」에서' }),
   steps: [
     dir({ j: 'boom', way: 1, text: '오른쪽 레버를 아래로', label: '붐 올림', said: '붐이 올라갑니다' }),
     toGround(),

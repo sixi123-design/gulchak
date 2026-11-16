@@ -107,6 +107,9 @@ const TUTOR_GROUND = TUTOR_FLOOR;
 const TUTOR_LINE = 0x8d97a0;
 /** 잘했다·잘못했다 연출: 미션이 센 값이 늘어난 만큼만 재생한다 */
 let fxOk = 0;
+/** '좋아요 ✓'를 띄워 두는 시각 (그 뒤 다음 지시) */
+let passUntil = 0;
+const PASS_MS = 900;
 let fxBad = 0;
 function playDrillFx(kind: 'ok' | 'bad') {
   const box = $('drill');
@@ -1040,6 +1043,14 @@ if (debug)
       return kindKey;
     },
     lessons: () => curLessons().map((l) => l.id),
+    /** 검토용 스크린샷: 미션 i 시작 / 지금 미션의 단계 n으로 건너뛰기 (화면도 다시 그린다) */
+    start: (i: number) => startLesson(i),
+    jump: (n: number) => {
+      if (!tutor) return;
+      tutor.step = n;
+      (tutor as unknown as { enter(): void }).enter();
+      renderMission();
+    },
   };
 let lessonIdx = -1;
 const loadCleared = (): string[] => {
@@ -1208,6 +1219,8 @@ function beginLesson(i: number, again = false, lv = 0) {
   }
   fxOk = 0;
   fxBad = 0;
+  passUntil = 0;
+  readStep = -1;
   if (drive) {
     drive.s.ready();
     tutor = new Tutor(L, drive.s);
@@ -1219,9 +1232,6 @@ function beginLesson(i: number, again = false, lv = 0) {
 }
 /** 미션 도움 게이지: 막대(얼마나 왔나) 또는 바늘+목표 구간(각도 맞추기) */
 const meterEl = $('m-meter');
-const meterFill = meterEl.querySelector<HTMLElement>('.fill')!;
-const meterBand = meterEl.querySelector<HTMLElement>('.band')!;
-const meterNeedle = meterEl.querySelector<HTMLElement>('.needle')!;
 /** 지금 조작이 맞는지: 이 단계 레버를 움직이면 '좋아요', 다른 레버면 '그 레버 아니에요' */
 const LAB_AXIS: Record<string, [keyof Sticks, 1 | -1]> = Object.fromEntries(
   KEY_ACTIONS.map((a) => [a.label, [a.id.slice(0, 2) as keyof Sticks, a.id.endsWith('+') ? 1 : -1]]),
@@ -1311,8 +1321,6 @@ function setHints(labels: string[]) {
 /** 처음 배우는 레버: 그 부위를 깜빡 강조하고 조이스틱 위까지 선으로 이어 줌 (2초) */
 type Part = 'boom' | 'arm' | 'bucket';
 const PART_OF = (l: string): Part | null => (l.startsWith('붐') ? 'boom' : l.startsWith('암') ? 'arm' : l.startsWith('버킷') ? 'bucket' : null);
-/** 부품 이름 (부품 줄에서 레버 방향과 함께 쓴다) */
-const PART_NAME: Record<Part, string> = { boom: '붐', arm: '암', bucket: '버킷' };
 /** 지금 지시가 가리키는 부품 (없으면 null) */
 const stepPart = (): Part | null => {
   for (const l of tutor?.current?.labels ?? []) {
@@ -1323,8 +1331,15 @@ const stepPart = (): Part | null => {
 };
 /** 부품을 움직이는 레버 축 (3칸 표시가 어느 레버를 볼지) */
 const PART_AXIS: Record<Part, 'ly' | 'ry' | 'rx'> = { boom: 'ry', arm: 'ly', bucket: 'rx' };
-/** 그 부품을 움직이는 레버 (글자로) */
-const LEVER_WAY: Record<Part, string> = { boom: '오른쪽 레버 위아래', arm: '왼쪽 레버 위아래', bucket: '오른쪽 레버 좌우' };
+/** 이름표 → 그 레버를 미는 방향 (부품 줄: 깜빡이는 이름표를 **전부** 같은 말로 풀어 준다) */
+const LABEL_WAY: Record<string, string> = {
+  '붐 올림': '오른쪽 레버 ↓',
+  '붐 내림': '오른쪽 레버 ↑',
+  '버킷 펴기': '오른쪽 레버 →',
+  '버킷 오므림': '오른쪽 레버 ←',
+  '암 당기기': '왼쪽 레버 ↓',
+  '암 펴기': '왼쪽 레버 ↑',
+};
 /**
  * 지시문이 **버킷을 가리지 않게** 자리를 옮긴다.
  *
@@ -1407,7 +1422,9 @@ function updateGauge(part: Part | null) {
     return;
   }
   box.hidden = false;
-  const now = gaugeLevel(session.input[PART_AXIS[part]]);
+  // 손 자리로 센다. 시범 중에는 앱이 민 값(기계 값)을 손 자리로 되돌린다 — 노브와 같은 자리
+  const ax = PART_AXIS[part];
+  const now = gaugeLevel(tutor?.demoState() === 'demo' ? uncurve(session.input[ax]) : session.stick[ax]);
   box.classList.toggle('hit', now === want);
   const bars = box.children;
   for (let i = 0; i < bars.length; i++) {
@@ -1452,10 +1469,13 @@ function updateMeter() {
     // 교정이 먼저다. 반응("좋아요")이 떠 있는 동안 "붐을 더 내리기"가 가려지면 안 된다
     const d = tutor.demoState();
     // 시범 중에는 레버를 밀어도 안 먹는다. 가만히 있으면 "왜 안 되지"가 되니 그 말을 해 준다
-    const say = tutor.current?.ask ? '' : d !== 'user' && userPush > 0.12 ? '시범 중이에요 — 잠시 보세요' : (tutor.coach?.msg ?? h ?? '');
+    // '좋아요'를 띄우는 동안은 다음 단계 안내를 섞지 않는다 (해낸 것과 고칠 것이 한 화면에 같이 뜬다)
+    const say = tutor.current?.ask || passUntil ? '' : d !== 'user' && userPush > 0.12 ? '시범 중이에요 — 잠시 보세요' : (tutor.coach?.msg ?? h ?? '');
     const t = tutor.current?.text ?? '';
     // 시범에는 배지(시범 중)가 이미 떠 있다. 부품 줄까지 띄우면 네 줄이 된다
-    $('dr-part').textContent = !say && d === 'user' && part && !t.includes('레버') ? `${PART_NAME[part]} · ${LEVER_WAY[part]}` : '';
+    // 첫 부품만 말하면 '붐 내림 + 암 당기기'에서 왼쪽 레버 이야기가 빠진다 (검토) — 깜빡이는 것 전부
+    const ways = (tutor.current?.labels ?? []).filter((l) => LABEL_WAY[l]).map((l) => `${l} = ${LABEL_WAY[l]}`);
+    $('dr-part').textContent = !say && !passUntil && d === 'user' && ways.length && !t.includes('레버') ? ways.join('\n') : '';
     updateGauge(part);
     const badge = $('dr-badge');
     // 두 줄 지시 + 작은 줄 + 배지 = 네 줄이다. 작은 줄이 있으면 배지는 숨긴다
@@ -1479,20 +1499,27 @@ function updateMeter() {
     $('m-hold').hidden = !h;
     if (h) $('m-hold').textContent = h;
   }
-  const m = guideLv >= 1 ? null : (tutor?.meter() ?? null);
-  meterEl.hidden = !m;
+  const m = guideLv >= 1 || passUntil ? null : (tutor?.meter() ?? null);
+  // 큰 지시문 화면(기본기)은 지시문 바로 밑에 같은 막대를 쓴다 — 얼마나 남았는지 보여야 기다린다
+  const drM = $('dr-meter');
+  const el = tutor?.lesson.big ? drM : meterEl;
+  (el === drM ? meterEl : drM).hidden = true;
+  el.hidden = !m;
   if (!m) return;
   const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
+  const band = el.querySelector<HTMLElement>('.band')!;
+  const needle = el.querySelector<HTMLElement>('.needle')!;
+  const fillEl = el.querySelector<HTMLElement>('.fill')!;
   if (m.band) {
-    meterEl.classList.add('is-band');
-    meterBand.style.left = pct(m.band[0]);
-    meterBand.style.width = pct(m.band[1] - m.band[0]);
-    meterNeedle.style.left = pct(m.v);
-    meterEl.classList.toggle('ok', m.v >= m.band[0] && m.v <= m.band[1]);
+    el.classList.add('is-band');
+    band.style.left = pct(m.band[0]);
+    band.style.width = pct(m.band[1] - m.band[0]);
+    needle.style.left = pct(m.v);
+    el.classList.toggle('ok', m.v >= m.band[0] && m.v <= m.band[1]);
   } else {
-    meterEl.classList.remove('is-band');
-    meterFill.style.width = pct(m.v);
-    meterEl.classList.toggle('ok', m.v >= 1);
+    el.classList.remove('is-band');
+    fillEl.style.width = pct(m.v);
+    el.classList.toggle('ok', m.v >= 1);
   }
 }
 let missionStep = -1;
@@ -1518,7 +1545,10 @@ function renderMission(intro = false) {
     m.hidden = true;
     $('drill').classList.remove('ok', 'bad');
     $('drill-fx').innerHTML = '';
-    $('dr-text').textContent = tutor.notice ?? tutor.current?.text ?? '';
+    // 방금 해낸 단계: 다음 지시 전에 잠깐 '좋아요 ✓' (지시가 바로 갈아 끼워지면 됐는지 모른다)
+    const passing = passUntil > 0;
+    $('dr-text').textContent = passing ? '좋아요' : (tutor.notice ?? tutor.current?.text ?? '');
+    $('dr-text').classList.toggle('pass', passing);
     $('dr-ask').hidden = !tutor.current?.ask;
     for (const el of document.querySelectorAll('.lab')) el.classList.toggle('hint', new Set(tutor.current?.labels ?? []).has((el.textContent ?? '').replace(/ /g, ' ')));
     return;
@@ -1625,8 +1655,6 @@ let demoSlow = (() => {
     return false;
   }
 })();
-/** 0.5배속에서 이번 화면 프레임은 시범을 쉬는 프레임인가 */
-let slowHold = false;
 const paintSlow = () => {
   $('btn-slow').classList.toggle('on', demoSlow);
   $('btn-slow').setAttribute('aria-pressed', String(demoSlow));
@@ -2439,6 +2467,11 @@ function showDriveResult() {
 // ---------- 루프 (고정 60Hz 시뮬레이션) ----------
 const STEP = 1 / 60;
 let acc = 0;
+/** 시범 지시문 읽는 시간이 몇 초 남았나 (그동안 시범을 세워 둔다) */
+let readLeft = 0;
+let readStep = -1;
+/** 두 줄 지시문을 읽는 시간: 한국어 초당 5~6자 + 눈을 옮기는 시간 */
+const readSec = (t: string) => Math.min(2.2, Math.max(0.9, 0.4 + t.replace(/\s/g, '').length * 0.06));
 let last = performance.now();
 let frameAvg = 16;
 let slowT = 0;
@@ -2483,12 +2516,12 @@ function frame(now: number) {
     rx: curve(clamp1(right.x + kb.rx + pad.rx)),
     ry: curve(clamp1(right.y + kb.ry + pad.ry)),
   };
-  // 앱이 레버를 대신 미는 시범 중에는 유저 입력을 무시하고, 화면 손잡이도 앱 값으로 움직인다.
-  // 0.5배속: 시범 중에는 화면 두 프레임에 시범 한 프레임만 진행한다 (시뮬 시간도 절반 — 아래 acc).
-  // 쉬는 프레임에는 시범 입력을 그대로 두고 단계 판정(update)도 건너뛴다 — 시범 길이가 시뮬 시간과 어긋나지 않게
+  // 앱이 레버를 대신 미는 시범(tutor.drive)과 단계 판정(tutor.update)은 **시뮬 한 스텝마다** 부른다 (아래 반복문).
+  // 화면 프레임마다 부르면 30fps 폰에서는 시범 한 프레임에 시뮬이 두 번 돌아 시범이 버킷을 땅에 박고,
+  // 120Hz 폰에서는 '멈춰 있음' 카운터가 끊겨 안내가 안 뜬다 (개발 검토, 2026-11-16).
+  // 0.5배속은 시뮬 시간만 절반으로 흘린다 — 시범도 스텝에 묶여 있으니 같이 느려진다
   const slowNow = !drive && demoSlow && !!tutor && tutor.demoState() === 'demo';
-  slowHold = slowNow && !slowHold;
-  if (!slowHold) session.input = tutor ? tutor.drive(userInput) : userInput;
+  if (!tutor) session.input = userInput;
   // 시범 중에 손을 댔나 (입력은 무시되지만 **대답은 해야 한다**)
   userPush = Math.max(
     Math.hypot(left.x + kb.lx + pad.lx, left.y + kb.ly + pad.ly),
@@ -2504,23 +2537,60 @@ function frame(now: number) {
   const demo = tutor?.demoState() ?? 'user';
   document.body.classList.toggle('demo', demo !== 'user');
   if (demo !== 'user') {
-    left.show(session.input.lx, session.input.ly);
-    right.show(session.input.rx, session.input.ry);
+    // 시범 값은 기계에 들어가는 값(곡선 뒤)이다. 손이 둘 레버 자리(곡선 앞)로 되돌려 그린다 —
+    // 그래야 노브가 길잡이 고리·점과 같은 자리에 온다
+    left.show(uncurve(session.input.lx, 3), uncurve(session.input.ly));
+    right.show(uncurve(session.input.rx), uncurve(session.input.ry));
+  } else {
+    left.unshow();
+    right.unshow();
   }
   if (drive) {
     driveFrame(dt, now);
     return;
   }
   acc += slowNow ? dt * 0.5 : dt;
-  if (!$('settings').hidden || !$('why').hidden) acc = 0; // 설정·이론 카드 중에는 일시정지
+  // 시범 지시문이 바뀌면 기계를 잠깐 세우고 글부터 읽힌다 (영상 일시정지처럼).
+  // 글이 바뀌는 순간 동작이 같이 지나가면 '무엇을 하라는지' 읽기 전에 끝난다 (템포 검토)
+  if (tutor && tutor.step !== readStep) {
+    readStep = tutor.step;
+    const st = tutor.current;
+    readLeft = st?.demo && !st.ask ? readSec(st.text) : 0;
+  }
+  if (readLeft > 0 && demo === 'demo' && $('settings').hidden && $('why').hidden) {
+    readLeft -= dt;
+    acc = 0;
+  }
+  if (!$('settings').hidden || !$('why').hidden) acc = 0; // 설정·이론 카드 중에는 일시정지 (시범·판정도 같이 멈춘다)
   let n = 0;
   // 밀린 시간을 버리지 않고 따라잡는다 (저사양에서도 제한시간이 실제 시간과 일치)
   acc = Math.min(acc, 0.5);
+  const rw = tutor?.rewinds ?? 0;
   while (acc >= STEP && n < 30) {
+    if (tutor) session.input = tutor.drive(userInput);
     session.step(STEP);
     acc -= STEP;
     n++;
+    if (tutor && $('why').hidden && tutor.update()) {
+      if (tutor.cleared) {
+        onLessonClear();
+        break;
+      }
+      // 직접 한 단계를 해냈다: 링·꽃가루 + '좋아요 ✓'를 보여 준 뒤 다음 지시 (시범·고르기는 제외).
+      // 레버 익히기는 단계 안에서 이미 같은 연출을 1.2초 보여 준다
+      const prev = tutor.lesson.steps[tutor.step - 1];
+      const pass = tutor.lesson.big && prev && !prev.demo && !prev.ask && tutor.bag.okN === undefined;
+      if (pass) passUntil = now + PASS_MS;
+      renderMission(); // 판을 새로 그리면 연출 자리를 비우므로 연출은 그 뒤에
+      if (pass) playDrillFx('ok');
+      else sound.ding();
+    }
   }
+  if (passUntil && now >= passUntil) {
+    passUntil = 0;
+    renderMission();
+  }
+  if (tutor && tutor.rewinds !== rw) onRewind();
   // 평탄 도움 색·긁은 자국: 연습 모드에서 첫 덤프 뒤 (실제 시험 없음)
   soilView.flatGuide = session.flags.feedback && session.dumpCount >= 1;
   soilView.now = session.t;
@@ -2540,14 +2610,6 @@ function frame(now: number) {
   fx.sync(session);
   sound.active = operating();
   sound.update(session);
-  const rw = tutor?.rewinds ?? 0;
-  if (!slowHold && tutor && $('why').hidden && tutor.update()) {
-    if (tutor.cleared) onLessonClear();
-    else {
-      sound.ding();
-      renderMission();
-    }
-  } else if (tutor && tutor.rewinds !== rw) onRewind();
   updateMeter();
   if (examiners) {
     exc.bucketWorld(tmpV);
@@ -2602,20 +2664,23 @@ function driveFrame(dt: number, _now: number) {
   if (!$('settings').hidden || !$('precheck').hidden || !$('why').hidden) acc = 0;
   acc = Math.min(acc, 0.5);
   let n = 0;
+  const rw = tutor?.rewinds ?? 0;
+  // 단계 판정도 시뮬 한 스텝마다 (화면 주사율에 묶이지 않게)
   while (acc >= STEP && n < 30) {
     d.step(STEP);
     acc -= STEP;
     n++;
-  }
-  d.sync(scene);
-  const rw = tutor?.rewinds ?? 0;
-  if (tutor && $('why').hidden && tutor.update()) {
-    if (tutor.cleared) onLessonClear();
-    else {
+    if (tutor && $('why').hidden && tutor.update()) {
+      if (tutor.cleared) {
+        onLessonClear();
+        break;
+      }
       sound.ding();
       renderMission();
     }
-  } else if (tutor && tutor.rewinds !== rw) onRewind();
+  }
+  d.sync(scene);
+  if (tutor && tutor.rewinds !== rw) onRewind();
   updateMeter();
   sound.active = operating();
   sound.update(d.soundState());
@@ -2637,6 +2702,8 @@ const clamp1 = (v: number) => Math.max(-1, Math.min(1, v));
 const curve = (v: number) => Math.sign(v) * Math.abs(v) ** 2.2;
 // 선회는 조금 밀면 아주 천천히(미세 조정), 끝까지 밀어야 최고 속도
 const curveSwing = (v: number) => Math.sign(v) * Math.abs(v) ** 3;
+/** curve·curveSwing의 반대 (기계 값 → 레버 자리) */
+const uncurve = (v: number, p = 2.2) => Math.sign(v) * Math.abs(v) ** (1 / p);
 const kb = { lx: 0, ly: 0, rx: 0, ry: 0 };
 let lastBuzz = 0;
 

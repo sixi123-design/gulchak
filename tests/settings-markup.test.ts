@@ -192,12 +192,12 @@ it('부품을 깜빡이지 않는다 (누르라는 뜻으로 읽힌다)', () => 
   // 이 과정을 듣는 사람은 필기 합격자라 붐·암·버킷이 뭔지 이미 안다 — 지시문이 레버를 말하면 된다
   expect(main).not.toMatch(/깜빡이는 곳 = /);
   expect(main).not.toMatch(/introUntil/);
-  // 부품 줄은 레버 방향만 말하고, 지시문이 이미 레버를 말하면 비운다
-  expect(main).toMatch(/LEVER_WAY\[part\]/);
+  // 부품 줄은 깜빡이는 이름표 전부를 레버 방향으로 풀고, 지시문이 이미 레버를 말하면 비운다
+  expect(main).toMatch(/LABEL_WAY\[l\]/);
   // 세 줄을 동시에 띄우지 않는다: 반응·코치가 있으면 부품 줄을 비운다
   // 교정(coach)이 반응(hud)보다 먼저다 — "좋아요"가 떠 있는 동안 "붐을 더 내리기"가 가려지면 안 된다
   expect(main).toMatch(/\(tutor\.coach\?\.msg \?\? h \?\? ''\)/);
-  expect(main).toMatch(/textContent = !say && d === 'user' && part/);
+  expect(main).toMatch(/textContent = !say && !passUntil && d === 'user' && ways.length/);
   // 시범 중에 손을 대면 그 말을 해 준다 (입력은 무시되지만 대답은 한다)
   expect(main).toMatch(/시범 중이에요/);
 });

@@ -1,36 +1,20 @@
 import { expect, it } from 'vitest';
 import { MACHINE } from '../src/config/machine';
-import rules from '../src/config/rules.json';
-import { MODES } from '../src/core/ruleEngine';
-import { DigSession, type RulesFile } from '../src/sim/session';
-import { Tutor } from '../src/sim/tutorial';
+import type { Tutor } from '../src/sim/tutorial';
+import { frame, tutorFor, type Hand } from './harness';
 import { BASIC_LESSONS } from '../src/sim/leverSchool';
 import { ARC, READY_ARM, READY_BOOM, wantAngle } from '../src/sim/moveCourse';
 import { shapeOf, staticHits } from '../src/sim/judge';
 
-const R = rules as unknown as RulesFile;
 const deg = Math.PI / 180;
 
-function sess() {
-  const s = new DigSession(MACHINE, R, MODES.tutorial);
-  s.belt = true;
-  s.leverUnlocked = true;
-  s.rpm = 1;
-  s.ready();
-  for (let i = 0; i < 60; i++) s.step();
-  return s;
-}
 const ready = () => BASIC_LESSONS.find((l) => l.id === 'b-ready')!;
-const tutor = () => new Tutor(ready(), sess());
+const tutor = () => tutorFor(ready());
 
-/** 레버를 주고 n프레임 (시범 중에는 drive가 유저 입력을 무시한다 — 실제 앱과 같게) */
-function run(t: Tutor, inp: { lx?: number; ly?: number; rx?: number; ry?: number }, n: number) {
+/** 레버(손 자리)를 주고 n스텝 — 실제 앱과 같은 순서·곡선 (tests/harness) */
+function run(t: Tutor, inp: Hand, n: number) {
   for (let i = 0; i < n; i++) {
-    const hand = { lx: 0, ly: 0, rx: 0, ry: 0, ...inp };
-    t.s.input = t.drive(hand);
-    t.s.stick = t.s.input === hand ? hand : { lx: 0, ly: 0, rx: 0, ry: 0 };
-    t.s.step();
-    t.update();
+    frame(t, inp);
     if (t.cleared) return;
   }
 }
@@ -38,16 +22,12 @@ function run(t: Tutor, inp: { lx?: number; ly?: number; rx?: number; ry?: number
 function follow(t: Tutor, n: number) {
   for (let i = 0; i < n; i++) {
     const a = wantAngle(t.s) * deg;
-    const hand = { lx: 0, ly: 0, rx: Math.cos(a) * ARC.ring, ry: Math.sin(a) * ARC.ring };
-    t.s.input = t.drive(hand);
-    t.s.stick = t.s.input === hand ? hand : { lx: 0, ly: 0, rx: 0, ry: 0 };
-    t.s.step();
-    t.update();
+    frame(t, { rx: Math.cos(a) * ARC.ring, ry: Math.sin(a) * ARC.ring });
     if (t.cleared) return;
   }
 }
-/** 실습(원호 드릴) 단계의 번호 — 앞의 둘은 시범, 셋째는 '다시 보기/다음' 고르기 */
-const ARC_STEP = 3;
+/** 실습(원호 드릴) 단계의 번호 — 앞은 구분동작 시범들과 '다시 보기/다음' 고르기 */
+const ARC_STEP = ready().steps.findIndex((st) => st.text.startsWith('오른쪽 레버만'));
 /** 시범을 다 보고 '다음'을 눌러 실습 단계까지 */
 function pastDemos(t: Tutor) {
   for (let i = 0; i < 2400 && t.step < ARC_STEP; i++) {
@@ -81,6 +61,15 @@ it('시범이 기계를 내려놓아도 실습은 같은 자세에서 시작한�
   expect(t.s.pose.boom).toBeCloseTo(start.boom, 3);
   expect(t.s.pose.arm).toBeCloseTo(start.arm, 3);
   expect(t.s.pose.bucket).toBeCloseTo(start.bucket, 3);
+});
+
+it('구분동작 시범은 붐을 목표 높이까지 내리고 버킷을 암과 일직선까지만 연다', () => {
+  const t = tutor();
+  for (let i = 0; i < 4000 && !t.current?.ask; i++) {
+    run(t, {}, 1);
+    expect(t.s.groundGap(), '시범이 버킷을 땅에 박았다').toBeGreaterThan(0.05);
+  }
+  expect(t.current?.ask, '시범이 끝나지 않았다').toBeTruthy();
 });
 
 it('시범 뒤에는 고를 때까지 기다리고, 다시 보기는 시범 처음으로 간다', () => {
@@ -130,11 +119,7 @@ it('실습 중에는 매 프레임 한 줄 피드백이 있다', () => {
   pastDemos(t);
   for (let i = 0; i < 400 && t.step === ARC_STEP; i++) {
     const a = wantAngle(t.s) * deg;
-    const hand = { lx: 0, ly: 0, rx: Math.cos(a) * ARC.ring * 0.4, ry: Math.sin(a) * ARC.ring * 0.4 };
-    t.s.input = t.drive(hand);
-    t.s.stick = hand;
-    t.s.step();
-    t.update();
+    frame(t, { rx: Math.cos(a) * ARC.ring * 0.4, ry: Math.sin(a) * ARC.ring * 0.4 });
     expect(t.hud() ?? '', `프레임 ${i}`).not.toBe('');
   }
 });
@@ -171,4 +156,18 @@ it('멈추기에서 한 번 덜컹해도 다시 내려오면 통과한다 (막�
   run(t, { ry: -0.5 }, 45);
   for (let i = 0; i < 1200 && !t.cleared; i++) run(t, t.s.groundGap() > 0.3 ? { ry: 0.25 } : {}, 1);
   expect(t.cleared, '고쳐도 못 끝내면 막다른 길이다').toBe(true);
+});
+
+it('시범 레버 자리는 세션마다 따로다 — 둘을 번갈아 돌려도 한 개만 돌린 것과 같다', () => {
+  const solo = tutor();
+  const a = tutor();
+  const b = tutor();
+  for (let i = 0; i < 600; i++) {
+    run(solo, {}, 1);
+    run(a, {}, 1);
+    if (i === 100) b.restartStep(); // 다른 세션이 중간에 시범을 처음부터
+    run(b, {}, 1);
+  }
+  expect(a.s.pose.boom).toBeCloseTo(solo.s.pose.boom, 6);
+  expect(a.s.pose.bucket).toBeCloseTo(solo.s.pose.bucket, 6);
 });

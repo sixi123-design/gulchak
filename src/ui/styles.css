@@ -7629,6 +7629,51 @@ body.stage-on #precheck .mode-pick {
 }
 #btn-why-go {
   margin-top: 2px;
+  /* 글이 길어 카드가 스크롤돼도 '해보기'는 늘 보이게 (잘려서 못 찾고 ◀로 나갔다 — 검토) */
+  position: sticky;
+  bottom: 0;
+}
+/* 어절 중간에서 끊지 않는다 ("배웁니/다", "그 이/름을") */
+.why-text p,
+#why h1 {
+  word-break: keep-all;
+}
+/* 가로로 누운 폰: 높이가 모자라 세로로 쌓으면 버튼이 화면 밖이다. 그림은 왼쪽, 글·버튼은 오른쪽 */
+@media (max-height: 520px) and (orientation: landscape) {
+  #why .card {
+    width: min(720px, 100%);
+    grid-template-columns: 120px 1fr;
+    grid-template-areas: 'art title' 'art text' 'art go';
+    justify-items: start;
+    align-items: start;
+    text-align: left;
+    column-gap: 22px;
+    row-gap: 8px;
+    padding: 18px 22px 16px;
+  }
+  .why-art {
+    grid-area: art;
+    align-self: center;
+    justify-self: center;
+  }
+  #why h1 {
+    grid-area: title;
+    font-size: 21px;
+    /* 왼쪽 위 ◀ 버튼과 안 겹치게는 그림 칸이 이미 비켜 준다 */
+  }
+  .why-text {
+    grid-area: text;
+    max-width: none;
+    gap: 4px;
+  }
+  .why-text p {
+    font-size: calc(15px * var(--z-txt, 1));
+    line-height: 1.45;
+  }
+  #btn-why-go {
+    grid-area: go;
+    justify-self: end;
+  }
 }
 /* 미션 박스의 '왜?' — 작게 붙지만 손가락으로 누를 수 있게 */
 .m-why {
@@ -7881,6 +7926,9 @@ body.flat-bg {
   font: 900 calc(15px * var(--z-txt, 1)) / 1.3 var(--font);
   color: color-mix(in srgb, var(--ink) 62%, transparent);
   letter-spacing: 0.02em;
+  /* 레버 하나에 한 줄 (두 레버를 한 줄에 이으면 '왼쪽 레/버'처럼 끊긴다) */
+  white-space: pre-line;
+  word-break: keep-all;
 }
 /* 레버 길잡이: 어느 정도 깊이로(링), 어느 길로(원호) 움직여야 하는지.
    클래스 이름을 .guide로 쓰면 화면 아래 검은 안내 박스(.guide) 스타일을 물려받아
@@ -7994,4 +8042,25 @@ body.demo .stick .knob {
 }
 .dr-part:empty {
   display: none;
+}
+
+/* 단계를 해냈다: 다음 지시 전에 잠깐 초록 '좋아요 ✓' (튀어 오르며) */
+.dr-text.pass {
+  color: var(--pass, #2fd27a);
+  animation: drPass 0.35s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+@keyframes drPass {
+  from {
+    transform: scale(0.7);
+    opacity: 0;
+  }
+}
+
+/* 기본기 화면의 진행 막대: 밝은 바탕이라 테두리를 진하게 */
+.drill .dr-meter {
+  width: min(260px, 70%);
+  height: 14px;
+  margin: 6px auto 2px;
+  background: #0000001a;
+  border-color: var(--ink, #1d1b2e);
 }

@@ -38,16 +38,27 @@ export const digSpot = (s: DigSession) => {
   return { swing: Math.PI, r: a ? (a.zoneIn + a.zoneOut) / 2 : 6 };
 };
 
-/** 시범 한 토막: `frames` 동안 `inp`를 밀고, 그 뒤 다음 단계로 */
-const show = (text: string, frames: number, inp: (f: number) => Record<string, number>, gauge?: 1 | 2 | 3, label = '붐 올림'): Step => ({
+/** 손 자리 → 기계 값 (앱의 레버 곡선 2.2와 같게) */
+const curve = (v: number) => Math.sign(v) * Math.abs(v) ** 2.2;
+/**
+ * 시범 한 토막: `frames` 동안 `hand`(손이 둘 레버 자리)를 밀고, 그 뒤 다음 단계로.
+ * 3칸 표시는 손 자리로 센다 — 기계 값으로 세면 붐이 움직이는데 0칸인 구간이 생긴다 (개발 검토)
+ */
+const show = (text: string, frames: number, hand: (f: number) => number, gauge?: 1 | 2 | 3, label = '붐 올림'): Step => ({
   text,
   gauge,
   labels: [label],
-  demo: (f) => (f < frames ? inp(f) : null),
+  demo: (f) => (f < frames ? { ry: curve(hand(f)) } : null),
   begin: (_s, mem) => (mem.t = 0),
   // 시범 + 가운데로 돌아와 쉬는 0.5초까지 보고 넘어간다
   done: (_s, mem) => ++mem.t > frames + 40,
 });
+
+/** 한 칸 = 손 자리 0.35 (3칸 표시의 1칸 한가운데쯤) */
+const HAND1 = 0.35;
+
+/** '이빨을 표시에 맞추세요' 단계 번호 (되돌아갈 곳) */
+const aimStep = () => SCOOP_LESSON.steps.findIndex((st) => st.text === '이빨을 표시에 맞추세요');
 
 export const SCOOP_LESSON: Lesson = {
   id: 'b-scoop',
@@ -84,9 +95,9 @@ export const SCOOP_LESSON: Lesson = {
   steps: [
     // ---- 손맛 시범 3회 ----
     // 올림 → 내림 → 올림으로 짜서 시범이 끝나면 처음 높이로 돌아온다
-    show('오른쪽 레버를 아래로\n이만큼만', 70, () => ({ ry: -0.25 }), 1),
-    show('오른쪽 레버를 위로\n끝까지', 80, () => ({ ry: 1 }), 3, '붐 내림'),
-    show('레버를 가운데로\n천천히', 110, (f) => ({ ry: f < 60 ? -0.25 : -0.25 * (1 - (f - 60) / 50) })),
+    show('오른쪽 레버를 아래로\n이만큼만', 70, () => -HAND1, 1),
+    show('오른쪽 레버를 위로\n끝까지', 55, () => 1, 3, '붐 내림'),
+    show('레버를 가운데로\n천천히', 110, (f) => (f < 60 ? -HAND1 : -HAND1 * (1 - (f - 60) / 50))),
     // ---- 따라 하기 ----
     {
       text: '이제 직접\n오른쪽 레버를 아래로 한 칸만',
@@ -95,8 +106,9 @@ export const SCOOP_LESSON: Lesson = {
       begin: (_s, mem) => ((mem.used = 0), (mem.ok = 0)),
       hud: (_s, mem) => (mem.used ? null : '오른쪽 레버를 아래로 조금만'),
       done: (s, mem) => {
-        const v = Math.abs(s.input.ry);
-        if (v > 0.15 && v <= 0.4) mem.used = (mem.used ?? 0) + 1;
+        // 손 자리로 본다 (화면 3칸과 같은 기준)
+        const v = Math.abs(s.stick.ry);
+        if (v > 0.05 && v <= 0.4) mem.used = (mem.used ?? 0) + 1;
         return hold(mem, (mem.used ?? 0) >= 30 && v < 0.05, 20);
       },
     },
@@ -136,7 +148,10 @@ export const SCOOP_LESSON: Lesson = {
       text: '이빨을 흙에 넣으세요',
       spot: digSpot,
       labels: ['붐 내림'],
+      begin: (s, mem) => (mem.g0 = s.groundGap()),
       done: (s) => s.groundGap() <= SCOOP.bite,
+      // 흙까지 얼마나 남았나 (내려갈수록 찬다)
+      meter: (s, mem) => ({ v: Math.min(1, Math.max(0, (mem.g0 - s.groundGap()) / Math.max(1e-6, mem.g0 - SCOOP.bite))) }),
       coach: (s) => (s.lift > 2 * deg ? co('너무 눌렀어요 — 붐을 살짝 올리기', '붐 올림') : null),
     },
     // ---- 채우기 ----
@@ -145,7 +160,21 @@ export const SCOOP_LESSON: Lesson = {
       labels: ['버킷 오므림', '암 당기기'],
       hud: (s) => `담긴 흙 ${Math.round((s.load / SC(s)) * 100)}%`,
       done: (s) => s.load >= SCOOP.fill * SC(s),
-      coach: (s) => (s.lift > 2 * deg ? co('너무 깊어요 — 붐을 살짝 올리기', '붐 올림') : null),
+      // 암을 끝까지 당겼거나 버킷이 다 오므려졌는데 덜 찼다 — 더 할 게 없다. 이빨 맞추기부터 다시
+      fail: (s, mem) => {
+        const lim = s.m.limits;
+        const atEnd = s.pose.arm <= lim.arm[0] + 3 * deg || s.pose.bucket <= lim.bucket[0] + 3 * deg;
+        const stillNow = Math.abs(s.vel.arm) < 0.02 * s.m.speeds.arm && Math.abs(s.vel.bucket) < 0.02 * s.m.speeds.bucket;
+        mem.stuck = atEnd && stillNow && s.load < SCOOP.fill * SC(s) ? (mem.stuck ?? 0) + 1 : 0;
+        return mem.stuck >= 45 ? { to: aimStep(), msg: '덜 찼어요 — 더 깊이 꽂고 다시' } : null;
+      },
+      coach: (s, mem) => {
+        if (s.lift > 2 * deg) return co('너무 깊어요 — 붐을 살짝 올리기', '붐 올림');
+        // 버킷만 오므리면 흙에 막혀 멈춘다 — 암을 같이 당겨야 찬다
+        const armIdle = Math.abs(s.vel.arm) < 0.02 * s.m.speeds.arm;
+        mem.armIdle = armIdle && s.load < SCOOP.fill * SC(s) ? (mem.armIdle ?? 0) + 1 : 0;
+        return mem.armIdle > 50 ? co('암을 당기면서 오므리기', '암 당기기') : null;
+      },
     },
     // ---- 오므리며 들기 ----
     {
@@ -159,6 +188,8 @@ export const SCOOP_LESSON: Lesson = {
         return liftedClear(s) && bag.keep >= SCOOP.keep * bag.peak;
       },
       coach: (s, _mem, bag) => (s.load / SC(s) < SCOOP.keep * (bag.peak ?? 1) ? co('버킷을 더 오므리기', '버킷 오므림') : null),
+      // 흘린 흙은 다시 안 찬다 — 기준 밑으로 흘렸으면 통과할 길이 없다. 다시 퍼기로
+      fail: (s, _mem, bag) => (s.load / SC(s) < SCOOP.keep * (bag.peak ?? 1) - 1e-6 ? { to: aimStep(), msg: '흙이 흘렀어요 — 다시 퍼기' } : null),
     },
   ],
 };

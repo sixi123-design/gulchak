@@ -12,11 +12,26 @@ export class Joystick {
    * 앱이 레버를 대신 미는 시범에서, 유저가 보는 손잡이도 같이 움직여야 배울 게 생긴다.
    */
   show(x: number, y: number) {
-    if (this.id !== null) return; // 손가락이 올라가 있으면 건드리지 않는다
+    // 손가락이 올라가 있어도 시범 자리를 그린다 — 시범 중에는 입력이 무시되므로,
+    // 엄지를 레버에 올려 둔 사람에게 노브가 안 움직이면 시범을 못 본다 (개발 검토)
+    this.showing = true;
+    // x·y는 레버값(this.x/this.y와 같은 뜻: 위가 +). 화면 자리로 되돌린다 —
+    // 데드존을 다시 붙이고, 화면은 아래가 +라서 y를 뒤집는다 (안 뒤집어서 시범 노브가 거꾸로 갔다)
+    const un = (v: number) => (Math.abs(v) < 1e-3 ? 0 : Math.sign(v) * (DEADZONE + Math.min(1, Math.abs(v)) * (1 - DEADZONE)));
     const r = this.el.getBoundingClientRect().width * 0.42;
     const sc = r / Math.max(1, this.el.offsetWidth * 0.42);
-    this.knob.style.transform = `translate(${(x * r) / Math.max(sc, 1e-6)}px, ${(y * r) / Math.max(sc, 1e-6)}px)`;
+    this.knob.style.transform = `translate(${(un(x) * r) / Math.max(sc, 1e-6)}px, ${(-un(y) * r) / Math.max(sc, 1e-6)}px)`;
   }
+  /** 시범이 끝났다: 노브를 손가락 자리로 (손을 안 댔으면 가운데로). 안 하면 시범 마지막 자리에 남는다 */
+  unshow() {
+    if (!this.showing) return;
+    this.showing = false;
+    this.knob.style.transform = this.id !== null ? this.finger : '';
+  }
+  /** 시범이 노브를 그리는 중 */
+  private showing = false;
+  /** 손가락이 둔 노브 자리 (시범이 끝나면 여기로 돌려 놓는다) */
+  private finger = '';
   constructor(readonly el: HTMLElement) {
     this.knob = el.querySelector('.knob') as HTMLElement;
     el.addEventListener('pointerdown', (e) => this.down(e));
@@ -65,7 +80,8 @@ export class Joystick {
     }
     // 레버 크기 설정(scale)으로 키우면 손잡이 이동도 같이 커지므로 화면 px → 레버 안 px
     const s = this.el.getBoundingClientRect().width / Math.max(1, this.el.offsetWidth);
-    this.knob.style.transform = `translate(${(dx * this.radius) / s}px, ${(dy * this.radius) / s}px)`;
+    this.finger = `translate(${(dx * this.radius) / s}px, ${(dy * this.radius) / s}px)`;
+    if (!this.showing) this.knob.style.transform = this.finger;
     const dz = DEADZONE;
     const shape = (v: number) => (Math.abs(v) < dz ? 0 : Math.sign(v) * ((Math.abs(v) - dz) / (1 - dz)));
     this.x = shape(dx);
@@ -88,7 +104,8 @@ export class Joystick {
     }
     this.x = 0;
     this.y = 0;
-    this.knob.style.transform = '';
+    this.finger = '';
+    if (!this.showing) this.knob.style.transform = '';
     this.el.classList.remove('active');
   }
 }
@@ -100,14 +117,16 @@ export class Joystick {
 export const DEADZONE = 0.15;
 
 /**
- * 레버를 얼마나 밀었나를 칸 수로 (0~3).
+ * 레버를 얼마나 밀었나를 칸 수로 (0~3). **손 자리**(데드존을 뺀 레버 값, 곡선 전)로 센다.
+ * 기계 값(곡선 뒤)으로 세면 손을 0.4까지 밀어도 0칸이라 '붐은 움직이는데 칸이 안 찬다' (개발 검토).
  *
  * 숫자(%)는 쓰지 않는다 — 초심자 검수에서 "무엇의 25%인지 모르겠다"가 나왔다.
  * 칸은 읽을 글자가 없고, 한 칸과 세 칸의 차이가 바로 보인다.
  */
 export function gaugeLevel(v: number): 0 | 1 | 2 | 3 {
   const a = Math.abs(v);
-  if (a <= DEADZONE) return 0;
+  // 데드존은 레버에서 이미 뺐다 — 0이 아니면 기계가 움직인다
+  if (a < 0.02) return 0;
   if (a <= 0.4) return 1;
   if (a <= 0.7) return 2;
   return 3;

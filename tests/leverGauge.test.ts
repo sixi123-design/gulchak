@@ -6,14 +6,14 @@ const html = readFileSync('index.html', 'utf8');
 const css = readFileSync('src/ui/styles.css', 'utf8');
 
 describe('레버 3칸 표시', () => {
-  it('데드존 안이면 0칸 — 기계가 안 움직이는 구간이다', () => {
+  it('손을 안 대면 0칸', () => {
     expect(gaugeLevel(0)).toBe(0);
-    expect(gaugeLevel(DEADZONE - 0.01)).toBe(0);
-    expect(gaugeLevel(DEADZONE)).toBe(0);
   });
 
-  it('데드존을 넘으면 1칸', () => {
-    expect(gaugeLevel(DEADZONE + 0.01)).toBe(1);
+  it('손 자리로 센다 — 조금이라도 밀면(기계가 움직이면) 1칸', () => {
+    // 레버 값은 데드존을 이미 뺀 손 자리다. 기계 값(곡선 뒤)으로 세면 0.4를 밀어도 0칸이었다
+    expect(gaugeLevel(0.05)).toBe(1);
+    expect(gaugeLevel(DEADZONE)).toBe(1);
     expect(gaugeLevel(0.4)).toBe(1);
   });
 
