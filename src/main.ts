@@ -1180,7 +1180,11 @@ $('btn-why').onclick = () => {
     () => {},
   );
 };
-function startLesson(i: number, again = false, lv = 0) {
+/**
+ * 미션 시작. `demo`가 false면 시범을 건너뛰고 실습부터 — 반복·다시는 연습하려고 누른다.
+ * 시범은 처음 한 번만 자동으로, 그 뒤로는 '▶ 시범'·'시범 다시 보기'로 원할 때만 (기획 검토)
+ */
+function startLesson(i: number, again = false, lv = 0, demo = true) {
   const L0 = curLessons()[i];
   // 처음 보는 미션은 이론 카드를 먼저 (반복할 때는 건너뜀)
   if (!again && L0?.why && !loadSeen(WHY_KEY).includes(L0.id)) {
@@ -1189,14 +1193,16 @@ function startLesson(i: number, again = false, lv = 0) {
       L0,
       () => {
         markSeen(WHY_KEY, L0.id);
-        beginLesson(i, again, lv);
+        beginLesson(i, again, lv, demo);
       },
       openLessonMap,
     );
   }
-  beginLesson(i, again, lv);
+  beginLesson(i, again, lv, demo);
 }
-function beginLesson(i: number, again = false, lv = 0) {
+/** 같은 미션에서 막혀 처음으로 되돌아간 횟수 (시범을 권할 때 쓴다) */
+let stuckN = 0;
+function beginLesson(i: number, again = false, lv = 0, demo = true) {
   clearTimeout(againTimer);
   tutorLook = !!curLessons()[i]?.flat;
   guideLv = lv;
@@ -1228,6 +1234,8 @@ function beginLesson(i: number, again = false, lv = 0) {
     session.ready();
     tutor = new Tutor(L, session);
   }
+  if (!again || demo) stuckN = 0;
+  if (!demo) tutor.skipDemo();
   renderMission(true);
 }
 /** 미션 도움 게이지: 막대(얼마나 왔나) 또는 바늘+목표 구간(각도 맞추기) */
@@ -1483,6 +1491,10 @@ function updateMeter() {
     badge.textContent = d === 'user' ? '직접 해보기' : '시범 중';
     // 배속 버튼: 시범이 도는 단계와 '다시 볼까요?'에서만 (다시 보기 전에 느리게 고를 수 있게)
     $('btn-slow').hidden = !(tutor.current?.ask || (tutor.current?.demo && d !== 'user'));
+    // 실습 중에 시범을 다시 보는 길. 막혀서 처음으로 돌아간 적이 있으면 눈에 띄게
+    const demoBtn = $('btn-demo');
+    demoBtn.hidden = !(tutor.hasDemo && d === 'user' && !tutor.current?.ask && tutor.step >= tutor.practiceStart());
+    demoBtn.classList.toggle('nudge', stuckN > 0);
     $('dr-say').textContent = say;
     $('m-hold').hidden = true;
     const ok = tutor.bag.okN ?? 0;
@@ -1590,7 +1602,8 @@ function onRewind() {
   buzz(40);
   if (tutor.wantReset) {
     const msg = tutor.notice;
-    startLesson(lessonIdx, true, guideLv);
+    stuckN++;
+    startLesson(lessonIdx, true, guideLv, false);
     tutor!.notice = `${msg ?? ''} (흙·자세를 처음으로)`.trim();
   }
   renderMission();
@@ -1610,6 +1623,8 @@ function onLessonClear() {
   const stars = [...document.querySelectorAll<HTMLElement>('.cl-stars i')];
   stars.forEach((el, k) => el.classList.toggle('off', !!g && k >= g.stars));
   $('clear-note').hidden = !g;
+  // 못한 사람에게만 시범 다시 보기 (버튼이 이미 많다 — 늘 띄우면 고르기 어렵다)
+  $('btn-clear-demo').hidden = !(tutor!.hasDemo && g && g.stars < 3);
   $('clear-note').textContent = g?.note ?? '';
   const last = lessonIdx >= curLessons().length - 1;
   $('btn-clear-next').hidden = last;
@@ -1645,7 +1660,13 @@ function onLessonFail(v: Violation) {
   $('fail').hidden = false;
 }
 $('btn-clear-next').onclick = () => startLesson(lessonIdx + 1);
-$('btn-clear-again').onclick = () => startLesson(lessonIdx, true, guideLv);
+$('btn-clear-again').onclick = () => startLesson(lessonIdx, true, guideLv, false);
+$('btn-clear-demo').onclick = () => startLesson(lessonIdx, true, guideLv, true);
+$('btn-demo').onclick = () => {
+  if (lessonIdx < 0 || !tutor) return;
+  sound.select();
+  startLesson(lessonIdx, true, guideLv, true);
+};
 $('btn-clear-less').onclick = () => startLesson(lessonIdx, true, Math.min(2, guideLv + 1));
 /** 시범 0.5배속 (켜 두면 다음 시범에도 유지 — 이 기기에만 기억) */
 let demoSlow = (() => {
@@ -1684,7 +1705,7 @@ $('btn-ask-next').onclick = () => askPick(false);
 $('btn-restart').onclick = () => {
   if (lessonIdx < 0 || !tutor) return;
   sound.select();
-  startLesson(lessonIdx, false, guideLv);
+  startLesson(lessonIdx, true, guideLv, false);
 };
 $('btn-clear-map').onclick = () => {
   $('clear').hidden = true;

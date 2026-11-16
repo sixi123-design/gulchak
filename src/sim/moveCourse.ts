@@ -1,6 +1,6 @@
-import { bucketLow, co, hold, pose, ropeClear, SC, fill, type Grade, type Lesson, type Step } from './tutorial';
+import { bucketLow, co, hold, ropeClear, SC, fill, type Grade, type Lesson, type Step } from './tutorial';
 import { retrySpan, SMOOTH_MAX, spanCo, spanJolt, startSpan, tickSpan, type Joint } from './gauge';
-import type { DigSession } from './session';
+import type { DigSession, Sticks } from './session';
 
 const deg = Math.PI / 180;
 
@@ -238,12 +238,19 @@ interface RdState {
   m0: number;
   /** 시범 시작 높이 (중간 지점 계산) */
   g0: number;
+  /** 시범 시작 버킷 각 (도) */
+  b0: number;
+  /** 피드백 전 레버 각도 (단계가 짠 각도) */
+  base: number;
+  /** 마지막으로 계산한 시범 프레임과 그 값 */
+  f: number;
+  out: Partial<Sticks>;
 }
 /** 세션마다 따로 (모듈 전역이면 세션 둘이 — 테스트·다시 시작 — 서로의 레버 자리를 덮어쓴다. 개발 검토) */
 const RDS = new WeakMap<DigSession, RdState>();
 const rd = (s: DigSession): RdState => {
   let v = RDS.get(s);
-  if (!v) RDS.set(s, (v = { a: 90, m: 0, a0: 90, m0: 0, g0: s.groundGap() }));
+  if (!v) RDS.set(s, (v = { a: 90, m: 0, a0: 90, m0: 0, g0: s.groundGap(), b0: s.pose.bucket / deg, base: 90, f: -1, out: {} }));
   return v;
 };
 /** 목표 높이: 버킷 바닥이 땅에서 이만큼 (m) */
@@ -266,29 +273,62 @@ interface Phase {
   min: number;
   /** 다음으로 넘어갈 조건 (없으면 min만) */
   until?: (s: DigSession) => boolean;
+  /** 버킷이 높이를 따라 펴지게 레버 각도를 고친다 (늦으면 3시 쪽으로 더) */
+  track?: boolean;
+  /** 시범 첫 토막: 기계를 시작 자세로 되돌린다 (다시 보기에도 같은 자리에서) */
+  reset?: (s: DigSession) => void;
+  /** 레버가 가운데 있을 때 각도를 바로 이 자리로 (돌려 옮기면 반대쪽 동작을 거친다) */
+  from?: number;
+  /** 길잡이 원호 [시작, 끝] (도, 화면 시계방향). 기본은 12시→3시 */
+  arc?: [number, number];
 }
-const phaseStep = (ph: Phase, first = false): Step => ({
+/**
+ * 내려가는 높이에 맞춰 버킷이 얼마나 펴져 있어야 하나 (도).
+ * 붐이 내려가기 시작한 높이에서 -120°, **거의 다 내려왔을 때(목표 + 15cm) -10°** —
+ * 다 내려온 뒤에 버킷을 펴면 순서가 틀린 시범이다 (앱 주인 지적, 2026-11-16)
+ */
+const RD_BUCKET_END = -10;
+const wantBucket = (s: DigSession) => {
+  const g1 = rdAt(s, 0.12);
+  const p = clamp01((g1 - s.groundGap()) / (g1 - (RD_LAND + 0.15)));
+  return rd(s).b0 + (RD_BUCKET_END - rd(s).b0) * p;
+};
+/** 버킷이 늦은 1°마다 레버를 3시 쪽으로 이만큼 (도) */
+const RD_K = 1.5;
+/** 손이 레버 각도를 한 스텝에 옮기는 최대 (도) — 피드백이 레버를 튀게 하지 않게 */
+const RD_TURN = 1.2;
+const phaseStep = (ph: Phase): Step => ({
   text: ph.text,
   labels: ph.labels,
   demo: (f, s) => {
     const RD = rd(s);
+    // 한 스텝에 여러 번 불린다(demoState도 부른다). 각도를 누적해 옮기므로 같은 프레임이면 같은 값
+    if (f === RD.f) return RD.out;
+    RD.f = f;
     const k = Math.min(1, f / Math.max(1, ph.ramp));
     // 서서히: 처음과 끝을 부드럽게 (손이 확 꺾이지 않게)
     const e = k * k * (3 - 2 * k);
-    RD.a = RD.a0 + (ph.a - RD.a0) * e;
+    RD.base = RD.a0 + (ph.a - RD.a0) * e;
+    let want = RD.base;
+    if (ph.track) want = Math.max(10, Math.min(90, RD.base - RD_K * (wantBucket(s) - s.pose.bucket / deg)));
+    // 피드백이 레버를 튀게 하지 않게 (따라가는 토막만 — 나머지는 이미 서서히 옮긴다)
+    RD.a = ph.track ? RD.a + Math.max(-RD_TURN, Math.min(RD_TURN, want - RD.a)) : want;
     RD.m = RD.m0 + (ph.m - RD.m0) * e;
-    return RD.m < 0.01 ? {} : toMachine(stickAt(RD.a, RD.m));
+    RD.out = RD.m < 0.01 ? {} : toMachine(stickAt(RD.a, RD.m));
+    return RD.out;
   },
-  guide: (s) => ({ ring: Math.max(0.2, rd(s).m), from: 90, to: 0, at: rd(s).a, rough: false }),
+  guide: (s) => ({ ring: Math.max(0.2, rd(s).m), from: ph.arc?.[0] ?? 90, to: ph.arc?.[1] ?? 0, at: rd(s).a, rough: false }),
   begin: (s, mem) => {
     const RD = rd(s);
-    if (first) {
-      reready(s);
-      RD.a = 90;
+    if (ph.reset) {
+      ph.reset(s);
+      RD.a = RD.base = ph.from ?? ph.a;
       RD.m = 0;
       RD.g0 = s.groundGap();
-    }
-    RD.a0 = RD.a;
+      RD.b0 = s.pose.bucket / deg;
+    } else if (ph.from !== undefined && RD.m < 0.01) RD.a = RD.base = ph.from;
+    RD.a0 = RD.base;
+    RD.f = -1;
     RD.m0 = RD.m;
     mem.t = 0;
   },
@@ -297,8 +337,7 @@ const phaseStep = (ph: Phase, first = false): Step => ({
 });
 const readyDemo = (): Step[] => [
   phaseStep(
-    { text: '오른쪽 레버를\n서서히 12시로', labels: ['붐 내림'], a: 90, m: 0.32, ramp: 70, min: 140 },
-    true,
+    { text: '오른쪽 레버를\n서서히 12시로', labels: ['붐 내림'], a: 90, m: 0.32, ramp: 70, min: 140, reset: reready },
   ),
   phaseStep({
     text: '붐이 움직이기 시작하면\n조금 더 밀기',
@@ -311,6 +350,7 @@ const readyDemo = (): Step[] => [
   }),
   phaseStep({
     text: '붐이 내려가기 시작 —\n조금씩 3시 쪽으로',
+    track: true,
     labels: ['붐 내림', '버킷 펴기'],
     a: 62,
     m: 0.6,
@@ -320,6 +360,7 @@ const readyDemo = (): Step[] => [
   }),
   phaseStep({
     text: '붐이 내려가면서\n버킷이 열립니다',
+    track: true,
     labels: ['붐 내림', '버킷 펴기'],
     a: 62,
     m: 0.6,
@@ -329,6 +370,7 @@ const readyDemo = (): Step[] => [
   }),
   phaseStep({
     text: '중간쯤 왔으면\n더 3시 가깝게',
+    track: true,
     labels: ['붐 내림', '버킷 펴기'],
     // 레버 곡선이 축마다 걸려서, 3시에 너무 붙이면 붐이 거의 멈춘다 — 40°·조금 깊게
     a: 40,
@@ -336,16 +378,19 @@ const readyDemo = (): Step[] => [
     ramp: 50,
     min: 60,
     // 버킷이 먼저 다 열리면 일직선을 지나친다 — 그 전에 3시로 넘어간다
-    until: (s) => s.groundGap() <= RD_LAND || s.pose.bucket >= -35 * deg,
+    until: (s) => s.groundGap() <= RD_LAND || s.pose.bucket >= (RD_BUCKET_END - 2) * deg,
   }),
   phaseStep({
     text: '목표 높이 — 3시로\n암과 버킷이 일직선이 될 때까지',
     labels: ['버킷 펴기'],
+    // 남은 건 10°쯤 — 살짝만 민다. 오래 밀면 일직선을 지나친다
+    // (읽을 시간은 앱이 지시문이 바뀔 때 시범을 세워서 준다 — 여기서 min을 길게 잡으면 그동안 계속 펴진다)
     a: 0,
-    m: 0.8,
-    ramp: 25,
-    min: 60,
-    until: (s) => s.pose.bucket >= RD_LINE,
+    m: 0.5,
+    ramp: 20,
+    min: 20,
+    // 레버를 놓는 동안에도 조금 더 펴진다 — 그만큼 앞에서 놓는다
+    until: (s) => s.pose.bucket >= RD_LINE - 4 * deg,
   }),
   phaseStep({ text: '일직선이면\n레버를 놓아 멈춤', labels: [], a: 0, m: 0, ramp: 20, min: 100 }),
 ];
@@ -439,6 +484,48 @@ export const READY_LESSON: Lesson = {
   ],
 };
 // ---------------------------------------------------------------- 3단계
+/** 흙을 담고 버리는 자리(C)에 온 상태 */
+/**
+ * 흙을 담고 C로 선회해 온 자세: 퍼기 준비와 같은 **선회해도 안전한 자세**
+ * (붐 48°·암 −72°·버킷 오므림 — 줄 위로 지나간다). 여기서 쏟기 시작한다 (앱 주인이 짠 순서, 2026-11-16)
+ */
+const dumpSetup = (s: DigSession) => {
+  s.teleport({ ...readyPose(), swing: 0 });
+  fill(s, 1.1);
+};
+/** 오므리기·붐 올리기를 같이 하는 레버 자리: 9시(180°)와 6시(270°) 사이 */
+const DUMP_ARC: [number, number] = [270, 180];
+/** 7시 (도) — 9시(180°)와 6시(270°) 사이에서 6시 쪽: 오므리면서 붐을 올린다 */
+const SEVEN = 240;
+/**
+ * 쏟고 돌릴 자세 시범 — 구분동작 (앱 주인이 짠 순서, 2026-11-16).
+ * 선회해 온 안전 자세 → 서서히 12시 → 12시에서 3시로 옮기며(붐 내림+버킷 펴기) 흙이 다 쏟아짐
+ * → 가운데 → 9시(오므림) → 7시(오므리며 붐 올림) → 선회 자세에서 천천히 놓기.
+ * 읽을 시간은 앱이 지시문이 바뀔 때마다 시범을 세워서 준다. 여기서는 레버를 천천히 옮기는 데만 시간을 쓴다
+ */
+const dumpDemo = (): Step[] => [
+  phaseStep({ text: '선회해 온 자세에서 시작\n줄 위로 안전한 높이', labels: [], a: 90, m: 0, ramp: 1, min: 90, reset: dumpSetup, arc: [90, 0] }),
+  phaseStep({ text: '오른쪽 레버를\n서서히 12시로', labels: ['붐 내림'], a: 90, m: 0.4, ramp: 60, min: 80, arc: [90, 0] }),
+  phaseStep({
+    text: '12시에서 3시로 옮기면서\n붐 내림 + 버킷 펴기',
+    labels: ['붐 내림', '버킷 펴기'],
+    a: 0,
+    m: 0.65,
+    // 손이 2.5초에 걸쳐 3시로 굴러간다 — 그 사이 버킷이 열리며 흙이 저절로 쏟아진다
+    ramp: 150,
+    min: 150,
+    until: (s) => s.load < MOVE.empty * SC(s),
+  }),
+  phaseStep({ text: '흙이 다 쏟아지면\n레버를 가운데로', labels: [], a: 0, m: 0, ramp: 30, min: 50, arc: [90, 0] }),
+  phaseStep({ text: '레버를 9시로\n버킷 오므리기', labels: ['버킷 오므림'], a: 180, from: 180, m: 0.55, ramp: 40, min: 110, arc: DUMP_ARC }),
+  // 놓는 동안에도 붐이 30cm쯤 더 올라간다 — 줄 바로 아래에서 놓기 시작하면 줄 위 알맞은 높이에 선다
+  phaseStep({ text: '7시로 옮기며\n오므리면서 붐 올리기', labels: ['버킷 오므림', '붐 올림'], a: SEVEN, m: 0.7, ramp: 60, min: 60, arc: DUMP_ARC, until: (s) => -s.pose.bucket / deg >= MOVE.curl && bucketLow(s) >= ropeClear(s) - 0.2 }),
+  phaseStep({ text: '선회 자세가 되면\n레버를 천천히 놓기', labels: [], a: SEVEN, m: 0, ramp: 50, min: 70, arc: DUMP_ARC }),
+];
+
+/** '오므리며 붐 올리기' 단계 번호 (막혔을 때 되돌아갈 곳 — 앞에 시범이 있어 번호를 박아 두면 틀린다) */
+const dumpLiftStep = () => DUMP_LESSON.steps.findIndex((st) => st.text === '오므리며 붐 올리기');
+
 export const DUMP_LESSON: Lesson = {
   id: 'b-dump',
   tier: '기본기',
@@ -462,17 +549,23 @@ export const DUMP_LESSON: Lesson = {
     if (c >= MOVE.co) return { stars: 2, note: '조금 겹쳐 썼어요. 버킷과 붐을 더 같이 움직여 보세요' };
     return { stars: 1, note: '하나씩 했어요. 오므리면서 드는 연습을 해보세요' };
   },
-  setup: (s) => {
-    // 흙을 담고 버리는 자리에 온 상태
-    const c = s.site.stations.find((x) => x.name === 'C');
-    const r = c ? (c.zoneIn + c.zoneOut) / 2 : 6;
-    pose(s, 0, r, 1.6, -40 * deg, -110 * deg);
-    fill(s, 1.1);
-  },
+  setup: (s) => dumpSetup(s),
   steps: [
+    ...dumpDemo(),
     {
-      text: '버킷을 펴서 흙 쏟기',
-      labels: ['버킷 펴기'],
+      text: '시범 끝\n다시 볼까요?',
+      labels: [],
+      ask: { replay: 0 },
+      // 고르는 동안 레버가 기계를 움직이지 않게 (퍼기 준비와 같게)
+      demo: () => ({}),
+      done: () => false,
+    },
+    {
+      text: '레버를 12시에서 3시로\n옮기며 흙 쏟기',
+      // 시범이 흙을 쏟고 자세를 바꿔 놓았다 — 같은 자리·같은 흙으로
+      begin: (s) => dumpSetup(s),
+      // 시범처럼 12시→3시로 옮기며 (붐 내림 + 버킷 펴기). 버킷만 펴도 쏟아지니 판정은 흙만 본다
+      labels: ['붐 내림', '버킷 펴기'],
       hud: (s) => `버킷에 남은 흙 ${Math.round((s.load / SC(s)) * 100)}%`,
       done: (s) => s.load < MOVE.empty * SC(s),
     },
@@ -498,7 +591,7 @@ export const DUMP_LESSON: Lesson = {
           mem.stuck = atEnd && still(s) && spanCo(mem) < MOVE.coMin ? (mem.stuck ?? 0) + 1 : 0;
           if (mem.stuck < 40) return null;
           bag.dumpRetry = 1;
-          return { to: 1, msg: '같이 움직여야 해요 — 다시' };
+          return { to: dumpLiftStep(), msg: '같이 움직여야 해요 — 다시' };
         },
         hud: (_s, mem) => (spanCo(mem) >= MOVE.co ? '좋아요 — 계속 접으며 올리기' : '한 번에 하나씩 쓰고 있어요'),
         done: (s, mem, bag) => {

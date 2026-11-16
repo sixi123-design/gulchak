@@ -130,3 +130,11 @@ it('흙에 넣기에는 진행 막대가 있다 — 내려갈수록 찬다', () 
   expect(vs[0]).toBeLessThan(0.1);
   expect(Math.max(...vs)).toBeGreaterThan(0.8);
 });
+
+it('다시 연습은 손맛 시범 세 토막을 건너뛴다', () => {
+  const t = tutor();
+  expect(t.hasDemo).toBe(true);
+  t.skipDemo();
+  expect(t.current?.text).toMatch(/이제 직접/);
+  expect(t.demoState()).toBe('user');
+});

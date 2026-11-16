@@ -715,6 +715,29 @@ export class Tutor<S extends { flags: { autoEnd: boolean } } = DigSession> {
     if (!this.cleared && this.current?.demo?.(this.demoFrame, this.s)) return 'demo';
     return this.demoFrame > 0 && this.demoRest > 0 ? 'rest' : 'user';
   }
+  /**
+   * 실습이 시작되는 단계: 마지막 '다시 볼까요?' 다음, 없으면 시범이 아닌 첫 단계.
+   * 반복 연습할 때마다 시범을 다시 보게 하면 안 된다 (기획 검토, 2026-11-16)
+   */
+  practiceStart(): number {
+    const st = this.lesson.steps;
+    let ask = -1;
+    st.forEach((x, i) => x.ask && (ask = i));
+    if (ask >= 0) return ask + 1;
+    const i = st.findIndex((x) => !x.demo);
+    return i < 0 ? 0 : i;
+  }
+  /** 이 미션에 시범이 있나 */
+  get hasDemo(): boolean {
+    return this.lesson.steps.some((x) => x.demo);
+  }
+  /** 시범을 건너뛰고 실습부터 */
+  skipDemo(): void {
+    const at = this.practiceStart();
+    if (at <= 0 || at >= this.lesson.steps.length) return;
+    this.step = at;
+    this.enter();
+  }
   /** 이 단계를 처음부터 다시 (시범도 다시 돈다) */
   restartStep(): void {
     this.enter();

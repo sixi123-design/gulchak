@@ -171,3 +171,29 @@ it('시범 레버 자리는 세션마다 따로다 — 둘을 번갈아 돌려�
   expect(a.s.pose.boom).toBeCloseTo(solo.s.pose.boom, 6);
   expect(a.s.pose.bucket).toBeCloseTo(solo.s.pose.bucket, 6);
 });
+
+it('시범: 거의 다 내려왔을 때 버킷은 이미 거의 펴져 있다 (다 내려온 뒤에 펴지 않는다)', () => {
+  const t = tutor();
+  let checked = false;
+  for (let i = 0; i < 4000 && !t.current?.ask; i++) {
+    run(t, {}, 1);
+    // 목표 높이 + 30cm 안으로 들어왔으면 버킷은 -25°보다 펴져 있어야 한다
+    if (t.step < 7 && t.s.groundGap() < 0.9) {
+      expect(t.s.pose.bucket / deg, `높이 ${t.s.groundGap().toFixed(2)}m`).toBeGreaterThan(-25);
+      checked = true;
+    }
+  }
+  expect(checked, '목표 높이 근처까지 안 내려왔다').toBe(true);
+  // 일직선을 크게 지나치지 않는다
+  expect(t.s.pose.bucket / deg).toBeLessThan(10);
+});
+
+it('다시 연습은 시범을 건너뛰고 실습 자세에서 시작한다', () => {
+  const t = tutor();
+  t.skipDemo();
+  expect(t.step).toBe(ARC_STEP);
+  expect(t.demoState()).toBe('user');
+  expect(t.s.pose.arm / deg).toBeCloseTo(READY_ARM, 0);
+  for (let i = 0; i < 1200 && t.step === ARC_STEP; i++) follow(t, 1);
+  expect(t.step).toBeGreaterThan(ARC_STEP);
+});

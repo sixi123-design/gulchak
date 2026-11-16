@@ -8064,3 +8064,18 @@ body.demo .stick .knob {
   background: #0000001a;
   border-color: var(--ink, #1d1b2e);
 }
+
+/* 평소에는 조용히 (지시문보다 튀면 누르라는 뜻으로 읽힌다) */
+#btn-demo {
+  background: #fff;
+}
+/* 막혀서 처음으로 돌아간 뒤: '▶ 시범'을 노랗게 두근거리게 (누르라고 권한다) */
+#btn-demo.nudge {
+  background: var(--sun);
+  animation: demoNudge 1.2s ease-in-out infinite;
+}
+@keyframes demoNudge {
+  50% {
+    transform: scale(1.08);
+  }
+}

@@ -1,9 +1,19 @@
 import { expect, it } from 'vitest';
 import { BASIC_LESSONS } from '../src/sim/leverSchool';
 import { ease, frame, tutorFor, until, type Hand as In } from './harness';
+import { MOVE } from '../src/sim/moveCourse';
+import { bucketLow, ropeClear, SC } from '../src/sim/tutorial';
+import { SMOOTH_MAX } from '../src/sim/gauge';
+
+const deg = Math.PI / 180;
 
 /** '쏟고 돌릴 자세'를 끝까지 — 정석으로 통과하고, 막다른 길이 없는지 */
-const tutor = () => tutorFor(BASIC_LESSONS.find((l) => l.id === 'b-dump')!);
+/** 실습부터 (시범 건너뜀 — 시범은 아래에서 따로 본다) */
+const tutor = () => {
+  const t = tutorFor(BASIC_LESSONS.find((l) => l.id === 'b-dump')!);
+  t.skipDemo();
+  return t;
+};
 const both: In = { rx: -0.75, ry: -0.75 }; // 버킷 오므림 + 붐 올림 (오른쪽 레버 왼쪽 아래)
 
 it('쏟고 → 오므리며 들고 → 천천히 놓으면 끝난다', () => {
@@ -18,14 +28,15 @@ it('쏟고 → 오므리며 들고 → 천천히 놓으면 끝난다', () => {
 it('하나씩 끝까지 써서 막히면, 쏟은 자세로 되돌려 다시 하게 한다', () => {
   const t = tutor();
   until(t, { rx: 0.8 }, 900);
+  const dumped = t.s.pose.bucket;
   const step = t.step;
   // 버킷만 끝까지 오므리고, 그다음 붐만 끝까지
-  for (let i = 0; i < 400 && t.step === step; i++) frame(t, { rx: -0.9 });
-  for (let i = 0; i < 400 && t.step === step; i++) frame(t, {});
+  for (let i = 0; i < 400 && t.step === step && !t.notice; i++) frame(t, { rx: -0.9 });
+  for (let i = 0; i < 400 && t.step === step && !t.notice; i++) frame(t, {});
   for (let i = 0; i < 900 && t.step === step && !t.notice; i++) frame(t, i < 600 ? { ry: -0.9 } : {});
   expect(t.notice ?? '', '막혔다고 알려 줘야 한다').toMatch(/같이/);
   expect(t.step).toBe(step);
-  expect(t.s.pose.bucket, '쏟은 자세로 돌아왔다').toBeGreaterThan(-60 * (Math.PI / 180));
+  expect(t.s.pose.bucket, '쏟은 자세로 돌아왔다').toBeCloseTo(dumped, 1);
   // 다시 같이 하면 통과
   expect(until(t, both, 900)).toBe(true);
 });
@@ -61,4 +72,21 @@ it('멈추기에는 진행 막대가 있다 — 잡고 있으면 0, 놓고 서�
   }
   expect(t.cleared).toBe(true);
   expect(top).toBeGreaterThan(0.9);
+});
+
+it('시범: 쏟고 → 오므리며 붐 올려 줄 위 선회 자세에서 덜컹 없이 멈춘다 → 다시 볼까요?', () => {
+  const t = tutorFor(BASIC_LESSONS.find((l) => l.id === 'b-dump')!);
+  let maxJolt = 0;
+  for (let i = 0; i < 3000 && !t.current?.ask; i++) {
+    frame(t, { ry: 1 }); // 시범 중 손을 대도 무시된다
+    maxJolt = Math.max(maxJolt, t.s.maxJolt);
+  }
+  expect(t.current?.ask, '시범이 끝나지 않았다').toBeTruthy();
+  expect(-t.s.pose.bucket / deg).toBeGreaterThanOrEqual(MOVE.curl);
+  expect(bucketLow(t.s)).toBeGreaterThanOrEqual(ropeClear(t.s));
+  expect(maxJolt).toBeLessThan(SMOOTH_MAX);
+  // 다음 → 실습은 흙이 다시 담긴 처음 자세에서
+  t.choose(false);
+  expect(t.current?.text).toMatch(/흙 쏟기/);
+  expect(t.s.load).toBeGreaterThan(MOVE.empty * SC(t.s));
 });
