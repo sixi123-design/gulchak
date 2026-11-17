@@ -4,6 +4,10 @@ import rules from '../src/config/rules.json';
 import { FREE, PRACTICE } from '../src/core/ruleEngine';
 import { ik } from '../src/sim/kinematics';
 import { DigSession, type RulesFile, type Sticks } from '../src/sim/session';
+/** 꽂는 깊이를 붐 속도와 무관하게: 예전 붐 내림 속도(28°/s)와 같은 속도가 되는 레버 크기 */
+/** 파는 중 '붐 살짝 올림': 예전 붐 올림 속도(28°/s)에서 0.1 레버와 같은 속도 */
+const UP = (0.1 * 28 * Math.PI) / 180 / MACHINE.speeds.boom;
+const DN = (28 * Math.PI) / 180 / (MACHINE.speeds.boom * MACHINE.boomDownGain);
 
 /** 퍼 담기 요령: 각도를 잡고 얕게 꽂아 당기며 오므려 쓸어 담는다. 잘못된 각도·과한 힘은 부하·들림으로 드러난다 */
 const R = rules as unknown as RulesFile;
@@ -35,7 +39,7 @@ describe('퍼 담기 요령', () => {
     s.setPose(ik(MACHINE, s.digTarget.rho, 0.2, -0.9)!);
     let maxSur = 0;
     for (let i = 0; i < 170; i++) {
-      s.input = { lx: 0, ly: 0, ...(i < 35 ? { rx: 0, ry: 1 } : { rx: -0.6, ry: 0 }) }; // 꽂은 뒤 버킷 레버만
+      s.input = { lx: 0, ly: 0, ...(i < 35 ? { rx: 0, ry: DN } : { rx: -0.6, ry: 0 }) }; // 꽂은 뒤 버킷 레버만
       s.step();
       maxSur = Math.max(maxSur, s.surcharge);
     }
@@ -49,10 +53,10 @@ describe('퍼 담기 요령', () => {
   it('흙에 닿은 채 암을 당기며 오므리면 입구부터 쌓인 뒤 안쪽으로 밀려 들어가 고봉까지 찬다', () => {
     const s = sess();
     s.setPose(ik(MACHINE, s.digTarget.rho, 0.2, -0.9)!);
-    run(s, [[26, { ry: 1 }], [30, { ly: -0.7, rx: -0.6, ry: -0.1 }]]);
+    run(s, [[26, { ry: DN }], [30, { ly: -0.7, rx: -0.6, ry: -UP }]]);
     // 처음 0.5초: 입구 쪽이 먼저
     expect(s.load - s.loadBack).toBeGreaterThan(s.loadBack);
-    run(s, [[190, { ly: -0.7, rx: -0.6, ry: -0.1 }]]);
+    run(s, [[190, { ly: -0.7, rx: -0.6, ry: -UP }]]);
     expect(s.load).toBeGreaterThan(SC);
     expect(s.loadBack).toBeGreaterThan(0.75 * SC);
     expect(s.load).toBeLessThanOrEqual(s.heapedCap + 1e-9);
@@ -67,10 +71,10 @@ describe('퍼 담기 요령', () => {
   it('비스듬히 꽂으면 조금만 들어가고, 당기며 오므려야 가득 찬다 (경고 없음)', () => {
     const s = sess();
     s.setPose(ik(MACHINE, s.digTarget.rho, 0.2, -0.9)!);
-    run(s, [[26, { ry: 1 }]]); // 흙 표면에서 20~30cm만 물기
+    run(s, [[26, { ry: DN }]]); // 흙 표면에서 20~30cm만 물기
     expect(s.load).toBeLessThan(0.25 * SC);
     // 암을 당기며 오므리고, 붐을 살짝 올려 깊이를 유지 (바른 요령)
-    const r = run(s, [[200, { ly: -0.7, rx: -0.6, ry: -0.1 }]]);
+    const r = run(s, [[200, { ly: -0.7, rx: -0.6, ry: -UP }]]);
     expect(s.load).toBeGreaterThan(SC);
     expect(s.loadBack / s.load).toBeGreaterThan(0.5); // 안쪽까지 밀려 들어감
     expect(r.ids.has('W-OVERLOAD')).toBe(false);
@@ -114,7 +118,7 @@ describe('퍼 담기 요령', () => {
     const scoop = (plunge: number) => {
       const s = sess();
       s.setPose(ik(MACHINE, s.digTarget.rho, 0.2, -0.9)!);
-      const r = run(s, [[plunge, { ry: 1 }], [180, { ly: -0.5, rx: -1 }]]);
+      const r = run(s, [[plunge, { ry: DN }], [180, { ly: -0.5, rx: -1 }]]);
       return { bucket: s.pose.bucket, ids: r.ids };
     };
     const ok = scoop(35);
@@ -153,7 +157,7 @@ describe('퍼 담기 요령', () => {
     expect(r.ids.has('D-LIFT')).toBe(true);
     const s2 = sess();
     s2.setPose(ik(MACHINE, s2.digTarget.rho, 0.2, -0.9)!);
-    const r2 = run(s2, [[26, { ry: 1 }], [220, { ly: -0.7, rx: -0.6, ry: -0.1 }]]);
+    const r2 = run(s2, [[26, { ry: DN }], [220, { ly: -0.7, rx: -0.6, ry: -UP }]]);
     expect(r2.ids.has('D-LIFT')).toBe(false);
   });
   it('자유 연습에서는 크게 들려도 실격 없음 (경고만)', () => {
@@ -206,7 +210,7 @@ describe('퍼 담기 요령 (아스트라 검토 반영)', () => {
     const drag = (curl: number) => {
       const s = sess();
       s.setPose(ik(MACHINE, s.digTarget.rho, 0.2, -0.9)!);
-      run(s, [[40, { ry: 1 }]]);
+      run(s, [[40, { ry: DN }]]);
       // 오므림은 반쯤(정석)까지만: 끝까지 오므리면 입구가 좁아져 덜 들어옴 (코치도 '반쯤 펴기')
       const step = (n: number) => {
         for (let i = 0; i < n; i++) {
@@ -240,7 +244,7 @@ describe('퍼 담기 요령 (아스트라 검토 반영)', () => {
     const got: number[] = [];
     s.onDigEntry((e) => got.push(e.dr));
     s.setPose(ik(MACHINE, s.digTarget.rho, 0.2, -0.9)!);
-    run(s, [[40, { ry: 1 }]]);
+    run(s, [[40, { ry: DN }]]);
     expect(got.length).toBe(1);
     expect(Math.abs(got[0])).toBeLessThan(0.2);
   });
@@ -250,7 +254,7 @@ describe('버킷 속 흙 분포·이빨', () => {
   it('실기 요령: 버킷 오므린 뒤 오므림을 멈추고 암만 당겨도 눌러 담겨 평적 80% 이상', () => {
     const s = sess();
     s.setPose(ik(MACHINE, s.digTarget.rho, 0.2, -0.9)!);
-    run(s, [[40, { ry: 1 }], [150, { rx: -0.6, ry: -0.1 }]]);
+    run(s, [[40, { ry: DN }], [150, { rx: -0.6, ry: -UP }]]);
     expect(s.load).toBeLessThan(0.8 * SC); // 오므림만으론 덜 참
     run(s, [[120, { ly: -0.7 }]]); // 무거운 흙: 암 당김 시간 여유
     expect(s.load).toBeGreaterThan(0.8 * SC);
@@ -259,7 +263,7 @@ describe('버킷 속 흙 분포·이빨', () => {
   it('오므리지 않고 끌기만 하면 흙이 앞쪽에 몰리고, 들어 올리면 앞쪽 흙이 쏟아진다', () => {
     const s = sess();
     s.setPose(ik(MACHINE, s.digTarget.rho, 0.2, -0.9)!);
-    run(s, [[26, { ry: 1 }], [130, { ly: -0.7, rx: 0, ry: -0.1 }]]);
+    run(s, [[26, { ry: DN }], [130, { ly: -0.7, rx: 0, ry: -UP }]]);
     const before = s.load;
     expect(s.loadBack / Math.max(before, 1e-9)).toBeLessThan(0.5); // 앞쪽에만 수북
     run(s, [[90, { ry: -1 }]]); // 오므리지 않고 붐만 올림
@@ -269,7 +273,7 @@ describe('버킷 속 흙 분포·이빨', () => {
     const s = sess();
     s.setPose(ik(MACHINE, s.digTarget.rho, 0.2, -0.9)!);
     // 당기며 오므린 뒤, 오므리면서 들어 올림 (흙 속에서는 오므림이 무거워 느림)
-    run(s, [[26, { ry: 1 }], [200, { ly: -0.7, rx: -0.6, ry: -0.1 }], [200, { rx: -0.8, ry: -0.5 }]]);
+    run(s, [[26, { ry: DN }], [200, { ly: -0.7, rx: -0.6, ry: -UP }], [200, { rx: -0.8, ry: -0.5 }]]);
     expect(s.pose.bucket).toBeLessThan(-1.3); // 오므리며 들어 올리면 75° 이상 오므려짐
     const before = s.load;
     expect(s.loadBack / before).toBeGreaterThan(0.6);
@@ -305,7 +309,7 @@ describe('자연스러운 퍼 올리기', () => {
     const s = sess();
     s.setPose(ik(MACHINE, s.digTarget.rho, 0.2, -0.9)!);
     // 꽂고 → 잠깐 멈춤 → 당기며 오므림 → 최대한 오므리며 들어 올림 (자연스러운 손동작)
-    run(s, [[26, { ry: 1 }], [12, {}], [200, { ly: -0.7, rx: -0.6, ry: -0.1 }], [240, { rx: -1, ry: -0.6 }], [60, { ry: -0.6 }]]);
+    run(s, [[26, { ry: DN }], [12, {}], [200, { ly: -0.7, rx: -0.6, ry: -UP }], [240, { rx: -1, ry: -0.6 }], [60, { ry: -0.6 }]]);
     expect(s.pose.bucket).toBeLessThan(MACHINE.limits.bucket[0] + 0.14); // 끝까지 오므려짐 (쿠션 구간에서는 천천히)
     expect(s.engine.violations.filter((v) => v.id === 'W-JOLT')).toEqual([]);
   });
@@ -328,7 +332,7 @@ describe('끝까지 오므리기 (시험 기본 동작)', () => {
   it('끝까지 오므린 채 선회하면 흙을 거의 흘리지 않는다', () => {
     const s = sess();
     s.setPose(ik(MACHINE, s.digTarget.rho, 0.2, -0.9)!);
-    run(s, [[26, { ry: 1 }], [12, {}], [130, { ly: -0.7, rx: -0.6, ry: -0.1 }], [150, { rx: -1, ry: -0.6 }], [80, { ry: -0.6 }]]);
+    run(s, [[26, { ry: DN }], [12, {}], [130, { ly: -0.7, rx: -0.6, ry: -UP }], [150, { rx: -1, ry: -0.6 }], [80, { ry: -0.6 }]]);
     const before = s.load;
     run(s, [[200, { lx: -0.5 }]]); // A → B 쪽으로 선회
     expect(s.carrySpill).toBeLessThan(before * 0.05);

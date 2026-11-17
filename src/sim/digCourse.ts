@@ -1,4 +1,4 @@
-import { MOVE, phaseStep, type Phase } from './moveCourse';
+import { handOn, MOVE, phaseStep, still as stillAll, swingPose, type Phase } from './moveCourse';
 import type { DigSession } from './session';
 import { bucketLow, co, hold, ropeClear, SC, type Grade, type Lesson, type Meter, type Step } from './tutorial';
 import { toWorld } from './kinematics';
@@ -101,12 +101,12 @@ export const bite = (s: DigSession) => {
   return Number.isNaN(y0) ? 0 : y0 - s.frame.tip.y;
 };
 /** 선회 자세: 끝까지 가깝게 오므리고, 버킷 최저점이 줄보다 넉넉히 위 (쏟고 돌릴 자세와 같은 기준) */
-export const swingReady = (s: DigSession) => -s.pose.bucket / deg >= MOVE.curl && bucketLow(s) >= ropeClear(s);
+export const swingReady = swingPose;
 
 /** 오른쪽 레버 길잡이: 7시 → 9시 → 12시 */
 const SCOOP_ARC: [number, number] = [240, 90];
 /** 7시 (도) — 오므리면서 붐 올리기 */
-const SEVEN = 240;
+const SEVEN = 230; // 7시보다 9시 쪽 — 버킷을 다 접는 동안 붐이 줄 위까지만 (쏟고 돌릴 자세와 같은 자리)
 const ph = (p: Phase): Step => phaseStep({ arc: SCOOP_ARC, ...p });
 
 const T_FAR = '왼쪽 레버를 12시로\n암을 펴서 먼 끝으로';
@@ -135,7 +135,7 @@ const scoopDemo = (): Step[] => [
     until: (s) => s.load >= SCOOP.full * SC(s) || toLine(s) <= SCOOP.lineMargin,
   }),
   ph({ text: '점선 전에 오른쪽 레버 7시로\n오므리면서 붐 올리기', labels: ['버킷 오므림', '붐 올림'], a: SEVEN, from: SEVEN, m: 0.75, ly: 0, ramp: 40, min: 60, until: swingReady }),
-  ph({ text: T_RELEASE, labels: [], a: SEVEN, m: 0, ramp: 50, min: 70 }),
+  ph({ text: T_RELEASE, labels: [], a: SEVEN, m: 0, ramp: 50, min: 70, until: (s) => swingReady(s) && stillAll(s) }),
 ];
 
 /** 실습 첫 단계 (되돌아갈 곳) — 앞에 시범이 있어 번호를 박아 두면 틀린다 */
@@ -306,9 +306,8 @@ export const SCOOP_LESSON: Lesson = {
       done: (s, mem, bag) => {
         bag.keep = Math.min(bag.keep ?? 1, fillOf(s));
         if (s.jolts > mem.j0) bag.jolt = 1;
-        const v = Math.max(Math.abs(s.stick.rx), Math.abs(s.stick.ry), Math.abs(s.stick.lx), Math.abs(s.stick.ly));
-        const still = Math.abs(s.vel.boom) < 0.02 * s.m.speeds.boom && Math.abs(s.vel.bucket) < 0.02 * s.m.speeds.bucket;
-        return hold(mem, v < 0.05 && still, 20);
+        // 쏟고 돌릴 자세의 멈추기와 같은 판정: 선회 자세 + 레버 놓음(≤0.12) + 네 축 정지, 15프레임 (아스트라 기준)
+        return hold(mem, swingReady(s) && !handOn(s) && stillAll(s), 15);
       },
       fail: (s, _mem, bag) => (fillOf(s) < SCOOP.keep * (bag.peak ?? 1) - 1e-6 ? { to: pracStart(), msg: '흙이 흘렀어요 — 다시 퍼기' } : null),
     },

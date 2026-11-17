@@ -146,11 +146,29 @@ function dir(o: {
       for (const k of o.keep ?? []) {
         if (Math.abs(s.pose[k] - mem['k_' + k]) > DRILL.mixWarn) return co(k === 'boom' ? '붐은 그대로 두세요' : '그 레버만 쓰세요', o.label);
       }
+      // 다른 레버를 움직이고 있으면 그게 무엇인지 바로 말해 준다 (첫 단계부터)
+      const wrong = movingOther(s, o.j);
+      if (wrong && !mem.say) return co(`그건 ${wrong}예요 — ${o.text}`, o.label, wrong);
       return null;
     },
   });
 }
 
+/** 지시한 관절 말고 다른 관절이 움직이는 중이면 그 동작 이름 (라벨과 같은 말) */
+const NAMES: Record<J | 'swing', [string, string]> = {
+  boom: ['붐 올림', '붐 내림'],
+  arm: ['암 펴기', '암 당기기'],
+  bucket: ['버킷 펴기', '버킷 오므림'],
+  swing: ['선회 ◀', '▶ 선회'],
+};
+const movingOther = (s: DigSession, j: J): string | null => {
+  for (const k of ['boom', 'arm', 'bucket', 'swing'] as const) {
+    if (k === j) continue;
+    const v = s.vel[k];
+    if (Math.abs(v) > 0.15 * s.m.speeds[k]) return k === 'swing' ? NAMES.swing[v > 0 ? 1 : 0] : NAMES[k][v > 0 ? 0 : 1];
+  }
+  return null;
+};
 /** 2 붐 내리기 — 바닥에 닿을 때까지 */
 const toGround = (): Step =>
   wrap({
@@ -169,6 +187,8 @@ const toGround = (): Step =>
       return false;
     },
     hud: (_s, mem) => (mem.say ? '바닥에 닿았습니다' : null),
+    // 시킨 일이다 — 바닥 충격 경고로 꾸중하지 않는다
+    quiet: ['W-IMPACT'],
   });
 
 /** 3 눌러 보기 — 왜 실격인지 몸으로. 우리가 시킨 일이므로 벌을 주지 않는다 */
@@ -282,7 +302,7 @@ export const LEVER_DRILL: Lesson = {
     s.teleport({ ...DRILL_START });
   },
   // 익히는 자리다. 끝까지 오면 별 3개 — 깎지 않는다
-  grade: () => ({ stars: 3, note: '붐으로 높이 · 버킷으로 각도 · 암으로 거리. 왼쪽 레버 좌우는 몸통 돌리기 — 「선회·흙 쏟기」에서' }),
+  grade: () => ({ stars: 3, note: '붐으로 높이 · 버킷으로 각도 · 암으로 거리. 왼쪽 레버 좌우는 몸통 돌리기 — 「선회해 C로」에서' }),
   steps: [
     dir({ j: 'boom', way: 1, text: '오른쪽 레버를 아래로', label: '붐 올림', said: '붐이 올라갑니다' }),
     toGround(),

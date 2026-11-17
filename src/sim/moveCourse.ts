@@ -1,5 +1,5 @@
 import { bucketLow, co, hold, ropeClear, SC, fill, type Grade, type Lesson, type Step } from './tutorial';
-import { retrySpan, SMOOTH_MAX, spanCo, spanJolt, startSpan, tickSpan, type Joint } from './gauge';
+import { SMOOTH_MAX, spanJolt, startSpan, tickSpan, type Joint } from './gauge';
 import type { DigSession, Sticks } from './session';
 
 const deg = Math.PI / 180;
@@ -20,8 +20,11 @@ export const MOVE = {
   gapHi: 0.45,
   /** 쏟았다고 보는 남은 양 */
   empty: 0.1,
-  /** 선회 전 오므림 각 */
-  curl: 60,
+  /**
+   * 선회 전 오므림 각 (도): **다 접음** — 버킷 한계(−135°)에서 5° 안 (앱 주인 지적·아스트라 기준, 2026-11-17).
+   * 쏟고 돌릴 자세·흙 퍼기 들기가 같은 기준
+   */
+  curl: 130,
 } as const;
 
 /** 구간마다 덜컹·동시조작을 재는 껍데기 */
@@ -39,11 +42,11 @@ const span = (st: Step, joints: Joint[]): Step => ({
 
 const smooth = (s: DigSession, mem: Record<string, number>) => spanJolt(s, mem) < SMOOTH_MAX;
 /** 정말로 서 있나 (최고 속도의 2% 아래). 없으면 목표 범위를 지나가며 통과해 버린다 */
-const still = (s: DigSession) =>
+export const still = (s: DigSession) =>
   (['boom', 'arm', 'bucket', 'swing'] as const).every((j) => Math.abs(s.vel[j]) < 0.02 * s.m.speeds[j]);
 
 /** 레버를 아직 잡고 있나 (손 자리) */
-const handOn = (s: DigSession) => Math.hypot(s.stick.rx, s.stick.ry) > 0.12 || Math.hypot(s.stick.lx, s.stick.ly) > 0.12;
+export const handOn = (s: DigSession) => Math.hypot(s.stick.rx, s.stick.ry) > 0.12 || Math.hypot(s.stick.lx, s.stick.ly) > 0.12;
 /** 얼마나 섰나 (0~1). 최고 속도의 100%면 0, still() 기준(2%) 아래면 1 — 로그로 고르게 */
 const settled = (s: DigSession) => {
   const f = Math.max(...(['boom', 'arm', 'bucket', 'swing'] as const).map((j) => Math.abs(s.vel[j]) / (0.02 * s.m.speeds[j])));
@@ -76,10 +79,10 @@ export const ARC = {
   smooth: 0.2,
   /** 끝났다고 보는 각도 (3시 근처) */
   endAng: 12,
-  /** 버킷 바닥이 이 높이에 닿을 때 레버가 3시에 와 있어야 한다 (m) */
-  land: 0.25,
+  /** 버킷 바닥이 이 높이에 닿을 때 레버가 3시에 와 있어야 한다 (m) — 결과 자세 창(READY_GOAL 0.35~0.75) 가운데 */
+  land: 0.5,
   /** 이 높이부터 레버를 3시로 굴리기 시작한다 (land + roll) */
-  roll: 1.5,
+  roll: 2.8, // 시범처럼 붐이 내려가기 시작하면 바로 3시 쪽으로 (별점 지점: 2m에서 펴지기 시작, 1m 앞에서 거의 다)
 } as const;
 
 const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
@@ -90,7 +93,18 @@ const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
  * 내려오는 높이에 맞춰 레버를 굴리면 붐이 서서히 멈추고 버킷이 서서히 펴져서,
  * 흙 파기 직전 자세로 끊김 없이 이어진다.
  */
-export const wantAngle = (s: DigSession) => 90 * clamp01((s.groundGap() - ARC.land) / ARC.roll);
+export const wantAngle = (s: DigSession) => {
+  const g = s.groundGap();
+  const base = 90 * clamp01((g - ARC.land) / ARC.roll);
+  // 시범처럼 버킷을 본다: 높이에 비해 버킷이 늦으면 3시 쪽으로, 앞서면 12시 쪽으로 (높이만 보면 버킷이 끝내 안 펴진다)
+  const want = DOT_BUCKET.top + (DOT_BUCKET.end - DOT_BUCKET.top) * clamp01((DOT_BUCKET.g1 - g) / (DOT_BUCKET.g1 - DOT_BUCKET.g2));
+  return Math.max(0, Math.min(90, base - DOT_BUCKET.k * (want - s.pose.bucket / deg)));
+};
+/**
+ * 노란 점이 따라가게 하는 버킷 각 (도): 높이 g1(시작 3.5m에서 조금 내려온 곳)에서 −120°,
+ * g2(결과 창 위쪽)에서 −10° — 시범(wantBucket)과 같은 모양. 별점 지점(2m·1m)을 이 길이 지난다
+ */
+const DOT_BUCKET = { g1: 3.15, g2: 0.65, top: -120, end: -10, k: 1.5 } as const;
 
 /** 각도(도)와 깊이로 오른쪽 레버값 */
 const stickAt = (a: number, m: number = ARC.ring) => ({ rx: Math.cos(a * deg) * m, ry: Math.sin(a * deg) * m });
@@ -113,7 +127,7 @@ const stickAt = (a: number, m: number = ARC.ring) => ({ rx: Math.cos(a * deg) * 
 export const READY_BOOM = 48;
 export const READY_ARM = -72;
 
-const readyPose = () => ({
+export const readyPose = () => ({
   swing: Math.PI,
   boom: READY_BOOM * deg,
   arm: READY_ARM * deg,
@@ -138,6 +152,55 @@ const toMachine = (k: { rx: number; ry: number }) => ({
 });
 
 /**
+ * 퍼기 준비 **결과 자세** (아스트라 기준, 2026-11-17) — 통과는 이것만 본다. 레버를 굴린 과정은 별점으로만.
+ * 버킷이 암과 일직선(±8°), 버킷 바닥이 땅에서 0.35~0.75m, 암·선회는 시작 그대로.
+ * 과정으로 통과를 막으면 맞는 자세에 온 사람을 되돌려 보낸다 (앱 주인 지적)
+ */
+export const READY_GOAL = { bucketTol: 8, gapLo: 0.35, gapHi: 0.75, armTol: 5, swingTol: 8 } as const;
+const readyErr = (s: DigSession) => ({
+  bucket: s.pose.bucket / deg,
+  gap: s.groundGap(),
+  arm: s.pose.arm / deg - READY_ARM,
+  swing: (s.pose.swing - Math.PI) / deg,
+});
+export const readyResult = (s: DigSession) => {
+  const e = readyErr(s);
+  const G = READY_GOAL;
+  return Math.abs(e.bucket) <= G.bucketTol && e.gap >= G.gapLo && e.gap <= G.gapHi && Math.abs(e.arm) <= G.armTol && Math.abs(e.swing) <= G.swingTol;
+};
+/** 지금 자세에서 결과 자세로 가려면 무엇을 할지 — 어떤 자세에서든 이걸 따르면 도착한다 */
+export const readyCoach = (s: DigSession) => {
+  const e = readyErr(s);
+  const G = READY_GOAL;
+  if (e.gap < G.gapLo) return co('너무 낮아요 — 붐 조금 올리기', '붐 올림');
+  if (e.bucket < -G.bucketTol) return co('버킷 조금 펴기 — 암과 일직선', '버킷 펴기');
+  if (e.bucket > G.bucketTol) return co('너무 폈어요 — 버킷 조금 오므리기', '버킷 오므림');
+  if (e.gap > G.gapHi) return co('조금 높아요 — 붐 조금 내리기', '붐 내림');
+  if (e.arm > G.armTol) return co('암이 펴졌어요 — 암 조금 당기기', '암 당기기');
+  if (e.arm < -G.armTol) return co('암이 접혔어요 — 암 조금 펴기', '암 펴기');
+  if (Math.abs(e.swing) > G.swingTol) return co('몸통이 돌았어요 — 왼쪽 레버 좌우로 되돌리기');
+  return co('맞았어요 — 레버 놓고 멈추기');
+};
+/**
+ * 레버를 잡고 있어도 자세 안내가 먼저인 때: 목표 높이 창까지 내려왔거나(이제 자세를 맞출 때),
+ * 버킷을 지나치게 폈을 때. 그 위에서 내려오는 동안은 노란 점이 안내한다
+ */
+const poseFirst = (s: DigSession) => s.groundGap() <= READY_GOAL.gapHi || s.pose.bucket / deg > READY_GOAL.bucketTol;
+/**
+ * 별점은 **몇 군데 지점**에서만 본다 (앱 주인, 2026-11-17): 그 지점을 지날 때 어느 범위에 있었는지 + 결과.
+ * 매 프레임 재지 않는다. 결과 자세에 왔으면 절차 때문에 불합격시키지 않는다.
+ * 지점을 처음 지날 때 한 번만 적는다 (1 = 범위 안, 0 = 밖). 안 지났으면(적힌 게 없으면) 깎지 않는다
+ */
+const mark = (bag: Record<string, number>, key: string, reached: boolean, ok: () => boolean) => {
+  if (bag[key] === undefined && reached) bag[key] = ok() ? 1 : 0;
+};
+const missed = (bag: Record<string, number>, keys: string[]) => keys.filter((k) => bag[k] === 0);
+/** 퍼기 준비 지점: 내려오는 중간(높이 2m)에 버킷이 펴지기 시작했나, 땅 1m 앞에서 거의 펴졌나 */
+const READY_CP = { midGap: 2.0, midBucket: -95, lowGap: 1.0, lowBucket: -50 } as const;
+/** 아직 시작 자세 그대로인가 (손대기 전) */
+const untouched = (s: DigSession) => s.groundGap() > 1.2 && s.pose.bucket < -90 * deg;
+
+/**
  * 선회해서 온 자세 → 흙 파기 직전 자세. **오른쪽 레버 하나**로 붐 내림과 버킷 펴기를 잇는다.
  *
  * 오른손을 12시(붐 내림)에서 3시(버킷 펴기)로 굴린다. 암은 건드리지 않는다 —
@@ -149,12 +212,11 @@ const arcStep = (): Step => ({
   labels: ['붐 내림', '버킷 펴기'],
   begin: (s, mem, bag) => {
     reready(s);
-    startSpan(s, mem);
     mem.ang = 90;
     mem.rough = 0;
-    mem.swept = 0;
-    mem.started = 0;
-    bag.rough = bag.rough ?? 0;
+    delete bag.cpMid;
+    delete bag.cpLow;
+    delete bag.jolt;
   },
   guide: (s) => {
     const m = stickMag(s);
@@ -171,7 +233,10 @@ const arcStep = (): Step => ({
   },
   hud: (s, mem) => {
     const m = stickMag(s);
-    if (m < 0.12) return '오른쪽 레버를 위(12시·붐 내림)로 밀며 시작';
+    // 손을 놓았으면 레버 길이 아니라 지금 자세로 말한다 (이미 맞는 사람을 처음으로 돌려보내지 않게)
+    if (m <= 0.12) return untouched(s) ? '오른쪽 레버를 위(12시·붐 내림)로 밀며 시작' : null;
+    // 자세 안내(코치)가 나오는 동안은 레버 길 안내를 겹쳐 띄우지 않는다 — 자세 오차가 먼저 (아스트라 기준)
+    if (poseFirst(s)) return null;
     const a = stickAngle(s);
     // 12시~3시 사분면 밖 = 반대로 밀고 있다 (9시·6시). 높이 탓으로 설명하면 안 된다
     if (a > 120 || a < -30) return '반대쪽이에요 — 12시에서 3시로';
@@ -185,37 +250,24 @@ const arcStep = (): Step => ({
     const g = s.groundGap();
     return g > 1 ? '좋아요 — 점을 따라 그대로' : `버킷 바닥까지 ${Math.max(0, Math.round(g * 100))}cm`;
   },
-  coach: (s) => (s.groundGap() <= 0.02 ? co('너무 깊어요 — 붐을 조금 올리기', '붐 올림') : null),
+  // 굴리는 중에는 노란 점이 안내한다. 손을 놓았거나 너무 낮으면 자세로 안내
+  coach: (s) => (poseFirst(s) || (stickMag(s) <= 0.12 && !untouched(s)) ? readyCoach(s) : null),
   done: (s, mem, bag) => {
-    tickSpan(s, mem, ['boom', 'bucket']);
+    // 한 번에 확 꺾으면 그 자리에서 알려 준다 (안내만 — 별점에는 안 넣는다)
     const m = stickMag(s);
-    const a = stickAngle(s);
     if (m > 0.12) {
-      // 12시 근처에서 출발했는가 (여기는 손이 실제로 둔 자리를 본다)
-      if (a >= 90 - ARC.angTol && a <= 90 + ARC.angTol) mem.started = 1;
-      // 점을 얼마나 따라갔는가 — 별점의 재료 (통과만 보면 '지나가며' 지나갈 수 있다).
-      // 평균이 아니라 **벗어난 프레임의 비율**이다 — 맞는 자리에서 오래 기다려도 희석되지 않게
-      if (mem.started) {
-        bag.offN = (bag.offN ?? 0) + 1;
-        if (Math.abs(a - wantAngle(s)) > ARC.angTol) bag.offBad = (bag.offBad ?? 0) + 1;
-      }
       const prev = mem.ang;
-      mem.ang = prev + (a - prev) * ARC.smooth;
-      // 한 번에 확 꺾으면 거칠다. 한 번의 꺾음을 한 번으로만 센다
-      if (Math.abs(mem.ang - prev) > ARC.jerkDeg) {
-        if (!mem.rough) bag.rough = (bag.rough ?? 0) + 1;
-        mem.rough = 20;
-      }
-      // 12시에서 3시로 내려온 만큼만 쌓는다 (되돌아간 것은 안 센다)
-      if (prev - mem.ang > 0) mem.swept += prev - mem.ang;
+      mem.ang = prev + (stickAngle(s) - prev) * ARC.smooth;
+      if (Math.abs(mem.ang - prev) > ARC.jerkDeg) mem.rough = 20;
     }
     if (mem.rough > 0) mem.rough--;
-    // 원호를 실제로 그리고, 땅 가까이 와야 한다. 3시에 레버를 툭 놓는 것으로는 안 된다.
-    // 멈추기 단계의 창(gapHi)보다 안쪽이어야 한다 — 0.5로 두면 45~50cm에서 통과해 다음 단계에 갇힌다
-    const ok = m > 0.12 && a <= ARC.endAng && a >= -ARC.angTol && s.groundGap() < MOVE.gapHi - 0.05;
-    if (ok) bag.co = spanCo(mem);
-    // 한 프레임 스치고 지나가면 안 된다 — 그 자세로 잠깐은 있어야 한다
-    return mem.started > 0 && mem.swept > 60 && hold(mem, ok, 10);
+    // 별점 지점 두 곳 (지날 때 한 번)
+    const g = s.groundGap();
+    const b = s.pose.bucket / deg;
+    mark(bag, 'cpMid', g < READY_CP.midGap, () => b >= READY_CP.midBucket);
+    mark(bag, 'cpLow', g < READY_CP.lowGap, () => b >= READY_CP.lowBucket);
+    // 통과는 결과 자세만 본다. 어떤 순서로 왔든 맞는 자세면 '멈추기'로
+    return hold(mem, readyResult(s), 3);
   },
 });
 
@@ -418,7 +470,8 @@ const readyDemo = (): Step[] => [
     // 레버를 놓는 동안에도 조금 더 펴진다 — 그만큼 앞에서 놓는다
     until: (s) => s.pose.bucket >= RD_LINE - 4 * deg,
   }),
-  phaseStep({ text: '일직선이면\n레버를 놓아 멈춤', labels: [], a: 0, m: 0, ramp: 20, min: 100 }),
+  // 실습과 같은 판정으로 끝난다: 결과 자세에서 다 섰을 때 (아스트라 기준)
+  phaseStep({ text: '일직선이면\n레버를 놓아 멈춤', labels: [], a: 0, m: 0, ramp: 20, min: 100, until: (s) => readyResult(s) && still(s) }),
 ];
 
 export const READY_LESSON: Lesson = {
@@ -438,14 +491,14 @@ export const READY_LESSON: Lesson = {
       '이번에는 <b>오른쪽 레버만</b> 씁니다. 암은 그대로 두세요.',
     ],
   },
+  // 지점 두 곳(중간 높이·땅 1m 앞)에서 버킷이 범위 안이었나 + 덜컹. 결과 자세엔 이미 왔다
   grade: (_s, bag): Grade => {
-    const r = bag.rough ?? 0;
-    // 점에서 벗어난 프레임 비율 + 두 손을 겹쳐 쓴 비율
-    const off = bag.offN ? (bag.offBad ?? 0) / bag.offN : 0;
-    const c = bag.co ?? 0;
-    if (r === 0 && off < 0.05 && c >= MOVE.co) return { stars: 3, note: '레버를 끊김 없이 굴려 내려놨습니다' };
-    if (r <= 3 && off < 0.25) return { stars: 2, note: '조금 끊겼어요. 노란 점을 따라 천천히 굴려 보세요' };
-    return { stars: 1, note: '하나씩 했어요. 붐 내림에서 버킷 펴기로 굴려 보세요' };
+    const miss = missed(bag, ['cpMid', 'cpLow']);
+    if (miss.length >= 2) return { stars: 1, note: '목표 자세는 맞았어요. 다음엔 내려오면서 버킷을 같이 펴 보세요' };
+    if (miss[0] === 'cpMid') return { stars: 2, note: '자세는 맞았어요. 붐이 내려가기 시작하면 버킷도 같이 펴세요' };
+    if (miss[0] === 'cpLow') return { stars: 2, note: '자세는 맞았어요. 땅에 가까워지기 전에 버킷을 거의 다 펴 두세요' };
+    if (bag.jolt) return { stars: 2, note: '자세는 맞았어요. 레버를 천천히 놓아 보세요' };
+    return { stars: 3, note: '내려오면서 버킷을 같이 펴 한 번에 맞췄습니다' };
   },
   setup: (s) => {
     s.teleport(readyPose());
@@ -481,29 +534,15 @@ export const READY_LESSON: Lesson = {
         text: '레버를 가운데로 놓아\n멈추기',
         // 멈추는 단계에서 방향 이름표를 깜빡이면 '계속 밀라'로 읽힌다 (검토)
         labels: [],
-        hud: (s) => {
-          const g = s.groundGap();
-          if (g > MOVE.gapLo && g < MOVE.gapHi)
-            return stickMag(s) > 0.12 || Math.hypot(s.stick.lx, s.stick.ly) > 0.12
-              ? '레버가 아직 밀려 있어요'
-              : still(s)
-                ? '멈추는 중 — 그대로'
-                : '여기! 레버를 가운데로 놓기';
-          if (g <= MOVE.gapLo) return '너무 깊어요 — 붐을 조금 올리기';
-          return `조금 더 — 버킷 바닥까지 ${Math.round(g * 100)}cm`;
-        },
+        hud: (s) => (readyResult(s) ? (handOn(s) ? '레버가 아직 밀려 있어요' : still(s) ? '멈추는 중 — 그대로' : '여기! 레버를 가운데로 놓기') : null),
         done: (s, mem, bag) => {
-          const g = s.groundGap();
-          const inWin = g > MOVE.gapLo && g < MOVE.gapHi;
-          // 범위 밖으로 나가면 '다시 내려오는 중'이다 — 충격을 새로 잰다 (덜컹 한 번에 막히지 않게)
-          if (!inWin) retrySpan(s);
-          // 레버를 실제로 놓아야 한다 — 이 단계가 가르치는 것이 '놓아서 멈추기'다
-          const hands = stickMag(s) < 0.12 && Math.hypot(s.stick.lx, s.stick.ly) < 0.12;
-          const ok = inWin && hands && still(s) && smooth(s, mem);
-          if (ok) bag.rough = bag.rough ?? 0;
-          return hold(mem, ok, 15);
+          // 같은 결과 자세 판정 + 레버 놓고 정지. 덜컹은 통과를 막지 않고 별에서 깎는다
+          if (!smooth(s, mem)) bag.jolt = 1;
+          const hands = !handOn(s);
+          return hold(mem, readyResult(s) && hands && still(s), 15);
         },
-        coach: (s, mem) => (!smooth(s, mem) ? co('덜컹했어요 — 붐을 조금 올렸다 다시 내리기', '붐 올림') : null),
+        // 자세가 벗어났으면 무엇을 할지 (맞으면 '놓고 멈추기')
+        coach: (s) => (readyResult(s) && !handOn(s) ? null : readyCoach(s)),
       },
       ['boom', 'bucket'],
     ),
@@ -521,8 +560,15 @@ const dumpSetup = (s: DigSession) => {
 };
 /** 오므리기·붐 올리기를 같이 하는 레버 자리: 9시(180°)와 6시(270°) 사이 */
 const DUMP_ARC: [number, number] = [270, 180];
-/** 7시 (도) — 9시(180°)와 6시(270°) 사이에서 6시 쪽: 오므리면서 붐을 올린다 */
-const SEVEN = 240;
+
+
+/** 들기 레버 자리 (도): 7시보다 9시 쪽 — 버킷을 **다 접는** 동안 붐이 줄 위까지만 오른다 `[측정]` */
+const LIFT_ANG = 220;
+/** 쏟는 높이 (버킷 바닥~땅, m): 이 높이까지 붐을 내린 뒤 펴기 시작 — 다 쏟을 때 0.1~0.8m */
+/** start: 시범이 쏟기 시작하는 높이 / coachHigh: 실습에서 '너무 높아요' 안내 (시범 높이와 따로) */
+const DUMP_LOW = { start: 2.0, coachHigh: 2.0 } as const;
+/** 쏟고 돌릴 자세 별점 지점 (넉넉하게): 반쯤 쏟을 때 1.2m 안 / 90° 접었을 때 붐으로 0.4m 이상 / 줄 0.5m 아래에서 80° 이상 */
+const DUMP_CP = { gap: 1.2, half: 90, rise: 0.4, below: 0.5, curlAt: 80 } as const;
 /**
  * 쏟고 돌릴 자세 시범 — 구분동작 (앱 주인이 짠 순서, 2026-11-16).
  * 선회해 온 안전 자세 → 서서히 12시 → 12시에서 3시로 옮기며(붐 내림+버킷 펴기) 흙이 다 쏟아짐
@@ -531,26 +577,28 @@ const SEVEN = 240;
  */
 const dumpDemo = (): Step[] => [
   phaseStep({ text: '선회해 온 자세에서 시작\n줄 위로 안전한 높이', labels: [], a: 90, m: 0, ramp: 1, min: 90, reset: dumpSetup, arc: [90, 0] }),
-  phaseStep({ text: '오른쪽 레버를\n서서히 12시로', labels: ['붐 내림'], a: 90, m: 0.4, ramp: 60, min: 80, arc: [90, 0] }),
+  // 쏟는 자리는 땅 가까이 — 높이서 쏟으면 흙이 튄다 (앱 주인 지적, 2026-11-17). 붐부터 내려 땅 가까이 온 뒤 쏟는다
+  phaseStep({ text: '오른쪽 레버를 12시로\n붐 내려 땅 가까이', labels: ['붐 내림'], a: 90, m: 0.55, ramp: 60, min: 80, arc: [90, 0], until: (s) => s.groundGap() < DUMP_LOW.start }),
   phaseStep({
     text: '12시에서 3시로 옮기면서\n붐 내림 + 버킷 펴기',
     labels: ['붐 내림', '버킷 펴기'],
     a: 0,
-    m: 0.65,
+    m: 0.7,
     // 손이 2.5초에 걸쳐 3시로 굴러간다 — 그 사이 버킷이 열리며 흙이 저절로 쏟아진다
-    ramp: 150,
-    min: 150,
-    until: (s) => s.load < MOVE.empty * SC(s),
+    ramp: 90,
+    min: 90,
+    // 시범은 다 쏟을 때까지 끝까지 편다 (실습 판정은 MOVE.empty로 너그럽게)
+    until: (s) => s.load < 0.01 * SC(s),
   }),
   phaseStep({ text: '흙이 다 쏟아지면\n레버를 가운데로', labels: [], a: 0, m: 0, ramp: 30, min: 50, arc: [90, 0] }),
   phaseStep({ text: '레버를 9시로\n버킷 오므리기', labels: ['버킷 오므림'], a: 180, from: 180, m: 0.55, ramp: 40, min: 110, arc: DUMP_ARC }),
   // 놓는 동안에도 붐이 30cm쯤 더 올라간다 — 줄 바로 아래에서 놓기 시작하면 줄 위 알맞은 높이에 선다
-  phaseStep({ text: '7시로 옮기며\n오므리면서 붐 올리기', labels: ['버킷 오므림', '붐 올림'], a: SEVEN, m: 0.7, ramp: 60, min: 60, arc: DUMP_ARC, until: (s) => -s.pose.bucket / deg >= MOVE.curl && bucketLow(s) >= ropeClear(s) - 0.2 }),
-  phaseStep({ text: '선회 자세가 되면\n레버를 천천히 놓기', labels: [], a: SEVEN, m: 0, ramp: 50, min: 70, arc: DUMP_ARC }),
+  phaseStep({ text: '7시로 옮기며\n버킷 다 접으면서 붐 올리기', labels: ['버킷 오므림', '붐 올림'], a: LIFT_ANG, m: 0.7, ramp: 60, min: 60, arc: DUMP_ARC, until: (s) => swingPose(s) }),
+  phaseStep({ text: '선회 자세가 되면\n레버를 천천히 놓기', labels: [], a: LIFT_ANG, m: 0, ramp: 50, min: 70, arc: DUMP_ARC, until: (s) => swingPose(s) && still(s) }),
 ];
 
-/** '오므리며 붐 올리기' 단계 번호 (막혔을 때 되돌아갈 곳 — 앞에 시범이 있어 번호를 박아 두면 틀린다) */
-const dumpLiftStep = () => DUMP_LESSON.steps.findIndex((st) => st.text === '오므리며 붐 올리기');
+/** 선회 자세: 버킷 다 접음 + 버킷 최저점이 줄보다 넉넉히 위 (흙 퍼기 들기와 같은 기준) */
+export const swingPose = (s: DigSession) => -s.pose.bucket / deg >= MOVE.curl - 1e-6 && bucketLow(s) >= ropeClear(s);
 
 export const DUMP_LESSON: Lesson = {
   id: 'b-dump',
@@ -569,11 +617,15 @@ export const DUMP_LESSON: Lesson = {
       '여기서도 몸통은 안 돌립니다. 자세만 잡습니다.',
     ],
   },
+  // 지점 세 곳: 반쯤 쏟았을 때 높이, 버킷을 반쯤(90°) 접었을 때 붐이 올라오고 있었나, 줄 0.8m 아래를 지날 때 버킷이 반쯤 접혀 있었나
   grade: (_s, bag): Grade => {
-    const c = bag.co ?? 0;
-    if (c >= 0.5) return { stars: 3, note: '오므리면서 들어 한 번에 선회 자세가 됐습니다' };
-    if (c >= MOVE.co) return { stars: 2, note: '조금 겹쳐 썼어요. 버킷과 붐을 더 같이 움직여 보세요' };
-    return { stars: 1, note: '하나씩 했어요. 오므리면서 드는 연습을 해보세요' };
+    const miss = missed(bag, ['cpDump', 'cpLift', 'cpCurl']);
+    if (miss.length >= 2) return { stars: 1, note: '자세는 맞았어요. 땅 가까이서 쏟고, 오므리면서 들어 보세요' };
+    if (miss[0] === 'cpDump') return { stars: 2, note: '자세는 맞았어요. 붐을 내려 땅 가까이서 쏟아 보세요' };
+    if (miss[0] === 'cpLift') return { stars: 2, note: '자세는 맞았어요. 오므리면서 붐도 같이 올려 보세요' };
+    if (miss[0] === 'cpCurl') return { stars: 2, note: '자세는 맞았어요. 붐을 올리면서 버킷도 같이 접어 보세요' };
+    if (bag.jolt) return { stars: 2, note: '자세는 맞았어요. 레버를 천천히 놓아 덜컹하지 않게' };
+    return { stars: 3, note: '땅 가까이서 쏟고, 오므리면서 들어 한 번에 선회 자세가 됐습니다' };
   },
   setup: (s) => dumpSetup(s),
   steps: [
@@ -587,49 +639,44 @@ export const DUMP_LESSON: Lesson = {
       done: () => false,
     },
     {
-      text: '레버를 12시에서 3시로\n옮기며 흙 쏟기',
+      text: '12시로 붐 내려 땅 가까이\n3시로 옮기며 흙 쏟기',
       // 시범이 흙을 쏟고 자세를 바꿔 놓았다 — 같은 자리·같은 흙으로
-      begin: (s) => dumpSetup(s),
+      begin: (s, _mem, bag) => {
+        dumpSetup(s);
+        for (const k of ['cpDump', 'cpLift', 'cpCurl', 'jolt']) delete bag[k];
+      },
       // 시범처럼 12시→3시로 옮기며 (붐 내림 + 버킷 펴기). 버킷만 펴도 쏟아지니 판정은 흙만 본다
       labels: ['붐 내림', '버킷 펴기'],
       hud: (s) => `버킷에 남은 흙 ${Math.round((s.load / SC(s)) * 100)}%`,
-      done: (s) => s.load < MOVE.empty * SC(s),
+      done: (s, _mem, bag) => {
+        mark(bag, 'cpDump', s.load < 0.5 * SC(s), () => s.groundGap() <= DUMP_CP.gap);
+        return s.load < MOVE.empty * SC(s);
+      },
+      // 높이서 쏟으면 흙이 튄다 — 땅 가까이에서 (막지는 않는다)
+      coach: (s) =>
+        s.groundGap() < 0.05
+          ? co('너무 낮아요 — 붐 조금 올리기', '붐 올림')
+          : s.groundGap() > DUMP_LOW.coachHigh && s.pose.bucket > -100 * deg && s.load > MOVE.empty * SC(s)
+            ? co('높아요 — 붐 내려 땅 가까이에서 쏟기', '붐 내림')
+            : null,
     },
     span(
       {
         text: '오므리며 붐 올리기',
         labels: ['버킷 오므림', '붐 올림'],
-        // 다시 할 때 돌아올 자세 (쏟은 직후)
-        begin: (s, _mem, bag) => {
-          if (bag.dumpRetry) {
-            s.teleport({ boom: bag.dB, arm: bag.dA, bucket: bag.dK });
-            bag.dumpRetry = 0;
-          } else {
-            bag.dB = s.pose.boom;
-            bag.dA = s.pose.arm;
-            bag.dK = s.pose.bucket;
-          }
-        },
-        // 하나씩 끝까지 써 버리면 더 움직일 수가 없어 비율이 영영 안 오른다 — 막다른 길. 쏟은 자세로 되돌려 다시
-        fail: (s, mem, bag) => {
-          const lim = s.m.limits;
-          const atEnd = s.pose.boom >= lim.boom[1] - 2 * deg || s.pose.bucket <= lim.bucket[0] + 2 * deg;
-          mem.stuck = atEnd && still(s) && spanCo(mem) < MOVE.coMin ? (mem.stuck ?? 0) + 1 : 0;
-          if (mem.stuck < 40) return null;
-          bag.dumpRetry = 1;
-          return { to: dumpLiftStep(), msg: '같이 움직여야 해요 — 다시' };
-        },
-        hud: (_s, mem) => (spanCo(mem) >= MOVE.co ? '좋아요 — 계속 접으며 올리기' : '한 번에 하나씩 쓰고 있어요'),
+        // 통과는 결과 자세(다 접음 + 줄 위)만. 같이 움직였는지는 지점 두 곳에서만 본다 (되돌려 보내지 않는다)
+        begin: (s, mem) => (mem.low0 = bucketLow(s)),
         done: (s, mem, bag) => {
-          const ok = -s.pose.bucket / deg >= MOVE.curl && bucketLow(s) >= ropeClear(s) && spanCo(mem) >= MOVE.coMin;
-          if (ok) bag.co = spanCo(mem);
-          return ok;
+          const curl = -s.pose.bucket / deg;
+          mark(bag, 'cpLift', curl >= DUMP_CP.half, () => bucketLow(s) >= mem.low0 + DUMP_CP.rise);
+          mark(bag, 'cpCurl', bucketLow(s) >= ropeClear(s) - DUMP_CP.below, () => curl >= DUMP_CP.curlAt);
+          return swingPose(s);
         },
-        coach: (s, mem) =>
+        coach: (s) =>
           -s.pose.bucket / deg < MOVE.curl
-            ? co('버킷을 더 오므리기', '버킷 오므림')
-            : spanCo(mem) < MOVE.co
-              ? co('붐도 같이 올리기', '붐 올림')
+            ? co('버킷을 끝까지 오므리기', '버킷 오므림')
+            : bucketLow(s) < ropeClear(s)
+              ? co('붐을 더 올리기', '붐 올림')
               : null,
       },
       ['bucket', 'boom'],
@@ -638,13 +685,14 @@ export const DUMP_LESSON: Lesson = {
       {
         text: '그 자세로 멈추기',
         labels: [],
-        done: (s, mem) => {
-          // 덜컹은 한 번 올라가면 안 내려간다 — 레버를 다시 잡으면 새로 잰다 (안 그러면 막다른 길)
-          if (handOn(s)) retrySpan(s);
-          return hold(mem, bucketLow(s) >= ropeClear(s) && still(s) && smooth(s, mem), 15);
+        // 결과 자세 + 레버 놓음 + 정지. 덜컹은 통과를 막지 않고 별에서 깎는다 (퍼기 준비와 같게 — 아스트라 기준).
+        // 레버를 놓아야 한다 — 버킷이 끝에 닿으면 잡은 채로도 선다
+        done: (s, mem, bag) => {
+          if (!smooth(s, mem)) bag.jolt = 1;
+          return hold(mem, swingPose(s) && !handOn(s) && still(s), 15);
         },
-        coach: (s, mem) => {
-          if (!smooth(s, mem)) return co('덜컹했어요 — 레버를 살짝 다시 밀었다 천천히 놓기');
+        coach: (s) => {
+          if (!handOn(s) && -s.pose.bucket / deg < MOVE.curl) return co('버킷을 끝까지 오므리기', '버킷 오므림');
           // 줄보다 낮으면 멈춰도 안 넘어간다 — 말해 주지 않으면 막대만 차고 끝이 안 난다
           if (!handOn(s) && bucketLow(s) < ropeClear(s)) return co('버킷이 줄보다 낮아요 — 붐 올리기', '붐 올림');
           return null;

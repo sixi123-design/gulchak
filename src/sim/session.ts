@@ -4,6 +4,7 @@ import { bucketCorners, bucketOutline, bucketUnderside, dirOf, fk, ik, latOf, to
 import { passHits, shapeOf, staticHits } from './judge';
 import { buildSite, type Site, type Station, type StationName } from './site';
 import { makeStationGrid, SoilWorld, type SoilGrid } from './soil';
+import { flowShare } from './hydraulics';
 import { clamp, dot, len, sub, v3, type V3 } from './vec';
 
 export interface RuleParams {
@@ -34,6 +35,8 @@ export interface RuleParams {
   /** 선회: 상부 차체가 무거워 천천히 붙고 천천히 멈춤 */
   swingTauUp: number;
   swingTauDown: number;
+  /** 선회 중 반대로 꺾을 때(역방향 제동): 빨리 서며 덜컹 */
+  swingTauRev: number;
   /** 이 감속도(최대속도의 배수/s)를 넘으면 충격 */
   joltSafeDecel: number;
   /** 경고를 띄우는 충격량 */
@@ -214,6 +217,8 @@ export class DigSession {
    * **손놀림**을 볼 때 쓴다. 커브(|v|^2.2)를 먹인 값으로는 각도가 일그러진다.
    */
   stick: Sticks = { lx: 0, ly: 0, rx: 0, ry: 0 };
+  /** 시작 점검에서 손을 들어 감독관에게 신호했나 (배우기 기초교육) */
+  signaled = false;
   frame: Frame;
   load = 0;
   /** 버킷 안쪽(바닥)까지 밀려 들어간 흙. 나머지(load - loadBack)는 입구 쪽에 수북한 흙 */
@@ -348,6 +353,9 @@ export class DigSession {
   private prevArmAngle: number | null = null;
   private endT = 0;
   pourAcc = 0;
+  /** 직전 스텝 버킷 날 끝 (쏟는 흙이 버킷 속도를 이어받게) */
+  private pourTipPrev: V3 | null = null;
+  private pourPinPrev: V3 | null = null;
   private impactCd = 0;
   private timeReported = false;
   private talus: number;
@@ -513,10 +521,22 @@ export class DigSession {
       ? {
           swing: this.input.lx * sp.swing * rf,
           arm: this.input.ly * sp.arm * rf,
-          boom: -this.input.ry * sp.boom * rf,
+          // 붐 내림은 자중으로 올림보다 빠르다
+          boom: -this.input.ry * sp.boom * rf * (this.input.ry > 0 ? this.m.boomDownGain : 1),
           bucket: this.input.rx * sp.bucket * rf,
         }
       : { swing: 0, arm: 0, boom: 0, bucket: 0 };
+    // 펌프 유량 분배: 여러 레버를 같이 쓰면 기름을 나눠 써서 느려진다 (혼자 쓰면 그대로)
+    if (active) {
+      const f = flowShare(
+        { swing: Math.abs(this.input.lx), arm: Math.abs(this.input.ly), boom: Math.abs(this.input.ry), bucket: Math.abs(this.input.rx) },
+        tgt.boom > 0,
+      );
+      tgt.swing *= f.swing;
+      tgt.arm *= f.arm;
+      tgt.boom *= f.boom;
+      tgt.bucket *= f.bucket;
+    }
     // 흙 무게: 많이 실을수록 붐 올림·선회·암이 굼뜨다 (가득 = 고봉)
     const wf = clamp(this.load / this.heapedCap, 0, 1);
     if (tgt.boom > 0) tgt.boom *= 1 - this.params.loadSlowBoom * wf;
@@ -574,12 +594,23 @@ export class DigSession {
     for (const j of ['swing', 'boom', 'arm', 'bucket'] as const) {
       // 유압 응답: 레버를 밀면 천천히 붙고, 놓으면 밸브가 빨리 닫혀 급정지
       const v0 = this.vel[j];
-      const speeding = Math.abs(tgt[j]) > Math.abs(v0) && (v0 === 0 || Math.sign(tgt[j]) === Math.sign(v0));
+      // 선회 역레버: 아직 도는 중에 반대로 민 레버는 민 만큼만 제동한다.
+      // 0.3 미만은 그냥 놓은 것과 같고(릴리프로 미끄러지며 섬), 끝까지 꺾어야 역방향 제동으로 확 선다
+      const reversing = j === 'swing' && tgt[j] !== 0 && Math.sign(tgt[j]) === -Math.sign(v0);
+      const revK = reversing ? clamp((Math.abs(this.input.lx) - 0.3) / 0.7, 0, 1) : 1;
+      const goal = reversing && Math.abs(v0) > 0.02 * sp[j] ? tgt[j] * revK : tgt[j];
+      const speeding = Math.abs(goal) > Math.abs(v0) && (v0 === 0 || Math.sign(goal) === Math.sign(v0));
       const tau =
         j === 'swing'
-          ? (speeding ? this.params.swingTauUp : this.params.swingTauDown) * (1 + this.params.loadSwingInertia * wf)
+          ? // 레버를 놓으면 상부 관성으로 더 돈다(목표 앞에서 놓아야 함). 반대로 꺾으면 역방향 제동으로 확 선다
+            (speeding
+              ? this.params.swingTauUp
+              : reversing
+                ? this.params.swingTauDown + (this.params.swingTauRev - this.params.swingTauDown) * revK
+                : this.params.swingTauDown) *
+            (1 + this.params.loadSwingInertia * wf)
           : speeding ? this.params.hydTauUp : this.params.hydTauDown;
-      this.vel[j] += (tgt[j] - v0) * Math.min(1, dt / tau);
+      this.vel[j] += (goal - v0) * Math.min(1, dt / tau);
       // 흙을 실은 채 선회·붐을 출발·정지하면 무게가 쏠려 차체가 출렁인다 (급조작 '덜컹'보다 약한 상시 출렁임)
       if (wf > 0 && (j === 'swing' || j === 'boom')) {
         const dv = ((this.vel[j] - v0) / Math.max(sp[j], 1e-6)) * wf * this.params.loadSway * reachF;
@@ -616,7 +647,8 @@ export class DigSession {
       if (j !== 'swing') {
         const lim = this.m.limits[j];
         const dist = this.vel[j] < 0 ? this.pose[j] - lim[0] : lim[1] - this.pose[j];
-        const cap = sp[j] * rf * clamp(dist / ((6 * Math.PI) / 180), 0.25, 1);
+        const top = j === 'boom' && this.vel[j] < 0 ? sp[j] * this.m.boomDownGain : sp[j];
+        const cap = top * rf * clamp(dist / ((6 * Math.PI) / 180), 0.25, 1);
         if (Math.abs(this.vel[j]) > cap) this.vel[j] = Math.sign(this.vel[j]) * cap;
       }
       // 릴리프: 실린더 끝(0.5° 이내)에서 그쪽으로 레버를 계속 밀면 밸브가 열린다
@@ -944,7 +976,7 @@ export class DigSession {
     this.overloadAcc = this.overloadAcc * Math.exp(-dt / 1.5) + Math.max(0, this.engineLoad - 1) * dt;
     this.maxOverloadAcc = Math.max(this.maxOverloadAcc, this.overloadAcc);
     if (this.overloadAcc > this.params.overloadWarnSec)
-      this.report('W-OVERLOAD', this.lastBite > this.params.curlFree ? '너무 깊이 물었음: 붐 살짝 올려 얕게' : '날 방향이 아니라 밀고 있음: 각도를 바꾸거나 얕게');
+      this.report('W-OVERLOAD', this.lastBite > this.params.curlFree ? '너무 깊이 물었음: 붐 살짝 올리기 (이빨이 안 보일 만큼만)' : '날 방향이 아니라 밀고 있음: 각도를 바꾸거나 얕게');
     if (this.lift > (this.params.liftWarnDeg * Math.PI) / 180) this.report('W-LIFT', '땅을 너무 눌러 차체가 들림');
     // 안전사고·장비 손상 우려 (Q2): 시험 순서 모드에서만 실격
     if (this.flags.timeLimit && this.lift > (this.params.liftFailDeg * Math.PI) / 180) this.report('D-LIFT', '버킷으로 땅을 눌러 차체가 크게 들림');
@@ -1804,6 +1836,23 @@ export class DigSession {
   private pour(dt: number, cutting = false) {
     const f = this.frame;
     const tipW = toWorld(this.pose.swing, f.tip);
+    // 쏟는 흙은 그 순간 버킷 날 끝 속도를 이어받는다 — 선회하며 쏟으면 앞으로 흩뿌려진다
+    const pv = this.pourTipPrev;
+    this.pourTipPrev = tipW;
+    const pinW = toWorld(this.pose.swing, f.P2);
+    const pp = this.pourPinPrev;
+    this.pourPinPrev = pinW;
+    let carry = v3(0, 0, 0);
+    if (pv && pp && dt > 0) {
+      // 버킷이 실려 가는 속도(핀)는 70%, 버킷을 펴는 회전분(날끝-핀)은 30%만 — 펴기만으로 멀리 던지지 않게
+      const k = 0.7 / dt;
+      const kr = 0.3 / dt;
+      const c = (t: number, t0: number, q: number, q0: number) => (q - q0) * k + (t - t0 - (q - q0)) * kr;
+      carry = v3(c(tipW.x, pv.x, pinW.x, pp.x), c(tipW.y, pv.y, pinW.y, pp.y), c(tipW.z, pv.z, pinW.z, pp.z));
+      const sp = Math.hypot(carry.x, carry.y, carry.z);
+      // 순간이동은 setPose·teleport에서 기준점을 지운다. 그래도 남는 비정상값만 거른다 (최고속 선회 날끝 약 9m/s)
+      if (sp > 15) carry = v3(0, 0, 0);
+    }
     // 버킷이 흙에 묻혀 있으면(날 끝이 표면 아래) 흙이 빠져나갈 수 없다
     const buried = tipW.y < this.soil.surfaceAt(tipW.x, tipW.z) - 0.02;
     const ny = f.nOpen.y;
@@ -1829,8 +1878,13 @@ export class DigSession {
     if (this.isCarrying()) this.carrySpill += v;
     if (this.pourAcc > 0.004 || this.load < 1e-4) {
       const W = this.m.bucketWidth;
-      const tip = toWorld(this.pose.swing, f.tip, (this.rand() - 0.5) * W * 0.8);
-      const vel = v3((this.rand() - 0.5) * 0.4, -0.5, (this.rand() - 0.5) * 0.4);
+      // 흙은 입구 가운데(핀과 날 끝 사이)에서 떨어진다 — 날 끝에서 나오면 다 편 버킷 앞으로 1m 넘게 건너뛴다
+      const mouth = { r: (f.tip.r + f.P2.r) / 2, y: Math.min(f.tip.y, (f.tip.y + f.P2.y) / 2) };
+      const lat = (this.rand() - 0.5) * W * 0.8;
+      let tip = toWorld(this.pose.swing, mouth, lat);
+      // 입구 가운데가 땅(구덩이 가장자리 등) 속이면 날 끝에서 (흙은 땅을 뚫고 나오지 않는다)
+      if (tip.y < this.soil.surfaceAt(tip.x, tip.z)) tip = toWorld(this.pose.swing, f.tip, lat);
+      const vel = v3((this.rand() - 0.5) * 0.4 + carry.x, -0.5 + carry.y, (this.rand() - 0.5) * 0.4 + carry.z);
       if (this.particles.length < 140) this.particles.push({ p: tip, v: vel, vol: this.pourAcc, id: this.particleId++ });
       else this.land(tip, this.pourAcc);
       this.pourAcc = 0;
@@ -2080,6 +2134,8 @@ export class DigSession {
   setPose(p: Partial<Pose>) {
     Object.assign(this.pose, p);
     this.frame = fk(this.m, this.pose);
+    this.pourTipPrev = null;
+    this.pourPinPrev = null;
   }
   /** 자세를 순간이동 (배우기 미션 시작용): 이동 경로를 판정하지 않고 속도도 0 */
   teleport(p: Partial<Pose>) {
@@ -2092,6 +2148,8 @@ export class DigSession {
     this.prevArmAngle = null;
     this.soilBucketPrev = null;
     this.soilPosePrev = null;
+    this.pourTipPrev = null; // 순간이동 거리를 쏟는 흙의 속도로 치지 않게
+    this.pourPinPrev = null;
     this.prevStation = this.stationOf(toWorld(this.pose.swing, this.frame.tip))?.name ?? null;
   }
   swingDir() {

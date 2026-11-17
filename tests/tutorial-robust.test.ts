@@ -40,41 +40,18 @@ const skim = (dir: 1 | -1) => (s: DigSession) => {
 };
 /** 단계별 기본 조작 (정석) */
 const BASE: Record<string, Policy[]> = {
-  scoop: [
-    (s) => ({ rx: s.pose.bucket < -5 * deg ? 1 : s.pose.bucket > 5 * deg ? -1 : 0 }),
-    () => ({ ly: 0.8 }),
-    (s) => {
-      const r = s.frame.tip.r;
-      const want = s.digTarget.rho - 0.4;
-      return { ry: 0.6, ly: r < want - 0.15 ? 0.6 : r > want + 0.15 ? -0.6 : 0 };
-    },
-    () => ({ rx: -0.6, ry: -0.1 }),
-    (s) => ({ ly: -0.7, ry: s.groundGap() < -0.6 ? -0.4 : 0 }),
-    () => ({ rx: -1, ry: -1 }),
-  ],
   deepScoop: [
     (s) => ({ ly: far(s) < -0.3 ? 0.5 : far(s) > -0.15 ? -0.4 : 0, rx: vert(s) < -12 ? 0.6 : vert(s) > 12 ? -0.6 : 0 }),
-    (s) => ({ ry: 0.6, ly: far(s) < -0.35 ? 0.6 : 0 }),
-    (s) => ({ rx: -s.pose.bucket < 40 * deg ? -0.6 : 0, ly: -0.6, ry: s.groundGap() > -0.2 ? 0.6 : s.groundGap() < -0.6 ? -0.4 : 0 }),
+    // 붐 내림은 올림보다 빠르다(45°/s) — 꽂을 때는 살살
+    (s) => ({ ry: 0.4, ly: far(s) < -0.35 ? 0.6 : 0 }),
+    (s) => ({ rx: -s.pose.bucket < 40 * deg ? -0.6 : 0, ly: -0.6, ry: s.groundGap() > -0.2 ? 0.4 : s.groundGap() < -0.6 ? -0.3 : 0 }),
     (s) => ({ ry: -0.8, rx: s.fullyCurled ? 0 : -1 }),
   ],
-  flowDump: [0, 1, 2].flatMap(() => [
-    (s: DigSession) => ({ ry: Math.min(...[s.frame.tip.y, s.frame.heel.y]) > 1.2 ? 0.5 : 0, rx: 0.8 }),
-    (s: DigSession) => ({ ry: -0.8, rx: -s.pose.bucket < 70 * deg ? -0.8 : 0, ly: s.frame.tip.r > s.site.B.rF - 0.5 ? -0.5 : 0 }),
-  ]),
-  flow: [0, 1, 2].flatMap(() => [
-    (s: DigSession) => {
-      const g = s.groundGap();
-      const r = s.frame.tip.r - (s.digTarget.rho - 0.4);
-      return { ry: g > 0.25 ? 0.5 : g < 0.1 ? -0.3 : 0, rx: s.pose.bucket < -8 * deg ? 0.7 : s.pose.bucket > 8 * deg ? -0.7 : 0, ly: r < -0.25 ? 0.6 : r > 0.25 ? -0.6 : 0 };
-    },
-    (s: DigSession) => ({ ry: -0.8, rx: -s.pose.bucket < 70 * deg ? -0.8 : 0, ly: s.frame.tip.r > s.site.B.rF - 0.5 ? -0.5 : 0 }),
-  ]),
   flatten: [
     () => ({ rx: 1 }),
     () => ({ ly: 1 }),
     skim(-1),
-    () => ({ ry: -0.6, ly: -1 }),
+    () => ({ ry: -0.3, ly: -1 }),
     skim(1),
     (s) => (s.pose.bucket < s.m.limits.bucket[1] - 0.02 ? { rx: 1 } : s.groundGap() > 0.02 ? { ry: 0.5 } : {}),
   ],
@@ -127,7 +104,7 @@ function play(id: string, seed: number, noise: boolean, budget = 7200) {
 }
 
 describe('배우기: 어긋난 조작에도 안내 따라 끝까지 (막다른 길 없음)', () => {
-  for (const id of ['scoop', 'deepScoop', 'flatten', 'flow', 'flowDump']) {
+  for (const id of ['deepScoop', 'flatten']) {
     it(`${id}: 정석이면 안내·되돌림 없이 완료`, () => {
       const r = play(id, 1, false);
       expect(r.cleared, JSON.stringify({ ...r, coached: [...r.coached] })).toBe(true);
@@ -142,23 +119,4 @@ describe('배우기: 어긋난 조작에도 안내 따라 끝까지 (막다른 �
       expect(fails, JSON.stringify(fails)).toEqual([]);
     });
   }
-  it('퍼 담기: 버킷을 지나치게 오므리면 처음으로 안 돌아가고 "반쯤 펴기" 안내', () => {
-    const L = lesson('scoop');
-    const t = new Tutor(L, mk());
-    for (let i = 0; i < 3000 && t.step < 4; i++) {
-      t.s.input = { lx: 0, ly: 0, rx: 0, ry: 0, ...BASE.scoop[t.step](t.s) };
-      t.s.step();
-      t.update();
-    }
-    expect(t.step).toBe(4);
-    let msg = '';
-    for (let i = 0; i < 400 && !msg.includes('반쯤 펴기'); i++) {
-      t.s.input = { lx: 0, ly: 0, rx: -1, ry: 0 };
-      t.s.step();
-      t.update();
-      msg = t.coach?.msg ?? '';
-    }
-    expect(msg).toContain('반쯤 펴기');
-    expect(t.rewinds).toBe(0);
-  });
 });

@@ -789,7 +789,7 @@ body:has(#settings.seat:not([hidden])) #precheck {
   color: #ffc23a;
 }
 .modebtn.tier-mid.on {
-  animation: midGlow 1.6s ease-in-out infinite;
+  animation: midGlow 1.6s ease-in-out 4;
 }
 @keyframes midGlow {
   50% {
@@ -827,7 +827,7 @@ body:has(#settings.seat:not([hidden])) #precheck {
   }
 }
 .modebtn.tier-boss.on {
-  animation: bossGlow 1.1s ease-in-out infinite;
+  animation: bossGlow 1.1s ease-in-out 4;
 }
 @keyframes bossGlow {
   50% {
@@ -1302,7 +1302,7 @@ body:has(#settings.seat:not([hidden])) #precheck {
   color: var(--ink);
 }
 .modebtn.tier-learn.on {
-  animation: learnGlow 1.6s ease-in-out infinite;
+  animation: learnGlow 1.6s ease-in-out 4;
 }
 @keyframes learnGlow {
   50% {
@@ -1447,6 +1447,8 @@ body:has(#settings.seat:not([hidden])) #precheck {
   margin-right: 6px;
 }
 .m-text {
+  word-break: keep-all;
+  text-wrap: balance;
   font: 900 20px var(--font);
   color: var(--sun);
   margin: 2px 0 4px;
@@ -4264,13 +4266,13 @@ body:has(#mission.good) .stick .lab.hint::after {
 }
 /* 고른 카드의 빛(기존 맥동)은 등장 뒤에 이어서 */
 #precheck .modebtn.tier-learn.on {
-  animation: spIn 0.45s cubic-bezier(0.2, 1.5, 0.4, 1) backwards, learnGlow 1.6s ease-in-out 0.5s infinite;
+  animation: spIn 0.45s cubic-bezier(0.2, 1.5, 0.4, 1) backwards, learnGlow 1.6s ease-in-out 0.5s 4;
 }
 #precheck .modebtn.tier-mid.on {
-  animation: spIn 0.45s cubic-bezier(0.2, 1.5, 0.4, 1) 0.14s backwards, midGlow 1.6s ease-in-out 0.6s infinite;
+  animation: spIn 0.45s cubic-bezier(0.2, 1.5, 0.4, 1) 0.14s backwards, midGlow 1.6s ease-in-out 0.6s 4;
 }
 #precheck .modebtn.tier-boss.on {
-  animation: spIn 0.45s cubic-bezier(0.2, 1.5, 0.4, 1) 0.21s backwards, bossGlow 1.1s ease-in-out 0.7s infinite;
+  animation: spIn 0.45s cubic-bezier(0.2, 1.5, 0.4, 1) 0.21s backwards, bossGlow 1.1s ease-in-out 0.7s 4;
 }
 @keyframes spIn {
   from {
@@ -4841,7 +4843,7 @@ body.stage-on #precheck .modebtn.pay::before {
   background: #fff;
   color: #1d1b2e;
   box-shadow: 0 4px 0 #1d1b2e;
-  font: 900 15px system-ui, sans-serif;
+  font: 900 15px var(--font);
 }
 .exam-check .ec-btn i {
   width: 14px;
@@ -4854,7 +4856,7 @@ body.stage-on #precheck .modebtn.pay::before {
   background: #2fd27a;
 }
 .exam-check .ec-btn small {
-  font: 700 12px system-ui, sans-serif;
+  font: 700 13px var(--font);
   color: #5a5870;
 }
 .exam-check .ec-btn:active,
@@ -4872,7 +4874,7 @@ body.stage-on #precheck .modebtn.pay::before {
   background: #ffc23a;
   color: #1d1b2e;
   box-shadow: 0 5px 0 #1d1b2e;
-  font: 900 18px system-ui, sans-serif;
+  font: 900 18px var(--font);
   animation: ecHand 1.3s ease-in-out infinite;
 }
 .exam-check .ec-hand span {
@@ -4957,7 +4959,7 @@ body[data-kind='drive'] .exam-check.working {
   display: flex;
   flex-wrap: wrap;
   gap: 6px 10px;
-  font: 800 13px system-ui, sans-serif;
+  font: 800 13px var(--font);
   background: none;
   border: 0;
   padding: 4px 0 0;
@@ -5628,8 +5630,10 @@ body[data-mode='exam'] #btn-labels {
   white-space: nowrap;
 }
 .res-score .sc-head {
-  font: 900 12px system-ui, sans-serif;
-  color: #8a8799;
+  font: 900 15px var(--font);
+  color: var(--ink);
+  border-left: 4px solid #ff4d5e;
+  padding-left: 8px;
   letter-spacing: 0.02em;
 }
 .res-score .sc-head.sc-perfect {
@@ -7190,7 +7194,7 @@ body.stage-on #precheck .modebtn:not(:has(.mb-badge)) {
   cursor: pointer;
 }
 .lk-chip.on {
-  background: #fff;
+  background: #ffc23a;
   border-color: var(--ink);
   font-weight: 800;
 }
@@ -8089,4 +8093,281 @@ body.demo .stick .knob {
   50% {
     transform: scale(1.08);
   }
+}
+
+/* ---- 배우기 결과 카드 (쇼핑앱 디자인 검토, 2026-11-17) ----
+   결과(성공·별) → 한 줄 조언 → 주 행동 '다음' 하나. 보조 버튼은 흰 칩.
+   세로 화면에서 4열 한 줄 grid가 메모를 한 글자 폭으로 꺾던 것을 고친다 */
+#clear .cl-note {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+#clear.quiet .cl-box {
+  grid-auto-flow: row;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'word stars title btns'
+    'note note note btns';
+  justify-items: start;
+  align-items: center;
+  column-gap: 10px;
+  row-gap: 4px;
+  width: min(820px, 94vw);
+  padding: 10px 12px 10px 16px;
+}
+#clear.quiet .cl-word {
+  grid-area: word;
+}
+#clear.quiet .cl-stars {
+  display: flex;
+  grid-area: stars;
+  gap: 1px;
+  font-size: 20px;
+}
+#clear.quiet:not(.graded) .cl-stars {
+  display: none;
+}
+#clear.quiet .cl-stars i {
+  font-size: 1em;
+  -webkit-text-stroke: 2px var(--ink);
+  animation: none;
+}
+#clear.quiet .cl-title {
+  grid-area: title;
+  font-size: 13px;
+  color: color-mix(in srgb, var(--ink) 65%, transparent);
+}
+#clear.quiet .cl-note {
+  grid-area: note;
+  max-width: none;
+  min-width: 0;
+  text-align: left;
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: #fff6d6;
+}
+#clear.quiet .cl-note .tip {
+  font-weight: 900;
+}
+#clear.quiet .cl-btns {
+  grid-area: btns;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-content: center;
+  gap: 6px;
+  max-width: 400px;
+}
+#clear.quiet .cl-btns .go {
+  order: -1;
+  flex: 1 1 100%;
+  font-size: 19px;
+  padding: 8px 16px;
+}
+#clear.quiet .cl-btns .btn {
+  white-space: nowrap;
+}
+#clear.quiet .cl-btns .btn:not(.go) {
+  background: #fff;
+  font-size: 13px;
+  padding: 5px 10px;
+  border-width: 2px;
+  box-shadow: 0 2px 0 var(--ink);
+}
+@media (max-aspect-ratio: 1/1) {
+  #clear.quiet {
+    padding-inline: 12px;
+  }
+  #clear.quiet .cl-box {
+    width: 100%;
+    max-width: 440px;
+    grid-template-columns: auto auto minmax(0, 1fr);
+    grid-template-areas:
+      'word stars title'
+      'note note note'
+      'btns btns btns';
+    row-gap: 8px;
+    padding: 12px 14px;
+  }
+  #clear.quiet .cl-title {
+    justify-self: end;
+    text-align: right;
+  }
+  #clear.quiet .cl-btns {
+    width: 100%;
+    max-width: none;
+    justify-content: stretch;
+  }
+  #clear.quiet .cl-btns .btn:not(.go) {
+    flex: 1 1 40%;
+    font-size: 14px;
+    padding: 8px 10px;
+  }
+  #clear.quiet .cl-btns .go {
+    order: 9;
+    font-size: 22px;
+    padding: 12px 16px;
+  }
+}
+
+/* ---------- 기초교육 고르기 문제 ---------- */
+#hud > .drill .dr-quiz {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  pointer-events: auto;
+  width: min(520px, calc(100vw - 32px));
+}
+#hud > .drill .dr-quiz[hidden],
+#hud > .drill .dr-quiz [hidden] {
+  display: none;
+}
+.dq-opts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+}
+.dq-opts button {
+  flex: 1 1 140px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: 14px;
+  border: 2px solid #1d1d28;
+  background: #fff;
+  color: #1d1d28;
+  font: inherit;
+  font-weight: 800;
+  font-size: 15px;
+  word-break: keep-all;
+  box-shadow: 0 3px 0 #1d1d28;
+  cursor: pointer;
+}
+.dq-opts button:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #1d1d28;
+}
+.dq-opts button.right {
+  background: #2ecc71;
+  color: #fff;
+}
+.dq-opts button.wrong {
+  background: #ff5a5a;
+  color: #fff;
+}
+.dq-opts button:disabled:not(.right):not(.wrong) {
+  opacity: 0.45;
+}
+.dq-explain {
+  background: rgba(255, 255, 255, 0.94);
+  color: #1d1d28;
+  border-radius: 12px;
+  padding: 8px 12px;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1.45;
+  word-break: keep-all;
+  text-align: center;
+}
+.dq-explain b {
+  display: block;
+  font-size: 16px;
+}
+.dq-explain.ok b {
+  color: #1f9d55;
+}
+.dq-explain.no b {
+  color: #e03131;
+}
+
+/* 시작 점검 미션: 지시문은 위, 점검판은 아래 (겹치지 않게) */
+body.check-lesson:not(.quiz-on) #hud > .drill {
+  top: 12% !important;
+  left: 16px !important;
+  right: 16px !important;
+  width: auto !important;
+  transform: none !important;
+  text-align: center;
+}
+body.check-lesson .exam-check {
+  bottom: 8%;
+}
+
+/* 문제 푸는 동안: 지시문(문제)·보기를 가운데 넓게, 레버·게이지는 숨김 */
+body.quiz-on #hud > .drill {
+  left: 16px !important;
+  right: 16px !important;
+  top: 8% !important;
+  transform: none !important;
+  width: auto !important;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+body.quiz-on .stick,
+body.quiz-on .load.soil,
+body.quiz-on .exam-check {
+  display: none !important;
+}
+.dq-count {
+  font-weight: 800;
+  font-size: 13px;
+  color: #5a5870;
+}
+.dq-explain {
+  max-width: 420px;
+}
+/* 배우기 목록: 최고 별 */
+.lrow .lr-stars {
+  margin-left: auto;
+  margin-right: 8px;
+  color: #f5a623;
+  font-size: 14px;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+.lrow.next .lr-stars {
+  display: none;
+}
+
+/* ---------- 검토 반영 (2026-11-17) ---------- */
+/* 큰 지시문: 3D 위에서도 읽히게 작은 반투명 카드 (버킷을 피해 움직이는 지금 자리는 그대로) */
+#hud > .drill .dr-text {
+  display: inline-block;
+  max-width: 100%;
+  background: rgba(250, 250, 247, 0.82);
+  border-radius: 12px;
+  padding: 4px 12px;
+  word-break: keep-all;
+}
+#hud > .drill .dr-say:not(:empty) {
+  display: inline-block;
+  background: rgba(250, 250, 247, 0.78);
+  border-radius: 10px;
+  padding: 2px 10px;
+  word-break: keep-all;
+}
+/* 시험 인트로 부제: 줄무늬 위에서도 읽히게 */
+#boss-intro .bi-sub {
+  display: inline-block;
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: 999px;
+  padding: 4px 14px;
+  text-shadow: 0 2px 0 #000;
+}
+/* 시작 점검 상태: 색으로도 (안 된 것 주황, 된 것 초록) */
+.exam-check .ec-btn small {
+  color: #c2410c;
+}
+.exam-check .ec-btn.on small {
+  color: #15803d;
+}
+
+/* 작은 가로 화면: 레버 이름표가 두 줄로 깨지지 않게 */
+.lab {
+  white-space: nowrap;
 }

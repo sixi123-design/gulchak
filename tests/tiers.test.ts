@@ -14,13 +14,13 @@ it('모든 미션의 tier는 TIERS 안에 있다', () => {
 const mk = (id: string, tier: Lesson['tier']): Lesson => ({ id, tier, icon: 'stLevers', title: id, setup: () => {}, steps: [] });
 
 it('진행도를 센다', () => {
-  const ls = [mk('a', '기초'), mk('b', '기초'), mk('c', '숙련')];
-  expect(tierProgress(ls, new Set(['a']), '기초')).toEqual({ n: 1, of: 2 });
-  expect(tierProgress(ls, new Set(['a']), '숙련')).toEqual({ n: 0, of: 1 });
+  const ls = [mk('a', '마무리'), mk('b', '마무리'), mk('c', '기본기')];
+  expect(tierProgress(ls, new Set(['a']), '마무리')).toEqual({ n: 1, of: 2 });
+  expect(tierProgress(ls, new Set(['a']), '기본기')).toEqual({ n: 0, of: 1 });
 });
 
 it('미션이 없는 칸은 of가 0 (0으로 나누지 않도록 화면이 건너뛴다)', () => {
-  expect(tierProgress([mk('a', '기초')], new Set(), '기본기')).toEqual({ n: 0, of: 0 });
+  expect(tierProgress([mk('a', '마무리')], new Set(), '기본기')).toEqual({ n: 0, of: 0 });
 });
 
 it('옛 진행도(기존 id만)여도 숫자가 깨지지 않는다', () => {
@@ -35,6 +35,6 @@ it('옛 진행도(기존 id만)여도 숫자가 깨지지 않는다', () => {
 });
 
 it('목록에 없는 id가 저장돼 있어도 세지 않는다', () => {
-  const ls = [mk('a', '기초')];
-  expect(tierProgress(ls, new Set(['a', '사라진미션']), '기초')).toEqual({ n: 1, of: 1 });
+  const ls = [mk('a', '마무리')];
+  expect(tierProgress(ls, new Set(['a', '사라진미션']), '마무리')).toEqual({ n: 1, of: 1 });
 });

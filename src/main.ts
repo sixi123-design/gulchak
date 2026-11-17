@@ -8,8 +8,8 @@ import { bumpRuns, loadRuns, todayKey } from './core/practiceLog';
 import { ExcavatorView, type LookKey, type MachineStyleKey } from './render/excavatorView';
 import { FxView, SiteView, SoilView } from './render/siteView';
 import { DigSession, type DigEntry, type RulesFile, type Sticks } from './sim/session';
-import { LESSONS, TIERS, tierProgress, Tutor } from './sim/tutorial';
-import { BASIC_LESSONS } from './sim/leverSchool';
+import { TIERS, tierProgress, Tutor } from './sim/tutorial';
+import { DIG_COURSE } from './sim/leverSchool';
 import { SpotMark } from './render/spotMark';
 import { TipTrail } from './render/tipTrail';
 import { ik, toWorld } from './sim/kinematics';
@@ -199,6 +199,8 @@ let testPass: ModeKey | null = null;
 let payFor: ModeKey | null = null;
 const needPay = (k: ModeKey) => isLocked(k) && testPass !== k;
 function openPaywall(k: ModeKey) {
+  // 미션 화면을 떠나는 길: 한 톤 배경을 거둔다 (성공 카드 뒤에서는 남겨 두었다)
+  document.body.classList.remove('flat-bg');
   payFor = k;
   // 누른 모드를 앞에 (이용권은 두 모드 모두)
   const other: ModeKey = k === 'exam' ? 'practice' : 'exam';
@@ -790,6 +792,8 @@ function setStickLabels(k: KindKey) {
 /** 이번 세션에 쓸 장비 겉모습. 레버 익히기는 'T'(검정 없는 밝은 버전) */
 let look: LookKey = 'A';
 function newSession(autoEnd?: boolean) {
+  // 배우기 화면 상태(퀴즈·시작 점검)는 새 판마다 지운다 — 중간에 나가도 레버·점검판이 숨은 채 남지 않게
+  document.body.classList.remove('quiz-on', 'check-lesson', 'flat-bg');
   look = tutorLook ? 'T' : styleKey;
   $('btn-lookwheel').classList.remove('on');
   $('btn-lookmirror').classList.remove('on');
@@ -1055,7 +1059,7 @@ addEventListener('pointerdown', () => (peekT = 0), true);
 /** 지금 종목의 배우기 미션 */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 // 굴착 배우기: 기본기 과정이 먼저, 그 뒤가 기존 기초·숙련
-const DIG_LESSONS: Lesson<any>[] = [...BASIC_LESSONS, ...LESSONS];
+const DIG_LESSONS: Lesson<any>[] = DIG_COURSE;
 const curLessons = (): Lesson<any>[] => (kindKey === 'drive' ? DRIVE_LESSONS : DIG_LESSONS);
 // ?debug: 브라우저 자동 플레이 검증용으로 상태를 읽게 함 (입력은 실제 화면 레버·키·포인터로 넣는다)
 if (debug)
@@ -1090,7 +1094,16 @@ const loadCleared = (): string[] => {
     return [];
   }
 };
+/** 미션별 최고 별 (없으면 빈 객체) */
+const loadBest = (): Record<string, number> => {
+  try {
+    return JSON.parse(load('exc-tut-best') ?? '{}') ?? {};
+  } catch {
+    return {};
+  }
+};
 function renderLessonMap() {
+  const best = loadBest();
   const LS = curLessons();
   const done = new Set(loadCleared().filter((id) => LS.some((l) => l.id === id)));
   const next = LS.findIndex((l) => !done.has(l.id));
@@ -1130,7 +1143,8 @@ function renderLessonMap() {
         b.className = 'lrow' + (done.has(l.id) ? ' cleared' : '') + (i === next ? ' next' : '');
         b.style.setProperty('--r', String(r));
         const num = done.has(l.id) ? '<svg viewBox="0 0 16 16" aria-label="완료"><path pathLength="1" d="M3.2 8.6l3.1 3L12.9 4.6"/></svg>' : i + 1;
-        b.innerHTML = `<span class="lr-num">${num}</span><span class="lr-icon">${ICON[l.icon]}</span><b>${l.title}</b>${i === next ? '<i class="lr-sweep"></i><em>다음</em>' : ''}`;
+        const st = best[l.id] ? `<span class="lr-stars" aria-label="최고 별 ${best[l.id]}개">${'★'.repeat(best[l.id])}${'☆'.repeat(3 - best[l.id])}</span>` : '';
+        b.innerHTML = `<span class="lr-num">${num}</span><span class="lr-icon">${ICON[l.icon]}</span><b>${l.title}</b>${st}${i === next ? '<i class="lr-sweep"></i><em>다음</em>' : ''}`;
         b.onclick = pick(b, i);
         col.appendChild(b);
       });
@@ -1148,6 +1162,8 @@ function renderLessonMap() {
   });
 }
 function openLessonMap() {
+  // 미션 화면을 떠나는 길: 한 톤 배경을 거둔다 (성공 카드 뒤에서는 남겨 두었다)
+  document.body.classList.remove('flat-bg');
   renderLessonMap();
   // 뒤 배경: 굴착기 선 그림이 천천히 한 사이클씩 판다 (장식, 한 번만 넣음)
   if (!document.querySelector('#lessons .lm-deco')) {
@@ -1176,6 +1192,8 @@ const GUIDE_TAG = ['', '목표만', '안내 없이'];
 let whyAfter: (() => void) | null = null;
 let whyBack: (() => void) | null = null;
 function openWhy(L: Lesson<any>, after: () => void, back?: () => void) {
+  // 끝난 미션에서 다음 미션 카드로 갈 때만 한 톤 배경을 거둔다 (미션 중 '왜?'는 그대로 돌아온다)
+  if (!tutor || tutor.cleared) document.body.classList.remove('flat-bg');
   if (!L.why) return after();
   $('why-title').textContent = L.why.title;
   $('why-art').innerHTML = ICON[L.icon];
@@ -1248,6 +1266,8 @@ function beginLesson(i: number, again = false, lv = 0, demo = true) {
   // 튜토리얼 공간: 펜스·건물·폴·줄·표시선을 비우고 바닥·하늘을 한 색으로.
   // 화면 전체에 필터를 걸어 회색으로 만들던 것을 버렸다 (장비·흙까지 탈색되고 비용도 든다)
   document.body.classList.toggle('flat-bg', !!L.flat);
+  // 시작 점검: 점검판이 가운데 아래를 쓰니 지시문은 위로
+  document.body.classList.toggle('check-lesson', !!L.check);
   if (L.flat) {
     siteView.bare(TUTOR_FLOOR, TUTOR_LINE);
     soilView.setGround(TUTOR_GROUND);
@@ -1592,6 +1612,14 @@ function renderMission(intro = false) {
     $('dr-text').textContent = passing ? '좋아요' : (tutor.notice ?? tutor.current?.text ?? '');
     $('dr-text').classList.toggle('pass', passing);
     $('dr-ask').hidden = !tutor.current?.ask;
+    renderQuiz();
+    // 시작 점검: 점검판은 점검 단계 동안만
+    if (tutor.lesson.check) {
+      const p = $('exam-check');
+      p.hidden = !!tutor.current?.quiz || tutor.cleared;
+      p.classList.remove('working');
+      if (!p.hidden) syncExamCheck();
+    }
     for (const el of document.querySelectorAll('.lab')) el.classList.toggle('hint', new Set(tutor.current?.labels ?? []).has((el.textContent ?? '').replace(/ /g, ' ')));
     return;
   }
@@ -1640,29 +1668,59 @@ function onRewind() {
 }
 function onLessonClear() {
   const L = tutor!.lesson;
-  document.body.classList.remove('flat-bg');
+  // 한 톤 배경은 성공 카드 뒤에서도 그대로 둔다 (장면·안개와 맞게). 다음 판(newSession)에서 지운다
   const done = new Set(loadCleared());
   done.add(L.id);
   save('exc-tut', JSON.stringify([...done]));
+  // 최고 별점 (목록에 보인다)
+  const g0 = L.grade?.(tutor!.s as never, tutor!.bag);
+  if (g0) {
+    const best = loadBest();
+    if ((best[L.id] ?? 0) < g0.stars) {
+      best[L.id] = g0.stars;
+      save('exc-tut-best', JSON.stringify(best));
+    }
+  }
   renderMission();
   $('mission').hidden = true;
   for (const el of document.querySelectorAll('.lab')) el.classList.remove('hint');
   $('clear-title').innerHTML = `${ICON[L.icon]}${L.title}`;
   // 등급이 있는 미션만: 별 n개를 켜고 한 줄 평. 없으면 지금까지와 똑같이 별 세 개
   const g = L.grade?.(tutor!.s as never, tutor!.bag);
+  const c0 = $('clear');
   const stars = [...document.querySelectorAll<HTMLElement>('.cl-stars i')];
   stars.forEach((el, k) => el.classList.toggle('off', !!g && k >= g.stars));
   $('clear-note').hidden = !g;
   // 못한 사람에게만 시범 다시 보기 (버튼이 이미 많다 — 늘 띄우면 고르기 어렵다)
   $('btn-clear-demo').hidden = !(tutor!.hasDemo && g && g.stars < 3);
-  $('clear-note').textContent = g?.note ?? '';
-  const last = lessonIdx >= curLessons().length - 1;
-  $('btn-clear-next').hidden = last;
+  // 평가 한 문장 + 다음 행동(굵게) — 한 덩어리면 조언으로 안 읽힌다 (디자인 검토)
+  const note = $('clear-note');
+  note.textContent = '';
+  const cut = (g?.note ?? '').search(/[.]\s/);
+  if (g && cut > 0) {
+    note.append(g.note.slice(0, cut + 1) + ' ');
+    const tip = document.createElement('span');
+    tip.className = 'tip';
+    tip.textContent = g.note.slice(cut + 2);
+    note.append(tip);
+  } else note.textContent = g?.note ?? '';
+  // 등급 없는 미션은 조용한 카드에서 별을 안 보인다 (큰 CLEAR는 지금처럼 별 셋)
+  c0.classList.toggle('graded', !!g);
+  // 과정의 끝: 목록 맨 끝, 또는 마무리 칸의 끝(그 뒤는 번외 기초교육) — 여기서 시험으로 잇는다
+  const nextL = curLessons()[lessonIdx + 1];
+  const last = !nextL || (L.tier === '마무리' && nextL.tier !== '마무리');
+  const quizL = L.steps.some((st) => st.quiz);
+  const retry = quizL && !!g && g.stars === 1;
+  $('btn-clear-next').hidden = last || retry;
   $('btn-clear-exam').hidden = !last;
   $('btn-clear-free').hidden = !last;
-  // 성공하면 안내를 한 단계 줄여 같은 미션 다시 (레버 안내 → 목표만 → 안내 없이)
+  const again = $('btn-clear-again');
+  again.textContent = quizL ? '↺ 다시 풀기' : '↺ 다시 연습';
+  again.classList.toggle('big', retry);
+  again.classList.toggle('go', retry);
+  // 성공하면 안내를 한 단계 줄여 같은 미션 다시 (레버 안내 → 목표만 → 안내 없이). 퀴즈에는 뜻이 없다
   const less = $('btn-clear-less');
-  less.hidden = guideLv >= 2;
+  less.hidden = guideLv >= 2 || quizL;
   less.textContent = guideLv === 0 ? '목표만 보고 다시' : '안내 없이 다시';
   streak++;
   const big = last && streak === 1;
@@ -1670,7 +1728,8 @@ function onLessonClear() {
   const c = $('clear');
   // 반복 연습 흐름이라 조용히, 마지막 미션 첫 성공만 크게 축하
   c.classList.toggle('quiet', !big);
-  c.querySelector('.cl-word')!.textContent = guideLv >= 2 ? '안내 없이 성공' : big ? 'CLEAR!' : streak > 1 ? `성공 ${streak}회` : '성공';
+  c.querySelector('.cl-word')!.textContent = quizL && g ? g.note.split('.')[0] : guideLv >= 2 ? '안내 없이 성공' : big ? 'CLEAR!' : streak > 1 ? `성공 ${streak}회` : '성공';
+  if (quizL && g) note.textContent = g.note.slice(g.note.indexOf('.') + 1).trim();
   c.hidden = true;
   void c.offsetWidth;
   c.hidden = false;
@@ -1720,6 +1779,53 @@ $('btn-slow').onclick = () => {
   } catch {
     /* 저장 못 해도 이번 판에는 그대로 */
   }
+};
+// 기초교육 고르기 문제: 보기를 누르면 맞았나·풀이를 보이고 '다음'
+function renderQuiz() {
+  const q = tutor?.current?.quiz;
+  const box = $('dr-quiz');
+  box.hidden = !q;
+  // 문제 푸는 동안은 레버·게이지를 숨긴다 (보기·풀이와 겹치지 않게)
+  document.body.classList.toggle('quiz-on', !!q);
+  if (!q || !tutor) return;
+  const qs = tutor.lesson.steps.filter((st) => st.quiz);
+  $('dq-count').textContent = `${qs.findIndex((st) => st.quiz === q) + 1}/${qs.length}`;
+  const picked = tutor.picked;
+  const opts = $('dq-opts');
+  opts.innerHTML = '';
+  q.options.forEach((o, i) => {
+    const b = document.createElement('button');
+    b.textContent = o;
+    b.disabled = picked !== null;
+    if (picked !== null && i === q.answer) b.classList.add('right');
+    if (picked !== null && i === picked && i !== q.answer) b.classList.add('wrong');
+    b.onclick = () => {
+      if (!tutor) return;
+      const ok = tutor.answer(i);
+      if (ok === null) return;
+      if (ok) sound.select();
+      renderQuiz();
+    };
+    opts.appendChild(b);
+  });
+  const ex = $('dq-explain');
+  ex.hidden = picked === null;
+  if (picked !== null) {
+    const ok = picked === q.answer;
+    ex.className = 'dq-explain ' + (ok ? 'ok' : 'no');
+    ex.innerHTML = '';
+    const head = document.createElement('b');
+    head.textContent = ok ? '맞았어요' : '아쉬워요';
+    ex.append(head, document.createTextNode(q.explain));
+  }
+  $('dq-next').hidden = picked === null;
+}
+$('dq-next').onclick = () => {
+  if (!tutor?.current?.quiz) return;
+  sound.select();
+  tutor.nextQuiz();
+  if (tutor.cleared) onLessonClear();
+  else renderMission();
 };
 // 시범 뒤 고르기: 다시 보기 / 다음
 const askPick = (again: boolean) => {
@@ -1909,6 +2015,17 @@ $('ec-rpm').onclick = () => {
 $('ec-hand').onclick = () => {
   const p = $('exam-check');
   if (p.classList.contains('working')) return;
+  // 배우기 시작 점검: 손을 들면 신호만 (감독관·호각 없이 다음 단계로)
+  if (tutor?.lesson.check) {
+    const h = $('hand-pop');
+    h.hidden = true;
+    void h.offsetWidth;
+    h.hidden = false;
+    setTimeout(() => (h.hidden = true), 1500);
+    sound.select();
+    session.signaled = true;
+    return;
+  }
   p.classList.add('working');
   const h = $('hand-pop');
   h.hidden = true;
@@ -2095,7 +2212,11 @@ $('btn-retry').onclick = () => {
 };
 $('btn-home').onclick = () => newSession();
 
+/** 사용자에게 보일 규칙 이름: 채점 기준 번호·[해석] 같은 내부 표기를 뺀다 */
+const plainTitle = (t: string) => t.replace(/\[[^\]]*\]\s*/g, '').trim();
 function showToast(v: Violation) {
+  // 배우기에서 시킨 동작이 낸 경고는 띄우지 않는다 (억울하지 않게)
+  if (tutor?.current?.quiet?.includes(v.id)) return;
   // 레버 익히기: 실격으로 끝내지 않고 주의로만 알림
   const soft = !!tutor?.lesson.noFail;
   if (v.kind === 'disqualify' && session.flags.key === 'exam') return; // 실제 시험: 감독관 연출이 알림
@@ -2107,7 +2228,7 @@ function showToast(v: Violation) {
   const el = document.createElement('div');
   const dq = v.kind === 'disqualify' && !soft;
   el.className = 'toast' + (dq ? '' : ' warn');
-  el.innerHTML = `<b>${dq ? `실격 · ${v.basis}` : v.kind === 'disqualify' ? '실격' : '주의'}</b>${v.detail}`;
+  el.innerHTML = `<b>${v.kind === 'disqualify' ? '실격' : '주의'}</b>${v.detail}`;
   const box = $('toasts');
   box.prepend(el);
   while (box.children.length > 3) box.lastElementChild!.remove();
@@ -2366,7 +2487,7 @@ function showResult() {
   const dqList = $('res-dq');
   dqList.innerHTML =
     (dq.length
-      ? dq.slice(0, 2).map((d) => `<li class="dq"><b>${d.basis} ${d.title}</b>${d.count > 1 ? `<small>${d.count}회</small>` : ''}</li>`).join('') + (dq.length > 2 ? `<li class="dq"><b>외 ${dq.length - 2}건</b></li>` : '')
+      ? dq.map((d) => `<li class="dq"><b>${plainTitle(d.title)}</b>${d.count > 1 ? `<small>${d.count}회</small>` : ''}</li>`).join('')
       : s.abandoned && mode === 'exam'
         ? '' // 기권은 도장으로 이미 알림
         : '<li class="ok"><b>실격 없음</b></li>') +
@@ -2477,7 +2598,7 @@ function showDriveResult() {
   renderScore($('res-score'), mode === 'free' ? null : verdict, mode === 'free');
   renderTip(dq, verdict, s.abandoned, mode);
   $('res-dq').innerHTML = dq.length
-    ? dq.slice(0, 2).map((x) => `<li class="dq"><b>${x.basis} ${x.title}</b>${x.count > 1 ? `<small>${x.count}회</small>` : ''}</li>`).join('') + (dq.length > 2 ? `<li class="dq"><b>외 ${dq.length - 2}건</b></li>` : '')
+    ? dq.map((x) => `<li class="dq"><b>${plainTitle(x.title)}</b>${x.count > 1 ? `<small>${x.count}회</small>` : ''}</li>`).join('')
     : s.abandoned && mode === 'exam'
       ? ''
       : '<li class="ok"><b>실격 없음</b></li>';

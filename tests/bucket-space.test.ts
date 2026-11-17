@@ -4,6 +4,10 @@ import rules from '../src/config/rules.json';
 import { PRACTICE } from '../src/core/ruleEngine';
 import { ik, toWorld } from '../src/sim/kinematics';
 import { DigSession, type RulesFile, type Sticks } from '../src/sim/session';
+/** 꽂는 깊이를 붐 속도와 무관하게: 예전 붐 내림 속도(28°/s)와 같은 속도가 되는 레버 크기 */
+/** 파는 중 '붐 살짝 올림': 예전 붐 올림 속도(28°/s)에서 0.1 레버와 같은 속도 */
+const UP = (0.1 * 28 * Math.PI) / 180 / MACHINE.speeds.boom;
+const DN = (28 * Math.PI) / 180 / (MACHINE.speeds.boom * MACHINE.boomDownGain);
 
 /**
  * 버킷이 흙 속에서 차지하는 공간과 흙 흐름 (감독 합격 기준)
@@ -104,15 +108,15 @@ describe('버킷 공간과 흙 흐름 (감독 기준)', () => {
     const s = sess();
     s.setPose(ik(MACHINE, s.digTarget.rho, 0.2, -0.9)!);
     const t = track0();
-    run(s, 35, { ry: 1 }, t);
-    run(s, 135, { rx: -0.6, ry: -0.1 }, t);
+    run(s, 35, { ry: DN }, t);
+    run(s, 135, { rx: -0.6, ry: -UP }, t);
     expect(s.load).toBeLessThan(0.4 * SC);
     expect(t.maxSur).toBeGreaterThanOrEqual(0.08 * SC);
     expect(t.firstSurUp).toBeGreaterThan(0);
     expect(t.firstSurUp).toBeLessThanOrEqual(t.firstLoadUp < 0 ? Infinity : t.firstLoadUp);
     const l0 = s.load;
     const arm0 = s.pose.arm;
-    run(s, 180, { ly: -0.7, ry: -0.1 }, t);
+    run(s, 180, { ly: -0.7, ry: -UP }, t);
     expect(Math.abs(s.pose.arm - arm0)).toBeGreaterThan(0.2);
     expect(s.load).toBeGreaterThanOrEqual(0.8 * SC);
     expect(s.load - l0).toBeGreaterThanOrEqual(0.4 * SC);
@@ -125,8 +129,8 @@ describe('버킷 공간과 흙 흐름 (감독 기준)', () => {
     const s = sess();
     s.setPose(ik(MACHINE, s.digTarget.rho, 0.2, -0.9)!);
     const t = track0();
-    run(s, 26, { ry: 1 }, t);
-    run(s, 200, { ly: -0.7, rx: -0.6, ry: -0.1 }, t);
+    run(s, 26, { ry: DN }, t);
+    run(s, 200, { ly: -0.7, rx: -0.6, ry: -UP }, t);
     expect(s.load).toBeGreaterThanOrEqual(SC);
     expect(s.load).toBeLessThanOrEqual(s.heapedCap + 1e-9);
     expect(s.loadBack / s.load).toBeGreaterThanOrEqual(0.5);
@@ -158,9 +162,9 @@ describe('버킷 공간과 흙 흐름 (감독 기준)', () => {
     const cap = (s: DigSession) => {
       if (!hit && s.load >= 0.2 * SC && s.load <= 0.28 * SC) hit = spaceCheck(s);
     };
-    run(s, 35, { ry: 1 }, t);
-    run(s, 135, { rx: -0.6, ry: -0.1 }, t, cap);
-    run(s, 180, { ly: -0.7, ry: -0.1 }, t, cap);
+    run(s, 35, { ry: DN }, t);
+    run(s, 135, { rx: -0.6, ry: -UP }, t, cap);
+    run(s, 180, { ly: -0.7, ry: -UP }, t, cap);
     expect(hit).not.toBe(null);
     const c = hit!;
     expect(c.checked).toBeGreaterThanOrEqual(3);
@@ -178,7 +182,7 @@ describe('버킷 공간과 흙 흐름 (감독 기준)', () => {
       const c = spaceCheck(s);
       if (c.bad > 0) bads.push({ k, ...c });
     };
-    run(s, 35, { ry: 1 }, t);
+    run(s, 35, { ry: DN }, t);
     run(s, 60, { rx: -0.6 }, t, chk);
     run(s, 60, {}, t, chk);
     expect(bads, JSON.stringify(bads.slice(0, 3))).toEqual([]);

@@ -25,37 +25,18 @@ it('쏟고 → 오므리며 들고 → 천천히 놓으면 끝난다', () => {
   expect(t.cleared).toBe(true);
 });
 
-it('하나씩 끝까지 써서 막히면, 쏟은 자세로 되돌려 다시 하게 한다', () => {
-  const t = tutor();
-  until(t, { rx: 0.8 }, 900);
-  const dumped = t.s.pose.bucket;
-  const step = t.step;
-  // 버킷만 끝까지 오므리고, 그다음 붐만 끝까지
-  for (let i = 0; i < 400 && t.step === step && !t.notice; i++) frame(t, { rx: -0.9 });
-  for (let i = 0; i < 400 && t.step === step && !t.notice; i++) frame(t, {});
-  for (let i = 0; i < 900 && t.step === step && !t.notice; i++) frame(t, i < 600 ? { ry: -0.9 } : {});
-  expect(t.notice ?? '', '막혔다고 알려 줘야 한다').toMatch(/같이/);
-  expect(t.step).toBe(step);
-  expect(t.s.pose.bucket, '쏟은 자세로 돌아왔다').toBeCloseTo(dumped, 1);
-  // 다시 같이 하면 통과
-  expect(until(t, both, 900)).toBe(true);
-});
+// '하나씩 끝까지 써서 막히면 되돌리기'는 없앴다 — 결과 자세로 판정하고 순서는 별점으로 (tests/outcomeJudge)
 
-it('멈추기에서 덜컹해도 레버를 다시 잡았다 천천히 놓으면 통과한다', () => {
+it('멈추기에서 덜컹하면 통과는 하되 별 3개는 아니다 (막다른 길 아님 — 아스트라 기준)', () => {
   const t = tutor();
   until(t, { rx: 0.8 }, 900);
   until(t, both, 900);
   // 확 놓아 덜컹했다 (값을 직접 넣는다 — readyCourse와 같은 방식)
   frame(t, {});
   t.s.maxJolt = 0.2;
-  for (let i = 0; i < 120; i++) frame(t, {});
-  expect(t.cleared, '덜컹한 채로 끝나면 안 된다').toBe(false);
-  // 살짝 다시 밀었다가 천천히
-  const nudge: In = { ry: -0.3 };
-  for (let i = 0; i < 20; i++) frame(t, nudge);
-  ease(t, nudge, 60);
   for (let i = 0; i < 300 && !t.cleared; i++) frame(t, {});
-  expect(t.cleared, '고쳐도 못 끝내면 막다른 길이다').toBe(true);
+  expect(t.cleared, '덜컹 한 번에 막히면 안 된다').toBe(true);
+  expect(BASIC_LESSONS.find((l) => l.id === 'b-dump')!.grade!(t.s, t.bag).stars).toBeLessThan(3);
 });
 
 it('멈추기에는 진행 막대가 있다 — 잡고 있으면 0, 놓고 서면 끝까지 찬다', () => {
@@ -64,8 +45,12 @@ it('멈추기에는 진행 막대가 있다 — 잡고 있으면 0, 놓고 서�
   until(t, both, 900);
   expect(t.meter()?.v, '레버를 잡고 있다').toBe(0);
   expect(t.hud() ?? '').toMatch(/가운데로/);
-  ease(t, both);
   let top = 0;
+  // 서서히 놓는 동안에도 막대를 본다 (버킷이 이미 끝까지 접혀 있어 놓는 도중에 다 설 수 있다)
+  for (let i = 1; i <= 40 && !t.cleared; i++) {
+    top = Math.max(top, t.meter()?.v ?? 0);
+    frame(t, { rx: both.rx! * (1 - i / 40), ry: both.ry! * (1 - i / 40) });
+  }
   for (let i = 0; i < 300 && !t.cleared; i++) {
     top = Math.max(top, t.meter()?.v ?? 0);
     frame(t, {});

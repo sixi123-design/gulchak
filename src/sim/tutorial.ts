@@ -1,5 +1,4 @@
-import { PASS_MARGIN, shapeOf, staticHits } from './judge';
-import type { Site } from './site';
+import { PASS_MARGIN, shapeOf } from './judge';
 import { bucketUnderside, ik, toWorld } from './kinematics';
 import type { DigSession, Sticks } from './session';
 
@@ -23,6 +22,8 @@ export interface Step<S = DigSession> {
    * `null`을 돌려주면 시범이 끝난 것이다 (영상으로 못 배우는 손맛을 먼저 보여 주는 장치).
    */
   demo?: (frame: number, s: S) => Partial<Sticks> | null;
+  /** 이 단계에서 띄우지 않을 경고 id (시킨 동작을 꾸중하지 않게) */
+  quiet?: string[];
   /** 이 단계가 시작될 때 운전석에서 시선을 내려 땅을 한 번 보여 줄까 */
   peek?: boolean;
   /** 시범 중 옆에서 보여 줄까 (각도가 중요한 토막: 운전석에서는 버킷 바닥 각이 안 보인다). 실습은 운전석 그대로 */
@@ -52,6 +53,11 @@ export interface Step<S = DigSession> {
    * `replay`는 다시 보기를 누르면 돌아갈 단계 번호 (시범의 첫 단계). done은 쓰이지 않는다.
    */
   ask?: { replay: number };
+  /**
+   * 고르기 문제 (기초교육): text가 문제, 보기 중 하나를 누르면 맞았는지·풀이를 보여 주고 '다음'으로 넘어간다.
+   * 틀린 수는 bag.miss에 쌓인다 (별점). done은 쓰이지 않는다
+   */
+  quiz?: { options: string[]; answer: number; explain: string };
 }
 
 /** 미션을 끝냈을 때의 평가: 별 개수와 한 줄 평 */
@@ -80,16 +86,16 @@ const needle = (x: number, lo: number, hi: number, a: number, b: number): Meter 
   band: [(a - lo) / (hi - lo), (b - lo) / (hi - lo)],
 });
 
-export type Tier = '기본기' | '기초' | '숙련';
+export type Tier = '기본기' | '마무리' | '기초교육';
 
 /**
  * 배우기 목록의 묶음. 순서가 화면 순서다.
  * 기본기는 처음 온 사람이 가야 할 곳이라 맨 위 가로 전체(wide)를 쓴다.
  */
 export const TIERS: readonly { key: Tier; sub: string; wide?: boolean }[] = [
-  { key: '기본기', sub: '시험 전에 손에 붙여야 하는 기본 조작', wide: true },
-  { key: '기초', sub: '한 사이클 익히기' },
-  { key: '숙련', sub: '시험처럼 매끄럽게' },
+  { key: '기본기', sub: '시험 한 사이클을 동작별로', wide: true },
+  { key: '마무리', sub: '구덩이가 깊어진 뒤 · 평탄으로 끝내기' },
+  { key: '기초교육', sub: '번외 · 점검·부위·실격·주의 다시 보기' },
 ];
 
 /** 한 묶음의 진행도. of가 0이면 화면은 그 칸을 그리지 않는다 (0으로 나누기 방지) */
@@ -101,7 +107,7 @@ export function tierProgress(lessons: readonly Lesson<never>[] | readonly Lesson
 export interface Lesson<S = DigSession> {
   id: string;
   /** 아이콘 이름 (src/ui/icons.ts) */
-  icon: 'stLevers' | 'stScoop' | 'stCarry' | 'stDump' | 'stFlat' | 'kDrive' | 'stStop' | 'stAim' | 'stBoth' | 'stAll';
+  icon: 'stLevers' | 'stScoop' | 'stCarry' | 'stDump' | 'stFlat' | 'kDrive' | 'stStop' | 'stAim' | 'stBoth' | 'stAll' | 'check' | 'kWritten';
   title: string;
   /** 마지막 단계에서 '버킷 내려놓기' 종료 판정을 켬 */
   autoEnd?: boolean;
@@ -109,6 +115,8 @@ export interface Lesson<S = DigSession> {
   tier?: Tier;
   /** 레버만 익힘: 시험장 판정(실격·경고)을 안 보여 줌 */
   noFail?: boolean;
+  /** 시작 점검 미션: 시험의 점검판(안전벨트·안전레버·RPM·손 들기)을 띄운다 */
+  check?: boolean;
   /**
    * 끝났을 때 별 몇 개인지와 한 줄 평. 없으면 클리어 화면은 지금까지와 똑같다(별 3개).
    * bag이 비어 있을 수도 있으니(단계를 다 안 거치고 끝난 경우) 별은 반드시 1~3을 돌려준다.
@@ -149,12 +157,12 @@ export function pose(s: DigSession, swing: number, r: number, y: number, bucketA
     ty += y - tip.y;
   }
 }
-const tipStation =(s: DigSession) => s.stationOf(toWorld(s.pose.swing, s.frame.tip))?.name ?? null;
+export const tipStation = (s: DigSession) => s.stationOf(toWorld(s.pose.swing, s.frame.tip))?.name ?? null;
 /**
  * 버킷(날 끝·힐)이 C 작업구역 폭 안 위에 있나. tipStation은 구역 옆 0.8m까지 C로 쳐서, 거기서 쏟으면
  * 버킷을 펴는 동안 흙이 구덩이 옆(흙 격자 밖)으로 떨어진다 (실측: 선회 24°에서 쏟으면 0.45m³ 중 0.2~0.3m³)
  */
-const overC = (s: DigSession) => {
+export const overC = (s: DigSession) => {
   const C = s.site.stations.find((x) => x.name === 'C')!;
   return [s.frame.tip, s.frame.heel].every((q) => {
     const p = toWorld(s.pose.swing, q);
@@ -206,7 +214,7 @@ const packCoach = (s: DigSession, mem: Record<string, number>): Coach | null => 
   const c = curlDeg(s);
   if (c > 80) mem.reopen = 1;
   if (c < 55) mem.reopen = 0;
-  if (mem.reopen) return co('너무 오므렸어요 → 버킷 반쯤 펴기', '버킷 펴기');
+  if (mem.reopen) return co('너무 오므렸어요 → 버킷 조금 펴서 바닥 평행하게', '버킷 펴기');
   if (s.groundGap() > 0.05) return co('이빨이 떴어요 → 붐 내림', '붐 내림');
   if (c < 20) return co('버킷 조금 더 오므리기', '버킷 오므림');
   if (armIdle(s, mem)) return co('암 계속 당기기', '암 당기기');
@@ -232,18 +240,11 @@ const skimCoach = (s: DigSession, mem: Record<string, number>, pull: boolean): C
 export const bucketLow = (s: DigSession) => Math.min(...bucketUnderside(s.frame).map((q) => q.y), s.frame.tip.y);
 /** 줄(B 장애물선)을 여유 있게 넘는 높이 */
 export const ropeClear = (s: DigSession) => s.site.B.ropeY + 0.3;
-/** 버킷 끝이 B 두 폴 사이 반경 안 */
-const betweenPoles = (s: DigSession) => s.frame.tip.r > s.site.B.rE + 0.3 && s.frame.tip.r < s.site.B.rF - 0.3;
-/** 지금 자세 그대로 B(선회 π/2)를 지나면 폴·줄에 안 닿는가 */
-const clearsB = (s: DigSession) => {
-  const site = { ...s.site, poles: s.site.poles.filter((p) => p.name.startsWith('B-')), stations: [] as unknown as Site['stations'] };
-  return staticHits(site, shapeOf(s.m, s.frame, Math.PI / 2), -Infinity).length === 0;
-};
 /**
  * 지금 자세 그대로 B(선회 π/2)를 지날 때 버킷이 통과구역(ⓔ~ⓕ 가상통과제한선 사이, 줄 위)을 지나는가.
  * 판정기(passHits)와 같은 버킷 꼭짓점·여유로 보고, 0.1m 더 여유를 둔다. 고칠 레버를 돌려준다
  */
-const passFix = (s: DigSession): Coach | null => {
+export const passFix = (s: DigSession): Coach | null => {
   const b = shapeOf(s.m, s.frame, Math.PI / 2).bucket;
   const m = PASS_MARGIN + 0.1;
   if (Math.max(...b.map((p) => p.z)) >= s.site.B.rF - m) return co('버킷이 바깥 폴 쪽 선에 닿아요 → 암 당기기', '암 당기기');
@@ -251,7 +252,6 @@ const passFix = (s: DigSession): Coach | null => {
   if (Math.min(...b.map((p) => p.y)) <= s.site.B.ropeY + m) return co('줄보다 낮아요 → 붐 올림', '붐 올림');
   return null;
 };
-const readyToCarry = (s: DigSession) => bucketLow(s) >= ropeClear(s) && betweenPoles(s) && clearsB(s);
 /** 버킷에서 가장 먼 점의 반경 (등·힐·날 끝·핀) */
 const bucketFar = (s: DigSession) => Math.max(s.frame.tip.r, s.frame.heel.r, s.frame.P2.r);
 /** A의 ⓑ선 반경 */
@@ -286,223 +286,104 @@ export const fill = (s: DigSession, ratio: number) => {
   s.loadBack = s.load * 0.85;
 };
 
-/**
- * 연속 동작: 붐·암·버킷을 따로따로가 아니라 겹쳐서 움직이는지.
- * 한 관절만 오래 움직이면(mem.solo) 같이 움직일 레버를 알려 줌
- */
-type Want = { joint: 'boom' | 'arm' | 'bucket'; need: number; label: string };
-const flowTrack = (s: DigSession, mem: Record<string, number>) => {
-  const ms = (['boom', 'arm', 'bucket'] as const).map((j) => {
-    const k = 'p_' + j;
-    const mv = mem[k] !== undefined && Math.abs(s.pose[j] - mem[k]) > 0.002;
-    mem[k] = s.pose[j];
-    return mv;
-  });
-  const n = ms.filter(Boolean).length;
-  mem.solo = n === 1 ? (mem.solo ?? 0) + 1 : 0;
-  mem.still = n === 0 ? (mem.still ?? 0) + 1 : 0;
-  mem.frames = (mem.frames ?? 0) + (n > 0 ? 1 : 0);
-  mem.multi = (mem.multi ?? 0) + (n >= 2 ? 1 : 0);
-  return { boom: ms[0], arm: ms[1], bucket: ms[2] };
-};
-const flowCoach = (s: DigSession, mem: Record<string, number>, wants: Want[], at: 'A' | 'C' = 'A'): Coach | null => {
-  const mv = flowTrack(s, mem);
-  const sw = swingBack(s, at === 'A' ? SWING_A : SWING_C, at);
-  if (sw) return sw;
-  const left = wants.filter((w) => Math.abs(w.need) > 0.03);
-  if (mem.still > 40 && left.length) return co(`멈추지 말고 이어서 → ${left[0].label}`, ...left.map((w) => w.label));
-  if (mem.solo > 40) {
-    const idle = left.find((w) => !mv[w.joint]);
-    if (idle) return co(`같이 움직이기 → ${idle.label}`, idle.label);
-  }
-  return null;
-};
-/** 이빨 박기 직전: 날 끝이 흙 위 5~35cm, 버킷은 암과 일직선, ⓑ선 안쪽 목표 위 */
-const tipAbove = (s: DigSession) => s.groundGap();
-const aimR = (s: DigSession) => s.digTarget.rho - 0.4;
-const preStab = (s: DigSession) =>
-  tipStation(s) === 'A' && tipAbove(s) >= 0.05 && tipAbove(s) <= 0.35 && Math.abs(s.pose.bucket) <= 15 * deg && Math.abs(s.frame.tip.r - aimR(s)) <= 0.4;
-/** 선회 직전: 줄·폴을 넘을 높이·반경, 버킷은 오므림 */
-const preSwing = (s: DigSession) => readyToCarry(s) && curlDeg(s) >= 60;
 /** 조건이 잠깐 스치는 게 아니라 0.2초 머물러야 */
 export const hold = (mem: Record<string, number>, ok: boolean, n = 12) => {
   mem.hold = ok ? (mem.hold ?? 0) + 1 : 0;
   return mem.hold >= n;
 };
-const downStep = (round: number, of: number): Step => ({
-  text: `붐 내리면서 버킷 펴고 암 뻗어 · 이빨 박기 직전에 멈추기 (${round}/${of})`,
-  labels: ['붐 내림', '버킷 펴기', '암 펴기'],
-  begin: (s, mem) => (mem.g0 = tipAbove(s)),
-  done: (s, mem) => hold(mem, preStab(s)),
-  meter: (s, mem) => ({ v: preStab(s) ? 1 : Math.min(0.95, clamp01((mem.g0 - tipAbove(s)) / (mem.g0 - 0.2 || 1e-6))) }),
-  coach: (s, mem) => {
-    if (tipAbove(s) < 0.02) return co('이빨이 닿았어요 → 붐 살짝 올림', '붐 올림');
-    if (preStab(s)) return null;
-    return flowCoach(s, mem, [
-      { joint: 'boom', need: tipAbove(s) - 0.2, label: '붐 내림' },
-      { joint: 'bucket', need: Math.abs(s.pose.bucket) > 15 * deg ? s.pose.bucket : 0, label: s.pose.bucket < 0 ? '버킷 펴기' : '버킷 오므림' },
-      { joint: 'arm', need: Math.abs(s.frame.tip.r - aimR(s)) > 0.4 ? aimR(s) - s.frame.tip.r : 0, label: s.frame.tip.r < aimR(s) ? '암 펴기' : '암 당기기' },
-    ]);
-  },
-});
-const upStep = (round: number, of: number, at: 'A' | 'C' = 'A'): Step => ({
-  text: `붐 올리면서 버킷 오므리고 암 당겨 · 선회 직전 자세로 (${round}/${of})`,
-  labels: ['붐 올림', '버킷 오므림', '암 당기기'],
-  begin: (s, mem) => (mem.g0 = bucketLow(s)),
-  done: (s, mem) => hold(mem, preSwing(s)),
-  meter: (s, mem) => ({ v: preSwing(s) ? 1 : Math.min(0.95, toward(bucketLow(s), mem, ropeClear(s)).v) }),
-  coach: (s, mem) => {
-    if (preSwing(s)) return null;
-    return flowCoach(s, mem, [
-      { joint: 'boom', need: bucketLow(s) < ropeClear(s) ? 1 : 0, label: '붐 올림' },
-      { joint: 'bucket', need: curlDeg(s) < 60 ? 1 : 0, label: '버킷 오므림' },
-      { joint: 'arm', need: !betweenPoles(s) && s.frame.tip.r > s.site.B.rF - 0.3 ? 1 : 0, label: '암 당기기' },
-    ], at);
-  },
-});
-/** C에서 흙 쏟기: 붐 내리며 버킷 펴서, 너무 높지도(흙이 튐) 너무 낮지도(흙에 닿음) 않게 */
-const dumpHigh = (s: DigSession) => bucketLow(s) > s.site.B.ropeY + 0.2;
-const dumpStep = (round: number, of: number): Step => ({
-  text: `붐 내리면서 버킷 펴 흙 쏟기 (${round}/${of})`,
-  labels: ['붐 내림', '버킷 펴기'],
-  // 두 번째부터는 버킷을 다시 채워 둠 (반복 연습)
-  begin: (s, mem) => {
-    if (s.load < 0.5 * SC(s)) fill(s, 1);
-    mem.l0 = s.load;
-  },
-  done: (s) => tipStation(s) === 'C' && s.load < 0.1 * SC(s) && s.particles.length === 0,
-  meter: (s, mem) => ({ v: clamp01(1 - s.load / (mem.l0 || 1)) }),
-  coach: (s, mem) => {
-    if (s.groundGap() < 0.1) return co('흙에 닿아요 → 붐 살짝 올림', '붐 올림');
-    if (spilling(s) && dumpHigh(s)) return co('너무 높아요 → 붐 내리면서 쏟기', '붐 내림');
-    return flowCoach(
-      s,
-      mem,
-      [
-        { joint: 'boom', need: dumpHigh(s) ? 1 : 0, label: '붐 내림' },
-        { joint: 'bucket', need: s.load > 0.1 * SC(s) ? 1 : 0, label: '버킷 펴기' },
-      ],
-      'C',
-    );
-  },
-});
-/** 흙을 담아 C로 막 선회해 온 자세: 붐 높이, 버킷 끝까지 오므림 */
-const toDump = (s: DigSession) => {
-  const C = s.site.stations[1];
-  pose(s, SWING_C, (C.pitIn + C.pitOut) / 2 - 0.3, s.site.B.ropeY + 0.9, 95 * deg, s.m.limits.bucket[0] + 2 * deg);
-  fill(s, 1);
+
+/**
+ * 마무리 미션 별점: 결과(완료)는 이미 했다 — 별은 주의 경고 수로. 가장 많이 받은 경고에 맞춰 다음에 할 것 한 줄
+ */
+const WARN_TIP: Record<string, string> = {
+  'W-LIFT': '붐으로 누르지 말고 이빨이 안 보일 만큼만',
+  'W-OVERLOAD': '깊이 물면 붐을 살짝 올려 힘 빼기',
+  'W-JOLT': '레버를 확 놓지 말고 서서히',
+  'W-IMPACT': '땅 가까이서는 레버를 줄여 살살',
+  'W-DANGER': '흙에 박힌 채 선회하지 않기',
+  'W-NEAR': '선에서 거리 두기',
 };
-/** 선회해 A로 막 돌아온 자세: 붐 높이 들고 암 당기고 버킷은 쏟고 난 뒤라 펴져 있음 */
-const fromSwing = (s: DigSession) => pose(s, SWING_A, s.digTarget.rho - 1.4, s.site.B.ropeY + 0.9, -40 * deg, 35 * deg);
+const warnGrade = (s: DigSession): Grade => {
+  const ws = s.engine.violations.filter((v) => v.kind === 'warning');
+  if (ws.length === 0) return { stars: 3, note: '경고 없이 끝냈습니다' };
+  const by = new Map<string, number>();
+  for (const v of ws) by.set(v.id, (by.get(v.id) ?? 0) + 1);
+  const top = [...by.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  const tip = WARN_TIP[top] ?? '경고가 뜬 곳을 다시 보기';
+  return { stars: ws.length <= 2 ? 2 : 1, note: `주의 ${ws.length}번. ${tip}` };
+};
 
 export const LESSONS: Lesson[] = [
   {
-    id: 'scoop',
-    tier: '기초',
+    id: 'deepScoop',
+    tier: '마무리',
+    grade: warnGrade,
     icon: 'stScoop',
-    title: '퍼 담기',
+    title: '깊어진 구덩이 퍼기',
+    why: {
+      title: '두세 번 퍼면 구덩이가 깊어집니다',
+      lines: [
+        '가운데는 비고 흙은 <b>먼 끝</b>에 남습니다. 거기까지 뻗어 이빨을 세워 꽂습니다.',
+        '깊은 데서 퍼면 이빨이 빠지기 쉽습니다. 빠지면 <b>붐을 살짝 내려</b> 깊이를 지킵니다.',
+        '장비 쪽 가상선 전에 오므리며 들어야 합니다 — 넘으면 실격입니다.',
+      ],
+    },
     setup: (s) => {
-      // 흙을 쏟고 돌아온 자세: 버킷 오므리고 몸 가까이
+      // 두 번 퍼낸 뒤: A 구덩이 먼 쪽이 깊게 파여 있음
+      carvePit(s, 0.5);
       pose(s, SWING_A, s.digTarget.rho - 1.6, 1.3, -130 * deg);
     },
     steps: [
       {
-        text: '버킷을 암 각도로 펴기',
-        labels: ['버킷 펴기'],
-        // 버킷 관절 0° = 핀→이빨 선이 암과 일직선
-        done: (s) => Math.abs(s.pose.bucket) <= 12 * deg,
-        meter: (s) => needle(s.pose.bucket / deg, -90, 90, -12, 12),
-      },
-      {
-        text: '암 펴서 ⓑ선 안쪽까지 뻗기',
-        labels: ['암 펴기'],
+        text: '이빨 수직으로 세우고 암 펴서 먼 끝으로',
+        labels: ['버킷 펴기', '암 펴기'],
         coach: (s) => swingBack(s, SWING_A, 'A') ?? liftFirst(s),
-        begin: (s, mem) => (mem.g0 = s.frame.tip.r),
-        done: (s) => s.frame.tip.r >= s.digTarget.rho - 0.5,
-        meter: (s, mem) => toward(s.frame.tip.r, mem, s.digTarget.rho - 0.5),
+        // 가운데는 이미 비었고 흙은 먼 끝에 남음. 버킷 등이 ⓑ선에 닿으면 실격
+        done: (s) => bucketFar(s) >= bLine(s) - 0.4 && bucketFar(s) <= bLine(s) - 0.08 && teethVertical(s) <= 20,
+        meter: (s) => needle(bucketFar(s) - bLine(s), -1.8, 0.2, -0.4, -0.08),
       },
       {
-        text: '붐 내려 이빨이 안 보이게 깊이 꽂기',
+        text: '붐 내려 이빨이 안 보이게 꽂기',
         labels: ['붐 내림'],
-        // 얕게 꽂으면 버킷 앞쪽만 차고 끝남 (session.ts 적재: 앞 38% + 오므림 12%)
+        begin: (s, mem) => (mem.g0 = s.groundGap()),
         done: (s) => tipStation(s) === 'A' && s.groundGap() < -0.15,
-        meter: (s) => ({ v: clamp01((0.6 - s.groundGap()) / 0.75) }),
-        // 오므린 채(흙이 흘러 다시 꽂을 때) 내리면 버킷 배가 땅을 눌러 안 들어감
+        meter: (s, mem) => ({ v: clamp01((mem.g0 - s.groundGap()) / (mem.g0 + 0.15 || 1e-6)) }),
+        // 붐을 내리면 버킷이 장비 쪽으로 눕는다. 이빨이 장비 쪽으로 넘어가면 버킷 바닥(배)이 흙을 눌러 안 들어감
         coach: (s) => swingBack(s, SWING_A, 'A') ?? bellyPress(s),
       },
       {
-        text: '버킷 반쯤 오므려 흙 물기',
-        labels: ['버킷 오므림'],
-        // 오므려 둔 버킷(20°→45°)이어야 암을 당길 때 흙이 안쪽으로 눌려 담김 (session.ts packSoil)
-        done: (s) => curlDeg(s) >= 40 && s.groundGap() < -0.05,
-        meter: (s) => needle(curlDeg(s), 0, 90, 40, 60),
-        coach: (s) => swingBack(s, SWING_A, 'A') ?? (s.groundGap() > -0.05 ? co('이빨이 떴어요 → 붐 내림', '붐 내림') : null),
-      },
-      {
-        text: '암 당겨 눌러 담기 · 너무 깊어지면 붐 살짝 올림',
-        labels: ['암 당기기', '붐 올림'],
-        done: (s) => s.load >= 0.8 * SC(s),
-        meter: (s) => ({ v: clamp01(s.load / (0.8 * SC(s))) }),
+        text: '바닥을 땅과 평행하게 오므리고 암 당겨 담기 · 이빨 빠지면 붐 살짝 내림',
+        labels: ['버킷 오므림', '암 당기기', '붐 내림'],
+        done: (s) => s.load >= 0.85 * s.m.struckCapacity,
+        meter: (s) => ({ v: clamp01(s.load / (0.85 * s.m.struckCapacity)) }),
         coach: packCoach,
-        // 암을 끝까지 당겼는데 덜 담김: 담긴 흙은 그대로 두고 다시 뻗어 꽂기
-        fail: (s) => (armSpent(s) ? { to: 1, msg: '암이 끝까지 왔어요. 오므려 들고 다시 뻗기' } : null),
+        fail: (s) => (armSpent(s) ? { to: 0, msg: '암이 끝까지 왔어요. 다시 먼 끝부터' } : null),
       },
       {
-        text: '버킷 끝까지 오므리며 붐 올리기',
+        text: '가상선 전에 오므리며 붐 올려 들기',
         labels: ['버킷 오므림', '붐 올림'],
-        // 들면서 위에 얹힌 흙이 조금 흐르는 건 괜찮음 (70%, 무거운 흙은 입구 쪽이 조금 흐름)
-        done: (s) => s.fullyCurled && s.groundGap() > 0.8 && s.load >= 0.7 * SC(s),
-        meter: (s) => ({ v: Math.min(clamp01(s.groundGap() / 0.8), s.fullyCurled ? 1 : 0.5) }),
+        // 끝까지 오므리고 작업 높이 위로 (그 전에 장비 쪽 가상선을 넘으면 실격)
+        done: (s) => s.fullyCurled && bucketLow(s) > s.params.workHeight && s.load >= 0.75 * s.m.struckCapacity,
+        meter: (s) => ({ v: Math.min(clamp01(bucketLow(s) / s.params.workHeight), s.fullyCurled ? 1 : 0.7) }),
         coach: (s) => (spilling(s) ? co('흙이 흘러요 → 버킷 더 오므림', '버킷 오므림') : null),
-        // 들다가 많이 흘렀거나, 다 들었는데 70%가 안 되면 다시 꽂기 (기다리기만 하는 막다른 길 없음)
-        fail: (s) =>
-          s.load < 0.65 * SC(s) || (s.fullyCurled && s.groundGap() > 0.8 && s.load < 0.7 * SC(s)) ? { to: 2, msg: '흙이 흘렀어요. 다시 꽂아 채우기' } : null,
-      },
-    ],
-  },
-  {
-    id: 'carryDump',
-    tier: '기초',
-    icon: 'stCarry',
-    title: '선회·흙 쏟기',
-    setup: (s) => {
-      // 퍼 담기를 막 끝낸 자세: 가득 담아 끝까지 오므리고 A 위로 조금 듦
-      pose(s, SWING_A, s.digTarget.rho - 1.5, 0.8, 95 * deg, s.m.limits.bucket[0] + 2 * deg);
-      fill(s, 1);
-    },
-    steps: [
-      {
-        text: '암 당기고 붐 올려 줄·폴보다 높이',
-        labels: ['암 당기기', '붐 올림'],
-        begin: (s, mem) => (mem.g0 = bucketLow(s)),
-        done: readyToCarry,
-        // 높이만 차고 붐·암이 아직 폴에 걸리면 꽉 차지 않게
-        meter: (s, mem) => ({ v: readyToCarry(s) ? 1 : Math.min(0.9, toward(bucketLow(s), mem, ropeClear(s)).v) }),
-      },
-      {
-        text: '두 폴 사이, 줄 위로 지나 C까지 선회',
-        labels: ['▶ 선회', '선회 ◀'],
-        done: (s) => overC(s) && s.load >= 0.5 * s.m.struckCapacity,
-      },
-      {
-        text: 'C 구덩이 위에서 버킷을 펴 쏟기',
-        labels: ['버킷 펴기'],
-        done: (s) => s.load < 0.1 * s.m.struckCapacity && s.particles.length === 0,
-      },
-      {
-        text: '다시 줄 위로 지나 A로 돌아오기',
-        labels: ['선회 ◀', '▶ 선회'],
-        done: (s) => tipStation(s) === 'A',
-        // 쏟느라 버킷을 끝까지 펴면 날 끝이 바깥 가상통과제한선(ⓕ폴 쪽)까지 나간다. B에 닿기 전에 고치게
-        coach: (s) => (s.pose.swing < Math.PI / 2 ? passFix(s) : null),
+        fail: (s) => (s.load < 0.75 * SC(s) ? { to: 1, msg: '흙이 흘렀어요. 다시 꽂아 채우기' } : null),
       },
     ],
   },
   {
     id: 'flatten',
-    tier: '기초',
+    tier: '마무리',
+    grade: warnGrade,
     icon: 'stFlat',
     title: '평탄·마무리',
+    why: {
+      title: '마지막은 C를 평평하게',
+      lines: [
+        '쏟은 흙을 버킷을 <b>끝까지 편</b> 채로 끌어오고 밀어 고릅니다.',
+        '암을 쓰는 동안 <b>붐을 같이</b> 써야 높이가 일정합니다. 붐을 세게 누르면 차체가 들립니다.',
+        '다 고르면 버킷을 흙 위에 내려놓아 끝냅니다.',
+      ],
+    },
     autoEnd: true,
     setup: (s) => {
       const C = s.site.stations[1];
@@ -577,69 +458,6 @@ export const LESSONS: Lesson[] = [
       },
     ],
   },
-  {
-    id: 'flow',
-    tier: '숙련',
-    icon: 'stCarry',
-    title: '복합 조작 · 파기 전',
-    setup: fromSwing,
-    steps: [downStep(1, 3), upStep(1, 3), downStep(2, 3), upStep(2, 3), downStep(3, 3), upStep(3, 3)],
-  },
-  {
-    id: 'deepScoop',
-    tier: '숙련',
-    icon: 'stScoop',
-    title: '깊은 구덩이 퍼 담기',
-    setup: (s) => {
-      // 두 번 퍼낸 뒤: A 구덩이 먼 쪽이 깊게 파여 있음
-      carvePit(s, 0.5);
-      pose(s, SWING_A, s.digTarget.rho - 1.6, 1.3, -130 * deg);
-    },
-    steps: [
-      {
-        text: '이빨 수직으로 세우고 암 펴서 먼 끝으로',
-        labels: ['버킷 펴기', '암 펴기'],
-        coach: (s) => swingBack(s, SWING_A, 'A') ?? liftFirst(s),
-        // 가운데는 이미 비었고 흙은 먼 끝에 남음. 버킷 등이 ⓑ선에 닿으면 실격
-        done: (s) => bucketFar(s) >= bLine(s) - 0.4 && bucketFar(s) <= bLine(s) - 0.08 && teethVertical(s) <= 20,
-        meter: (s) => needle(bucketFar(s) - bLine(s), -1.8, 0.2, -0.4, -0.08),
-      },
-      {
-        text: '붐 내려 이빨이 안 보이게 꽂기',
-        labels: ['붐 내림'],
-        begin: (s, mem) => (mem.g0 = s.groundGap()),
-        done: (s) => tipStation(s) === 'A' && s.groundGap() < -0.15,
-        meter: (s, mem) => ({ v: clamp01((mem.g0 - s.groundGap()) / (mem.g0 + 0.15 || 1e-6)) }),
-        // 붐을 내리면 버킷이 장비 쪽으로 눕는다. 이빨이 장비 쪽으로 넘어가면 버킷 바닥(배)이 흙을 눌러 안 들어감
-        coach: (s) => swingBack(s, SWING_A, 'A') ?? bellyPress(s),
-      },
-      {
-        text: '반쯤 오므리고 암 당겨 눌러 담기 · 이빨 빠지면 붐 살짝 내림',
-        labels: ['버킷 오므림', '암 당기기', '붐 내림'],
-        done: (s) => s.load >= 0.85 * s.m.struckCapacity,
-        meter: (s) => ({ v: clamp01(s.load / (0.85 * s.m.struckCapacity)) }),
-        coach: packCoach,
-        fail: (s) => (armSpent(s) ? { to: 0, msg: '암이 끝까지 왔어요. 다시 먼 끝부터' } : null),
-      },
-      {
-        text: '가상선 전에 오므리며 붐 올려 들기',
-        labels: ['버킷 오므림', '붐 올림'],
-        // 끝까지 오므리고 작업 높이 위로 (그 전에 장비 쪽 가상선을 넘으면 실격)
-        done: (s) => s.fullyCurled && bucketLow(s) > s.params.workHeight && s.load >= 0.75 * s.m.struckCapacity,
-        meter: (s) => ({ v: Math.min(clamp01(bucketLow(s) / s.params.workHeight), s.fullyCurled ? 1 : 0.7) }),
-        coach: (s) => (spilling(s) ? co('흙이 흘러요 → 버킷 더 오므림', '버킷 오므림') : null),
-        fail: (s) => (s.load < 0.75 * SC(s) ? { to: 1, msg: '흙이 흘렀어요. 다시 꽂아 채우기' } : null),
-      },
-    ],
-  },
-  {
-    id: 'flowDump',
-    tier: '숙련',
-    icon: 'stCarry',
-    title: '복합 조작 · 쏟기',
-    setup: toDump,
-    steps: [dumpStep(1, 3), upStep(1, 3, 'C'), dumpStep(2, 3), upStep(2, 3, 'C'), dumpStep(3, 3), upStep(3, 3, 'C')],
-  },
 ];
 
 /** 미션 진행: 매 프레임 update()를 부르면 단계가 넘어간다 */
@@ -671,6 +489,7 @@ export class Tutor<S extends { flags: { autoEnd: boolean } } = DigSession> {
     this.enter();
   }
   private enter() {
+    this.picked = null;
     this.mem = {};
     this.coach = null;
     this.coachHold = 0;
@@ -701,6 +520,8 @@ export class Tutor<S extends { flags: { autoEnd: boolean } } = DigSession> {
    * 시범이 끝나면 노브를 가운데로 되돌리고 0.5초 쉰 뒤에 조작을 넘긴다.
    */
   drive(user: Sticks): Sticks {
+    // 문제를 푸는 동안은 레버가 기계를 움직이지 않는다 (키보드·게임패드 포함)
+    if (!this.cleared && this.current?.quiz) return { lx: 0, ly: 0, rx: 0, ry: 0 };
     const d = this.cleared ? null : (this.current?.demo?.(this.demoFrame, this.s) ?? null);
     if (d) {
       this.demoFrame++;
@@ -745,6 +566,25 @@ export class Tutor<S extends { flags: { autoEnd: boolean } } = DigSession> {
     this.enter();
   }
   /** 고르는 단계(ask)에서 유저가 누른 것: again이면 시범 처음으로, 아니면 다음 단계로 */
+  /** 고르기 문제의 답 (한 번만). 맞았나를 돌려준다 — 화면이 풀이를 보여 주고 '다음'을 띄운다 */
+  picked: number | null = null;
+  answer(i: number): boolean | null {
+    const q = this.current?.quiz;
+    if (this.cleared || !q || this.picked !== null) return null;
+    this.picked = i;
+    const ok = i === q.answer;
+    if (!ok) this.bag.miss = (this.bag.miss ?? 0) + 1;
+    return ok;
+  }
+  /** 풀이를 본 뒤 다음 문제로 */
+  nextQuiz(): void {
+    if (this.cleared || !this.current?.quiz || this.picked === null) return;
+    this.picked = null;
+    this.step++;
+    this.notice = null;
+    if (this.step >= this.lesson.steps.length) this.cleared = true;
+    else this.enter();
+  }
   choose(again: boolean): void {
     const ask = this.current?.ask;
     if (this.cleared || !ask) return;
@@ -772,8 +612,8 @@ export class Tutor<S extends { flags: { autoEnd: boolean } } = DigSession> {
       this.coach = c;
       this.coachHold = 30;
     } else if (this.coachHold > 0 && --this.coachHold === 0) this.coach = null;
-    // 고르는 단계는 버튼(choose)으로만 넘어간다
-    if (st.ask) return false;
+    // 고르는 단계는 버튼(choose·answer)으로만 넘어간다
+    if (st.ask || st.quiz) return false;
     if (!st.done(this.s, this.mem, this.bag)) return false;
     this.step++;
     this.notice = null;

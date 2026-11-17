@@ -237,23 +237,41 @@ describe('굴착 세션', () => {
     const ok = passHits(site, [v3(-0.1, y, (site.B.rE + site.B.rF) / 2)], [v3(0.1, y, (site.B.rE + site.B.rF) / 2)]);
     expect(ok).toEqual([]);
   });
-  it('유압: 빠르게 움직이다 레버를 즉시 놓으면 덜컹(W-JOLT), 서서히 놓으면 없음', () => {
+  it('유압: 붐을 빠르게 움직이다 레버를 즉시 놓으면 덜컹(W-JOLT), 서서히 놓으면 없음', () => {
     const run = (release: (t: number) => number) => {
       const s = startedSession();
-      // 암을 반쯤 편 자세 (암 핀 반경 약 5m)
-      s.setPose({ boom: 0.9, arm: -1.2, bucket: -1.0 });
-      for (let i = 0; i < 180; i++) {
+      s.rpm = 1;
+      s.setPose({ boom: 0.3, arm: -1.2, bucket: -1.0 });
+      for (let i = 0; i < 150; i++) {
         const t = i / 60;
-        s.input = { lx: t < 1.5 ? -1 : -release(t - 1.5), ly: 0, rx: 0, ry: 0 };
+        s.input = { lx: 0, ly: 0, rx: 0, ry: t < 1 ? -1 : -release(t - 1) };
         s.step();
+        rockMax = Math.max(rockMax, Math.abs(s.rock.pitch) + Math.abs(s.rock.pitchV));
       }
       return s;
     };
+    let rockMax = 0;
     const abrupt = run(() => 0);
+    const abruptRock = rockMax;
     const gentle = run((t) => Math.max(0, 1 - t / 0.6));
     expect(abrupt.jolts).toBeGreaterThan(0);
-    expect(Math.abs(abrupt.rock.roll) + Math.abs(abrupt.rock.rollV)).toBeGreaterThan(0);
+    expect(abruptRock).toBeGreaterThan(0);
     expect(gentle.jolts).toBe(0);
+  });
+  it('선회: 풀속도에서 레버를 놓으면 상부 관성으로 10° 넘게 더 돈다 (목표 앞에서 놓기)', () => {
+    const s = startedSession();
+    s.setPose({ boom: 0.9, arm: -1.2, bucket: -1.0 });
+    s.input = { lx: -1, ly: 0, rx: 0, ry: 0 };
+    for (let i = 0; i < 90; i++) s.step();
+    const a0 = s.pose.swing;
+    s.input = { lx: 0, ly: 0, rx: 0, ry: 0 };
+    for (let i = 0; i < 120; i++) s.step();
+    const slide = (Math.abs(s.pose.swing - a0) * 180) / Math.PI;
+    expect(slide).toBeGreaterThan(10);
+    expect(slide).toBeLessThan(25);
+    // 선회는 놓아도 관성으로 미끄러지며 서므로 덜컹(W-JOLT)이 아니다
+    expect(s.jolts).toBe(0);
+    expect(s.engine.violations.some((w) => w.id === 'W-JOLT')).toBe(false);
   });
   it('유압: 레버를 밀면 바로 최고속이 아니라 서서히 붙음', () => {
     const s = startedSession();
@@ -364,5 +382,26 @@ describe('모드', () => {
     expect(s.engine.violations.filter((v) => v.id === 'D-TIME')).toEqual([]);
     s.abandon();
     expect(s.phase).toBe('finished');
+  });
+});
+
+describe('붐 속도 (14t급)', () => {
+  it('혼자 끝까지 밀면 올림 약 38°/s, 내림 약 45°/s', () => {
+    const top = (ry: number, boom: number) => {
+      const s = startedSession();
+      s.rpm = 1;
+      s.setPose({ boom, arm: -1.0, bucket: -1.5 });
+      let mx = 0;
+      for (let i = 0; i < 70; i++) {
+        s.input = { lx: 0, ly: 0, rx: 0, ry };
+        s.step();
+        mx = Math.max(mx, Math.abs(s.vel.boom));
+      }
+      return (mx * 180) / Math.PI;
+    };
+    expect(top(-1, 0.2)).toBeGreaterThan(36);
+    expect(top(-1, 0.2)).toBeLessThan(39);
+    expect(top(1, 1.0)).toBeGreaterThan(43);
+    expect(top(1, 1.0)).toBeLessThan(46);
   });
 });

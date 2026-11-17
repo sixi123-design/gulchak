@@ -16,7 +16,8 @@ export interface MachineSpec {
   struckCapacity: number; // 평적 용량 m³
   heapedFactor: number; // 고봉/평적
   limits: { boom: [number, number]; arm: [number, number]; bucket: [number, number] }; // rad
-  speeds: { swing: number; boom: number; arm: number; bucket: number }; // rad/s (rpm 최대)
+  speeds: { swing: number; boom: number; arm: number; bucket: number }; // rad/s (rpm 최대). 붐은 올림 속도
+  boomDownGain: number; // 붐 내림 속도 / 올림 속도 (자중)
   radii: { boom: number; arm: number; bucket: number };
   wheelbase: number; // E
   trackWidth: number; // D
@@ -42,7 +43,9 @@ export const MACHINE: MachineSpec = {
   // 버킷 205°: 캐터필러 E 시리즈 single-pin 링크가 실제로 205° (일반 설계는 160~180°).
   limits: { boom: [d(-48), d(70)], arm: [d(-155), d(-38)], bucket: [d(-135), d(70)] },
   // 선회 69°/s = 11.5rpm (HW145+ 카탈로그 최고 선회속도. DX140W-7은 12.2rpm)
-  speeds: { swing: d(69), boom: d(28), arm: d(35), bucket: d(55) },
+  // 붐 올림 38°/s (118°에 약 3.1s), 내림 45°/s (약 2.6s): 14t급 실기 강사 기준 (2026-11-17)
+  speeds: { swing: d(69), boom: d(38), arm: d(35), bucket: d(55) },
+  boomDownGain: 45 / 38,
   radii: { boom: 0.22, arm: 0.16, bucket: 0.05 },
   wheelbase: 2.8, // 축간거리: HW145+·DX140W-7 모두 2,800mm
   trackWidth: 2.5,

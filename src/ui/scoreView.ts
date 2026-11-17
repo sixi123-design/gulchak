@@ -11,10 +11,8 @@ export function renderScore(el: HTMLElement, v: Score | null, locked = false) {
   el.hidden = !v && !locked;
   el.classList.toggle('locked', !v && locked);
   if (!v) {
-    // 자유 연습·배우기: 채점을 하지 않는다. 채점표가 있다는 것만 보여준다
-    el.innerHTML = locked
-      ? '<p class="sc-lock-h">채점표</p><ul class="sc-lock"><li></li><li></li><li></li></ul><p class="sc-lock-f">시험 기준이 걸린 모드에서 채점돼요</p>'
-      : '';
+    // 자유 연습: 채점하지 않는다고 그대로 말한다 (흐린 가짜 채점표는 쓰지 않는다 — 유료 유도처럼 보임)
+    el.innerHTML = locked ? '<p class="sc-lock-f">자유 연습은 채점하지 않아요 · 채점은 연습 시험에서</p>' : '';
     return;
   }
   // 고칠 것만, 많이 놓친 순서로 (만점 항목은 숨김)

@@ -116,3 +116,18 @@ it('고봉으로 담은 채 붐을 내리면 덜컹과 무관하게 흙이 흐�
   expect(mx).toBeLessThan(R.params.joltWarn); // 덜컹은 없다
   expect((l0 - s.load) / SC).toBeGreaterThan(0.05); // 그런데 흙은 흐른다
 });
+
+it('선회 중 반대로 살짝(0.3 미만) 밀면 그냥 놓은 것과 같다 — 역레버로 확 서지 않고 덜컹도 없다', () => {
+  const slide = (rev: number) => {
+    const s = laden();
+    go(s, { lx: 1 }, 90);
+    const a0 = s.pose.swing;
+    const mx = go(s, { lx: -rev }, 20);
+    settle(s, 'swing');
+    return { deg: Math.abs(s.pose.swing - a0) * (180 / Math.PI), mx };
+  };
+  const free = slide(0);
+  const light = slide(0.25);
+  expect(light.deg).toBeGreaterThan(0.8 * free.deg);
+  expect(light.mx).toBeLessThan(R.params.joltWarn);
+});

@@ -26,6 +26,9 @@ function follow(t: Tutor, n: number) {
     if (t.cleared) return;
   }
 }
+/** 코치가 깜빡이는 레버 이름 → 손 자리 (안내를 그대로 따르는 사람) */
+const LEVER: Record<string, Hand> = { '붐 올림': { ry: -0.35 }, '붐 내림': { ry: 0.35 }, '버킷 펴기': { rx: 0.35 }, '버킷 오므림': { rx: -0.35 } };
+const byCoach = (t: Tutor): Hand => Object.assign({}, ...(t.coach?.labels ?? []).map((l) => LEVER[l] ?? {}));
 /** 실습(원호 드릴) 단계의 번호 — 앞은 구분동작 시범들과 '다시 보기/다음' 고르기 */
 const ARC_STEP = ready().steps.findIndex((st) => st.text.startsWith('오른쪽 레버만'));
 /** 시범을 다 보고 '다음'을 눌러 실습 단계까지 */
@@ -106,12 +109,14 @@ it('길잡이 점을 따라가면 내려놓고 끝난다 (별 3개)', () => {
   expect(ready().grade!(t.s, t.bag).stars).toBe(3);
 });
 
-it('처음부터 3시로 놓으면 통과하지 못하고 12시로 밀라고 알려 준다', () => {
+it('처음부터 3시로 놓으면 통과하지 못하고, 지금 자세를 바로잡을 길을 알려 준다', () => {
   const t = tutor();
   pastDemos(t);
-  run(t, { rx: ARC.ring }, 600);
-  expect(t.cleared).toBe(false);
+  run(t, { rx: ARC.ring }, 30); // 버킷이 다 펴지기 전: 레버 길 안내
   expect(t.hud() ?? '').toMatch(/12시/);
+  run(t, { rx: ARC.ring }, 600); // 지나치게 폈다: 자세 안내가 먼저
+  expect(t.cleared).toBe(false);
+  expect(t.coach?.msg ?? '').toMatch(/오므리기/);
 });
 
 it('실습 중에는 매 프레임 한 줄 피드백이 있다', () => {
@@ -139,23 +144,21 @@ it('점에서 벗어난 채 끝나면 별 3개가 아니다', () => {
     const far = t.s.groundGap() > 0.6;
     run(t, far ? { ry: ARC.ring } : { rx: ARC.ring }, 1);
   }
-  expect(t.step, '통과는 한다 (막다른 길이 아니다)').toBeGreaterThan(ARC_STEP);
-  run(t, {}, 300);
+  // 결과 자세로 판정한다 — 점을 안 따라왔어도 안내대로 자세를 맞추면 끝난다 (막다른 길 아님)
+  for (let i = 0; i < 1200 && !t.cleared; i++) frame(t, byCoach(t));
+  expect(t.cleared, '통과는 한다 (막다른 길이 아니다)').toBe(true);
   expect(ready().grade!(t.s, t.bag).stars).toBeLessThan(3);
 });
 
-it('멈추기에서 한 번 덜컹해도 다시 내려오면 통과한다 (막다른 길 아님)', () => {
+it('멈추기에서 덜컹하면 통과는 하되 별 3개는 아니다 (막다른 길 아님 — 아스트라 기준)', () => {
   const t = tutor();
   pastDemos(t);
   for (let i = 0; i < 1200 && t.step === ARC_STEP; i++) follow(t, 1);
   expect(t.step).toBeGreaterThan(ARC_STEP);
   t.s.maxJolt = 0.2; // 덜컹했다
-  run(t, {}, 60);
-  expect(t.cleared, '덜컹한 채로 끝나면 안 된다').toBe(false);
-  // 붐을 올려 범위 밖으로 나갔다가 (= 다시 해 보기) 천천히 내려온다
-  run(t, { ry: -0.5 }, 45);
-  for (let i = 0; i < 1200 && !t.cleared; i++) run(t, t.s.groundGap() > 0.3 ? { ry: 0.25 } : {}, 1);
-  expect(t.cleared, '고쳐도 못 끝내면 막다른 길이다').toBe(true);
+  run(t, {}, 300);
+  expect(t.cleared, '덜컹 한 번에 막히면 안 된다').toBe(true);
+  expect(ready().grade!(t.s, t.bag).stars).toBeLessThan(3);
 });
 
 it('시범 레버 자리는 세션마다 따로다 — 둘을 번갈아 돌려도 한 개만 돌린 것과 같다', () => {

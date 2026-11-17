@@ -34,30 +34,6 @@ describe('배우기', () => {
       expect(t.update(), l.id).toBe(false);
     }
   });
-  it('퍼 담기: 버킷 펴고 → 뻗고 → 꽂고 → 반쯤 오므리고 → 암 당겨 눌러 담고 → 오므리며 들면 완료', () => {
-    const t = new Tutor(lesson('scoop'), mk());
-    const deg = Math.PI / 180;
-    const steps: ((s: DigSession) => Partial<Sticks>)[] = [
-      (s) => ({ rx: s.pose.bucket < -5 * deg ? 1 : s.pose.bucket > 5 * deg ? -1 : 0 }),
-      () => ({ ly: 0.8 }),
-      (s) => {
-        const r = s.frame.tip.r;
-        const want = s.digTarget.rho - 0.4;
-        return { ry: 0.6, ly: r < want - 0.15 ? 0.6 : r > want + 0.15 ? -0.6 : 0 };
-      },
-      () => ({ rx: -0.6, ry: -0.1 }),
-      // 오므림 멈추고 암만 당겨 눌러 담기, 너무 깊으면 붐 올림
-      (s) => ({ ly: -0.7, ry: s.groundGap() < -0.6 ? -0.4 : 0 }),
-      () => ({ rx: -1, ry: -1 }),
-    ];
-    for (const [i, f] of steps.entries()) expect(drive(t, f, 900), `단계 ${i + 1}`).toBe(true);
-    expect(t.notice).toBe(null);
-    expect(t.rewinds).toBe(0);
-    expect(t.cleared).toBe(true);
-    // 무거운 흙: 같은 스크립트 동작이면 조금 덜 참 (75% 이상)
-    expect(t.s.load).toBeGreaterThanOrEqual(0.75 * t.s.m.struckCapacity);
-    expect(t.s.engine.disqualifications()).toEqual([]);
-  });
   it('깊어진 구덩이: 이빨 세워 먼 끝 → 꽂고 → 깊이 지키며 오므려 당기고 → 가상선 전에 들면 완료, 실격 없음', () => {
     const t = new Tutor(lesson('deepScoop'), mk());
     const sc = t.s.m.struckCapacity;
@@ -93,35 +69,5 @@ describe('배우기', () => {
     expect(drive(t, (s) => (open(s) ? { rx: 1 } : s.groundGap() > 0.02 ? { ry: 0.5 } : {}), 900)).toBe(true);
     expect(t.cleared).toBe(true);
     expect(t.s.engine.disqualifications()).toEqual([]);
-  });
-  it('선회·흙 쏟기: 붐 들고 → B 지나 C → 쏟고 → A로 돌아오면 완료, 흙은 C에, 실격 없음', () => {
-    const t = new Tutor(lesson('carryDump'), mk());
-    const g = t.s.soil.grids.find((x) => x.name === 'C')!;
-    const vol = () => g.h.reduce((a, h, i) => a + h - g.h0[i], 0) * g.cell * g.cell;
-    const v0 = vol();
-    // 암은 버킷이 두 폴 사이(통과구역 가운데)에 올 때까지만 당긴다 — 끝까지 당기면 안쪽 폴 쪽으로 너무 들어온다
-    const Bmid = (t.s.site.B.rE + t.s.site.B.rF) / 2;
-    expect(drive(t, (s) => ({ ly: s.frame.tip.r > Bmid ? -1 : 0, ry: -1 }), 600), '암 당기고 붐 올림').toBe(true);
-    // A(π) → B(π/2) → C(0): 각도가 줄어드는 쪽
-    // 흙을 실으면 붐이 굼떠 암이 먼저 다 당겨짐 → 선회하며 암을 조금 펴서 C 위에 맞춤
-    const Cst = t.s.site.stations[1];
-    // 암은 B를 다 지난 뒤에 편다 (B 안에서 펴면 ⓕ폴 쪽 가상통과제한선을 넘는다)
-    const pastB = (s: DigSession) => s.pose.swing < Math.PI / 2 - 0.35;
-    expect(drive(t, (s) => ({ lx: -1, ly: pastB(s) && s.frame.tip.r < (Cst.zoneIn + Cst.zoneOut) / 2 ? 0.6 : 0 }), 900), 'C로 선회').toBe(true);
-    expect(drive(t, () => ({ rx: 1 }), 600), '쏟기').toBe(true);
-    expect(vol() - v0).toBeGreaterThan(0.35);
-    // 쏟느라 끝까지 편 버킷 그대로 돌면 날 끝이 ⓕ폴 쪽 가상통과제한선에 닿는다 (브라우저 실측 5번 중 4번 실격).
-    // 화면 안내(라벨)대로 선회하면서 고치면 통과해야 한다
-    const seen: string[] = [];
-    const ret = () => {
-      const c = t.coach;
-      if (c && !seen.includes(c.msg)) seen.push(c.msg);
-      const L = c?.labels ?? [];
-      return { lx: 1, ly: L.includes('암 당기기') ? -0.6 : L.includes('암 펴기') ? 0.6 : 0, ry: L.includes('붐 올림') ? -0.6 : 0 };
-    };
-    expect(drive(t, ret, 900), 'A로 돌아옴').toBe(true);
-    expect(seen.join(' / ')).toContain('암 당기기');
-    expect(t.cleared).toBe(true);
-    expect(t.s.engine.disqualifications().map((d) => `${d.id} ${d.detail}`)).toEqual([]);
   });
 });

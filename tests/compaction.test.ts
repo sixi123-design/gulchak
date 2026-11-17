@@ -4,6 +4,10 @@ import rules from '../src/config/rules.json';
 import { PRACTICE } from '../src/core/ruleEngine';
 import { bucketOutline, fk, groundReach, ik, toWorld } from '../src/sim/kinematics';
 import { DigSession, type RulesFile, type Sticks } from '../src/sim/session';
+/** 꽂는 깊이를 붐 속도와 무관하게: 예전 붐 내림 속도(28°/s)와 같은 속도가 되는 레버 크기 */
+/** 파는 중 '붐 살짝 올림': 예전 붐 올림 속도(28°/s)에서 0.1 레버와 같은 속도 */
+const UP = (0.1 * 28 * Math.PI) / 180 / MACHINE.speeds.boom;
+const DN = (28 * Math.PI) / 180 / (MACHINE.speeds.boom * MACHINE.boomDownGain);
 
 /**
  * 흙은 일정 부피 이상 압축되지 않는다 (아스트라 감독 기준).
@@ -317,8 +321,8 @@ describe('흙은 압축되지 않는다', () => {
     const s = sess();
     s.setPose(ik(MACHINE, s.digTarget.rho, 0.2, -0.9)!);
     const rec = newRec();
-    run(s, 26, { ry: 1 }, rec);
-    run(s, 200, { ly: -0.7, rx: -0.6, ry: -0.1 }, rec);
+    run(s, 26, { ry: DN }, rec);
+    run(s, 200, { ly: -0.7, rx: -0.6, ry: -UP }, rec);
     console.log('normal', { fill: s.load / SC, back: s.loadBack / s.load, press: rec.maxPress, blocks: s.pressBlocks, ids: [...rec.ids] });
     expect(s.load).toBeGreaterThanOrEqual(SC);
     expect(s.load).toBeLessThanOrEqual(s.heapedCap + 1e-9);
