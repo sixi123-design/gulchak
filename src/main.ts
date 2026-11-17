@@ -923,6 +923,10 @@ const gaze = new THREE.Vector3();
 const tmpV = new THREE.Vector3();
 const camPos = new THREE.Vector3(0, 12, 14);
 const camLook = new THREE.Vector3();
+/** 옆 시점: 버킷 옆으로 이만큼 (m, 운전석 반대쪽) */
+const SIDE_LAT = 6;
+/** 옆 시점에서 운전석으로 돌아오는 남은 시간 (초) */
+let sideBack = 0;
 function updateCamera(dt: number) {
   if (cine) {
     exc.setCabView(false);
@@ -936,6 +940,30 @@ function updateCamera(dt: number) {
     camLook.lerp(cine.look, k);
     camera.position.copy(camPos);
     camera.lookAt(camLook);
+    return;
+  }
+  // 시범의 각도 토막: 옆에서 버킷을 보여 준다 (운전석에서는 버킷 바닥 각이 안 보인다 — 유저 검토).
+  // 서서히 옮겨 가고, 끝나면 서서히 운전석으로 돌아온다. 실습은 운전석 그대로
+  if (tutor && !tutor.cleared && tutor.current?.side && tutor.demoState() !== 'user' && camMode === 'cab') {
+    exc.setCabView(false);
+    for (const l of siteView.labels) l.visible = false;
+    if (Math.abs(camera.fov - 50) > 0.1) {
+      camera.fov = 50;
+      camera.updateProjectionMatrix();
+    }
+    const ψ = session.pose.swing;
+    const fwd = tmpV.set(Math.cos(ψ), 0, Math.sin(ψ));
+    const lat = new THREE.Vector3(-Math.sin(ψ), 0, Math.cos(ψ));
+    const b = new THREE.Vector3();
+    exc.bucketWorld(b);
+    const pos = b.clone().addScaledVector(lat, SIDE_LAT).addScaledVector(fwd, -1.2).setY(Math.max(0.6, b.y + 0.6));
+    const look = b.clone().addScaledVector(fwd, -0.6).setY(Math.max(-0.4, b.y - 0.2));
+    const k = 1 - Math.exp(-dt * 2.5);
+    camPos.lerp(pos, k);
+    camLook.lerp(look, k);
+    camera.position.copy(camPos);
+    camera.lookAt(camLook);
+    sideBack = 0.9;
     return;
   }
   exc.setCabView(camMode === 'cab');
@@ -984,7 +1012,9 @@ function updateCamera(dt: number) {
     camera.fov = wantFov;
     camera.updateProjectionMatrix();
   }
-  const k = camMode === 'cab' ? 1 : 1 - Math.exp(-dt * 6);
+  // 옆 시점에서 돌아올 때는 서서히 (뚝 끊기면 어디를 보는지 놓친다)
+  sideBack = Math.max(0, sideBack - dt);
+  const k = camMode === 'cab' && sideBack <= 0 ? 1 : 1 - Math.exp(-dt * 6);
   camPos.lerp(pos, k);
   camLook.lerp(look, k);
   camera.position.copy(camPos);
@@ -1493,7 +1523,7 @@ function updateMeter() {
     $('btn-slow').hidden = !(tutor.current?.ask || (tutor.current?.demo && d !== 'user'));
     // 실습 중에 시범을 다시 보는 길. 막혀서 처음으로 돌아간 적이 있으면 눈에 띄게
     const demoBtn = $('btn-demo');
-    demoBtn.hidden = !(tutor.hasDemo && d === 'user' && !tutor.current?.ask && tutor.step >= tutor.practiceStart());
+    demoBtn.hidden = !(tutor.hasDemo && d === 'user' && !tutor.current?.ask && tutor.practiceStart() > 0 && tutor.step >= tutor.practiceStart());
     demoBtn.classList.toggle('nudge', stuckN > 0);
     $('dr-say').textContent = say;
     $('m-hold').hidden = true;
@@ -2600,7 +2630,8 @@ function frame(now: number) {
       // 직접 한 단계를 해냈다: 링·꽃가루 + '좋아요 ✓'를 보여 준 뒤 다음 지시 (시범·고르기는 제외).
       // 레버 익히기는 단계 안에서 이미 같은 연출을 1.2초 보여 준다
       const prev = tutor.lesson.steps[tutor.step - 1];
-      const pass = tutor.lesson.big && prev && !prev.demo && !prev.ask && tutor.bag.okN === undefined;
+      // 보기만 하는 단계(peek)는 해낸 게 없다 — 칭찬하면 장난처럼 보인다 (유저 검토)
+      const pass = tutor.lesson.big && prev && !prev.demo && !prev.ask && !prev.peek && tutor.bag.okN === undefined;
       if (pass) passUntil = now + PASS_MS;
       renderMission(); // 판을 새로 그리면 연출 자리를 비우므로 연출은 그 뒤에
       if (pass) playDrillFx('ok');

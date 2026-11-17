@@ -25,6 +25,8 @@ export interface Step<S = DigSession> {
   demo?: (frame: number, s: S) => Partial<Sticks> | null;
   /** 이 단계가 시작될 때 운전석에서 시선을 내려 땅을 한 번 보여 줄까 */
   peek?: boolean;
+  /** 시범 중 옆에서 보여 줄까 (각도가 중요한 토막: 운전석에서는 버킷 바닥 각이 안 보인다). 실습은 운전석 그대로 */
+  side?: boolean;
   /** 땅에 "여기" 표식을 놓을 자리 (없으면 표식 없음) */
   spot?: (s: S) => { swing: number; r: number } | null;
   /**

@@ -75,7 +75,8 @@ export class SoilGrid {
     return this.idx(i, j);
   }
   /** 쌍선형 보간 표면 높이 (격자 밖이면 NaN) */
-  heightAt(x: number, z: number): number {
+  /** h 대신 다른 높이 배열(같은 격자, 예: 꽂기 전 저장본)로 잴 수 있다 */
+  heightAt(x: number, z: number, h: ArrayLike<number> = this.h): number {
     const fx = (x - this.ox) / this.cell;
     const fz = (z - this.oz) / this.cell;
     if (fx < 0 || fz < 0 || fx > this.nx - 1 || fz > this.nz - 1) return NaN;
@@ -83,10 +84,10 @@ export class SoilGrid {
     const j = Math.min(Math.floor(fz), this.nz - 2);
     const tx = fx - i;
     const tz = fz - j;
-    const a = this.h[this.idx(i, j)];
-    const b = this.h[this.idx(i + 1, j)];
-    const c = this.h[this.idx(i, j + 1)];
-    const d = this.h[this.idx(i + 1, j + 1)];
+    const a = h[this.idx(i, j)];
+    const b = h[this.idx(i + 1, j)];
+    const c = h[this.idx(i, j + 1)];
+    const d = h[this.idx(i + 1, j + 1)];
     return (a * (1 - tx) + b * tx) * (1 - tz) + (c * (1 - tx) + d * tx) * tz;
   }
   /** y 높이까지 깎고 깎은 부피 반환 */

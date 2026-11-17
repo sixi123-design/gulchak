@@ -1563,6 +1563,17 @@ export class DigSession {
     if (this.sur.idle > 0.3 && this.coverDepth(this.frame, this.pose.swing) <= this.params.heaveDepth) this.releaseSurcharge(row);
   }
 
+  /**
+   * 튜토리얼 되돌리기: 지금 흙·흙 장부를 저장하고, 부르면 그대로 되돌리는 함수를 준다.
+   * 같은 자세에서 저장하고 되돌려야 한다 — 직전 버킷 자리(prevUnder 등)도 같이 돌아간다. 먼저 teleport 하고 부른다
+   */
+  checkpoint(): () => void {
+    const sn = this.soilSnapshot();
+    return () => {
+      this.soilRestore(sn);
+      this.particles.length = 0;
+    };
+  }
   /** 흙 처리 시험용: 지형·흙 관련 상태 저장 / 되돌림 */
   private soilSnapshot() {
     return {
@@ -1570,7 +1581,7 @@ export class DigSession {
       v: {
         throatBank: this.throatBank,
         surcharge: this.surcharge,
-        sur: { ...this.sur },
+        sur: { ...this.sur, dir: { ...this.sur.dir } },
         pushStep: this.pushStep,
         effort: this.effort,
         effortDown: this.effortDown,
@@ -1607,7 +1618,8 @@ export class DigSession {
       g.dirty = true;
       g.lastFirmCut = q.lastFirmCut;
     });
-    Object.assign(this, sn.v);
+    // 객체는 복사해서 — 참조째 넣으면 이후 변경이 저장본까지 바꿔 두 번째 되돌리기가 틀어진다
+    Object.assign(this, sn.v, { sur: { ...sn.v.sur, dir: { ...sn.v.sur.dir } }, cycle: { ...sn.v.cycle } });
     this.entries.length = sn.entries;
     this.positionErrors.length = sn.posErr;
   }

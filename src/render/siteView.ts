@@ -326,6 +326,9 @@ export class SiteView {
 }
 
 /** 흙 높이맵 메시 */
+/** 땅 위에 흘린 흙이 이 높이(m)부터 온전한 흙색 — 그보다 얇으면 바닥색과 섞는다 */
+const FADE_H = 0.1;
+
 export class SoilView {
   readonly meshes: THREE.Mesh[] = [];
   private base = new THREE.Color(PALETTE.dirt);
@@ -442,6 +445,14 @@ export class SoilView {
               this.tmp.lerp(this.smooth, 0.45 * w);
               s += (1 - s) * w;
             }
+          }
+          // 땅 위(처음 높이 0)에 얇게 흘린 흙: 높이만큼 바닥색에서 흙색으로 서서히.
+          // 꼭짓점마다 둘 중 하나로 칠하면 얇은 흙더미 가장자리가 삼각형 톱니로 끊겨 보인다 (유저 검토)
+          if (h0[k] === 0 && !inPit) {
+            const w = Math.min(1, Math.abs(h[k] - h0[k]) / FADE_H);
+            this.tmp.multiplyScalar(s).lerp(this.ground, 1 - w);
+            col.setXYZ(k, this.tmp.r, this.tmp.g, this.tmp.b);
+            continue;
           }
           col.setXYZ(k, this.tmp.r * s, this.tmp.g * s, this.tmp.b * s);
         }

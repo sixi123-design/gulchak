@@ -9,7 +9,7 @@
  *   오른쪽 레버 오른쪽 = 버킷 펴기(rx+) · 왼쪽 = 버킷 오므림(rx-)
  *   왼쪽 레버 위 = 암 펴기(ly+) · 아래 = 암 당기기(ly-)
  */
-import { co, type Lesson, type Step } from './tutorial';
+import { co, hold, type Lesson, type Step } from './tutorial';
 import type { DigSession } from './session';
 
 type Mem = Record<string, number>;
@@ -112,7 +112,8 @@ function dir(o: {
   const amount = o.amount ?? (o.j === 'bucket' ? DRILL.moveBucket : DRILL.move);
   return wrap({
     // 방향만 말하면 '아래로 당기는데 붐이 올라간다'에서 멈칫한다 — 깜빡이는 이름표와 같은 말을 같이 쓴다 (검토)
-    text: `${o.text}\n→ ${o.label}`,
+    text: `${o.text}
+→ ${o.label}`,
     labels: [o.label],
     begin: (s, mem) => {
       mem.p = s.pose[o.j];
@@ -202,6 +203,64 @@ const pressDown = (): Step =>
       mem.ask && anyLever(s) >= 0.08 ? co(mem.lifted ? '실격 자세예요 — 레버에서 손을 떼세요' : '레버에서 손을 떼세요') : null,
   });
 
+// ---- 손맛: 레버를 얼마나 미는지 (흙 퍼기에서 옮겨 옴 — 흙 퍼기는 정석만 가르친다) ----
+/** 손 자리 → 기계 값 (앱의 레버 곡선 2.2와 같게) */
+const curve = (v: number) => Math.sign(v) * Math.abs(v) ** 2.2;
+/**
+ * 시범 한 토막: `frames` 동안 `hand`(손이 둘 레버 자리)를 밀고, 그 뒤 다음 단계로.
+ * 3칸 표시는 손 자리로 센다 — 기계 값으로 세면 붐이 움직이는데 0칸인 구간이 생긴다 (개발 검토)
+ */
+const show = (text: string, frames: number, hand: (f: number) => number, gauge?: 1 | 2 | 3, label = '붐 올림', start?: (s: DigSession) => void): Step => ({
+  text,
+  gauge,
+  labels: [label],
+  demo: (f) => (f < frames ? { ry: curve(hand(f)) } : null),
+  begin: (s, mem) => {
+    start?.(s);
+    mem.t = 0;
+  },
+  // 시범 + 가운데로 돌아와 쉬는 0.7초까지 보고 넘어간다
+  done: (_s, mem) => ++mem.t > frames + 40,
+});
+/** 한 칸 = 손 자리 0.35 (3칸 표시의 1칸 한가운데쯤) */
+const HAND1 = 0.35;
+/** 따라 하기: 한 칸에 이만큼(프레임) 이어서 버틴다 */
+const HOLD1 = 30;
+// 올림 → 내림 → 올림으로 짜서 시범이 끝나면 처음 높이로 돌아온다. 처음 보는 사람이 읽고 볼 수 있게 길게 (유저 검토: 1.5초는 못 읽음)
+const feelSteps = (): Step[] => [
+  show('레버는 미는 만큼 빨라집니다\n오른쪽 레버를 아래로 한 칸만', 120, () => -HAND1, 1, '붐 올림', (s) => s.teleport({ ...DRILL_START })),
+  show('오른쪽 레버를 위로\n끝까지 — 빠릅니다', 75, (f) => (f < 40 ? 1 : 1 - (f - 40) / 35), 3, '붐 내림'),
+  show('레버를 가운데로\n천천히 놓기', 120, (f) => (f < 60 ? -HAND1 : -HAND1 * (1 - (f - 60) / 60))),
+  {
+    text: '이제 직접\n오른쪽 레버를 아래로 한 칸만',
+    gauge: 1,
+    labels: ['붐 올림'],
+    begin: (_s, mem) => ((mem.used = 0), (mem.ok = 0)),
+    hud: (_s, mem) => ((mem.used ?? 0) >= HOLD1 ? '이제 천천히 가운데로' : '한 칸에 두고 잠깐 버티기'),
+    // 손 자리로 본다 (화면 3칸과 같은 기준). 아래(음수)로 한 칸에 이어서 버티고, 천천히 놓아야 한다
+    done: (s, mem) => {
+      const y = s.stick.ry;
+      const v = Math.abs(y);
+      const one = y < -0.05 && y >= -0.4;
+      if ((mem.used ?? 0) < HOLD1) mem.used = one ? (mem.used ?? 0) + 1 : 0;
+      else if (y > 0.05 || y < -0.4) mem.used = 0; // 버틴 뒤 엉뚱하게 밀면 다시
+      // 한 프레임에 가운데로 = 손을 확 뗐다
+      if (v < 0.05 && (mem.prev ?? 0) >= 0.2) ((mem.used = 0), (mem.snap = 1));
+      if (v > 0.05) mem.snap = 0;
+      mem.prev = v;
+      return hold(mem, (mem.used ?? 0) >= HOLD1 && v < 0.05, 20);
+    },
+    coach: (s, mem) =>
+      s.stick.ry > 0.05
+        ? co('반대예요 — 아래로', '붐 올림')
+        : s.stick.ry < -0.4
+          ? co('너무 많이 — 한 칸만', '붐 올림')
+          : mem.snap
+            ? co('손을 확 뗐어요 — 다시 한 칸, 천천히 놓기', '붐 올림')
+            : null,
+  },
+];
+
 export const LEVER_DRILL: Lesson = {
   id: 'b-levers',
   tier: '기본기',
@@ -232,5 +291,6 @@ export const LEVER_DRILL: Lesson = {
     dir({ j: 'bucket', way: -1, text: '오른쪽 레버를 왼쪽으로', label: '버킷 오므림', said: '버킷이 오므라듭니다', keep: ['boom'] }),
     dir({ j: 'arm', way: -1, text: '왼쪽 레버를 아래로', label: '암 당기기', said: '암이 접힙니다 — 버킷이 몸 쪽으로', keep: ['boom'] }),
     dir({ j: 'arm', way: 1, text: '왼쪽 레버를 위로', label: '암 펴기', said: '암이 펴집니다 — 버킷이 멀어집니다', keep: ['boom'] }),
+    ...feelSteps(),
   ],
 };

@@ -245,12 +245,17 @@ interface RdState {
   /** 마지막으로 계산한 시범 프레임과 그 값 */
   f: number;
   out: Partial<Sticks>;
+  /** 왼쪽 레버 앞뒤 (손 자리, −가 암 당기기) */
+  ly: number;
+  ly0: number;
+  /** 레버를 가운데로 거쳐서 옮기는 중 (from) */
+  via: boolean;
 }
 /** 세션마다 따로 (모듈 전역이면 세션 둘이 — 테스트·다시 시작 — 서로의 레버 자리를 덮어쓴다. 개발 검토) */
 const RDS = new WeakMap<DigSession, RdState>();
 const rd = (s: DigSession): RdState => {
   let v = RDS.get(s);
-  if (!v) RDS.set(s, (v = { a: 90, m: 0, a0: 90, m0: 0, g0: s.groundGap(), b0: s.pose.bucket / deg, base: 90, f: -1, out: {} }));
+  if (!v) RDS.set(s, (v = { a: 90, m: 0, a0: 90, m0: 0, g0: s.groundGap(), b0: s.pose.bucket / deg, base: 90, f: -1, out: {}, ly: 0, ly0: 0, via: false }));
   return v;
 };
 /** 목표 높이: 버킷 바닥이 땅에서 이만큼 (m) */
@@ -261,7 +266,7 @@ const rdMid = (s: DigSession) => (rd(s).g0 + RD_LAND) / 2;
 /** 시작 높이에서 목표까지 k만큼 내려온 높이 */
 const rdAt = (s: DigSession, k: number) => rd(s).g0 + (RD_LAND - rd(s).g0) * k;
 
-interface Phase {
+export interface Phase {
   text: string;
   labels: string[];
   /** 옮겨 갈 레버 자리 */
@@ -281,6 +286,10 @@ interface Phase {
   from?: number;
   /** 길잡이 원호 [시작, 끝] (도, 화면 시계방향). 기본은 12시→3시 */
   arc?: [number, number];
+  /** 왼쪽 레버 앞뒤 (손 자리, −가 6시·암 당기기). 오른쪽 레버와 같이 서서히 옮긴다. 없으면 그대로 */
+  ly?: number;
+  /** 옆에서 보여 주기 (Step.side) */
+  side?: boolean;
 }
 /**
  * 내려가는 높이에 맞춰 버킷이 얼마나 펴져 있어야 하나 (도).
@@ -297,9 +306,10 @@ const wantBucket = (s: DigSession) => {
 const RD_K = 1.5;
 /** 손이 레버 각도를 한 스텝에 옮기는 최대 (도) — 피드백이 레버를 튀게 하지 않게 */
 const RD_TURN = 1.2;
-const phaseStep = (ph: Phase): Step => ({
+export const phaseStep = (ph: Phase): Step => ({
   text: ph.text,
   labels: ph.labels,
+  side: ph.side,
   demo: (f, s) => {
     const RD = rd(s);
     // 한 스텝에 여러 번 불린다(demoState도 부른다). 각도를 누적해 옮기므로 같은 프레임이면 같은 값
@@ -314,7 +324,20 @@ const phaseStep = (ph: Phase): Step => ({
     // 피드백이 레버를 튀게 하지 않게 (따라가는 토막만 — 나머지는 이미 서서히 옮긴다)
     RD.a = ph.track ? RD.a + Math.max(-RD_TURN, Math.min(RD_TURN, want - RD.a)) : want;
     RD.m = RD.m0 + (ph.m - RD.m0) * e;
-    RD.out = RD.m < 0.01 ? {} : toMachine(stickAt(RD.a, RD.m));
+    if (RD.via) {
+      // 밀던 레버를 가운데로 놓았다가(앞 절반) 새 자리로 민다(뒤 절반) — 돌려 옮기면 사이 동작을 거친다
+      const h = Math.min(1, k * 2);
+      const eh = h * h * (3 - 2 * h);
+      if (k < 0.5) (RD.a = RD.a0), (RD.m = RD.m0 * (1 - eh));
+      else {
+        const h2 = Math.min(1, (k - 0.5) * 2);
+        RD.a = RD.base = ph.from!;
+        RD.m = ph.m * h2 * h2 * (3 - 2 * h2);
+      }
+    }
+    if (ph.ly !== undefined) RD.ly = RD.ly0 + (ph.ly - RD.ly0) * e;
+    const r = RD.m < 0.01 ? {} : toMachine(stickAt(RD.a, RD.m));
+    RD.out = Math.abs(RD.ly) < 0.01 ? r : { ...r, ly: Math.sign(RD.ly) * Math.abs(RD.ly) ** 2.2 };
     return RD.out;
   },
   guide: (s) => ({ ring: Math.max(0.2, rd(s).m), from: ph.arc?.[0] ?? 90, to: ph.arc?.[1] ?? 0, at: rd(s).a, rough: false }),
@@ -326,8 +349,11 @@ const phaseStep = (ph: Phase): Step => ({
       RD.m = 0;
       RD.g0 = s.groundGap();
       RD.b0 = s.pose.bucket / deg;
+      RD.ly = 0;
     } else if (ph.from !== undefined && RD.m < 0.01) RD.a = RD.base = ph.from;
+    RD.via = ph.from !== undefined && RD.m >= 0.01 && Math.abs(RD.a - ph.from) > 1;
     RD.a0 = RD.base;
+    RD.ly0 = RD.ly;
     RD.f = -1;
     RD.m0 = RD.m;
     mem.t = 0;

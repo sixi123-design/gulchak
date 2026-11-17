@@ -2422,6 +2422,17 @@ body:has(#dq-banner:not([hidden])) #hud {
 .load.soil .bar::after {
   left: 76.9%;
 }
+/* 목표 구간: 평적 100% ~ 115% (막대 끝 = 고봉 130%). 채운 흙 위에 얹어 늘 보이게 */
+.load.soil .bar::before {
+  content: '';
+  position: absolute;
+  left: 76.9%;
+  width: 11.5%;
+  top: 0;
+  bottom: 0;
+  background: rgba(47, 210, 122, 0.55);
+  z-index: 1;
+}
 /* 게이지 옆 숫자: 평적(버킷 입구까지) = 100%, 고봉 = 130% */
 .load.soil .load-pct {
   min-width: 58px;

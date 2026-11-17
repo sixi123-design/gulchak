@@ -5,6 +5,7 @@ import { MODES } from '../src/core/ruleEngine';
 import { DigSession, type RulesFile } from '../src/sim/session';
 import { Tutor } from '../src/sim/tutorial';
 import { DRILL, DRILL_START, LEVER_DRILL } from '../src/sim/leverDrill';
+import { frame } from './harness';
 import { MACHINE_STYLES, TUTOR_LOOK } from '../src/render/excavatorView';
 
 const R = rules as unknown as RulesFile;
@@ -176,6 +177,13 @@ it('아홉 단계를 레버로 끝까지 간다', () => {
   expect(t.step).toBe(7);
   run(t, { ry: -1 }, 40);
   expect(until(t, {}, 600)).toBe(true);
+  // 손맛 시범 (앱이 민다) → 직접 한 칸만
+  for (let i = 0; i < 3 && !t.current?.text.includes('한 칸만'); i++) expect(until(t, {}, 600), `손맛 시범: ${t.current?.text}`).toBe(true);
+  expect(t.current?.text).toMatch(/한 칸만/);
+  // 따라 하기는 손 자리(stick)로 본다 — 실제 앱과 같은 공용 한 스텝으로
+  for (let i = 0; i < 40; i++) frame(t, { ry: -0.3 });
+  for (let i = 0; i < 20; i++) frame(t, { ry: -0.3 * (1 - i / 20) }); // 천천히 가운데로
+  for (let i = 0; i < 200 && !t.cleared; i++) frame(t, {});
   expect(t.cleared).toBe(true);
 });
 
@@ -232,4 +240,39 @@ it('배우기용 겉모습에는 검정이 없다', () => {
 
 it('시험장 기종 목록에는 배우기용이 섞이지 않는다', () => {
   expect(Object.keys(MACHINE_STYLES)).toEqual(['A', 'B', 'C']);
+});
+
+const toFollow = () => {
+  const t = drill();
+  t.step = LEVER_DRILL.steps.findIndex((x) => x.text.startsWith('이제 직접'));
+  (t as unknown as { enter(): void }).enter();
+  return t;
+};
+it('손맛 따라 하기: 반대로 밀거나 너무 많이 밀면 알려 주고, 손을 확 떼면 안 넘어간다', () => {
+  let t = toFollow();
+  frame(t, { ry: 0.3 });
+  expect(t.coach?.msg ?? '').toMatch(/반대/);
+  frame(t, { ry: -0.9 });
+  expect(t.coach?.msg ?? '').toMatch(/한 칸만/);
+  t = toFollow();
+  for (let i = 0; i < 40; i++) frame(t, { ry: -0.3 });
+  for (let i = 0; i < 200; i++) frame(t, {}); // 확 뗐다
+  expect(t.cleared).toBe(false);
+  expect(t.coach?.msg ?? '').toMatch(/확 뗐/);
+});
+
+it('레버 익히기에는 시범 보기 버튼 기준(실습 시작)이 없다 — 손맛 시범은 순서의 일부', () => {
+  expect(drill().practiceStart()).toBe(0);
+});
+
+it('손맛 시범은 앱이 스스로 주의(덜컹·갑자기 놓음)를 띄우지 않는다', () => {
+  const t = drill();
+  const ids: string[] = [];
+  t.s.onViolation((v) => ids.push(v.id));
+  const at = LEVER_DRILL.steps.findIndex((x) => x.text.startsWith('레버는 미는 만큼'));
+  t.step = at;
+  (t as unknown as { enter(): void }).enter();
+  for (let i = 0; i < 1500 && !t.current?.text.includes('이제 직접'); i++) frame(t, {});
+  expect(t.current?.text).toMatch(/이제 직접/);
+  expect(ids).toEqual([]);
 });
