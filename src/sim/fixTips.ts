@@ -17,9 +17,9 @@ type T = [string, string | undefined];
 const DIG_DQ: Record<string, T> = {
   'D-POLE': ['붐을 충분히 올려 폴·줄에서 멀리 돌리고, 멈출 곳 앞에서 선회 레버 미리 놓기', 'b-carry'],
   'D-DIGLINE': ['버킷을 굴착 표시 안쪽에 내린 뒤 파기', 'b-scoop'],
-  'D-PASS': ['B지점 통과구역 쪽으로, 장애물선보다 높게 들고 선회', 'b-carry'],
+  'D-PASS': ['가운데 두 폴 사이로, 줄보다 높게 들고 선회', 'b-carry'],
   'D-COUNT': ['한 번에 오래 퍼지 말고 4회부터 채우기', 'b-scoop'],
-  'D-NOFLAT': ['마지막에 버킷을 끝까지 펴서 C를 끌어오고 밀어 고르기', 'flatten'],
+  'D-NOFLAT': ['마지막에 버킷을 끝까지 펴서 쏟은 구덩이를 끌어오고 밀어 고르기', 'flatten'],
   'D-TIME': ['줄 위가 되면 바로 선회, 돌아오며 붐 내리기처럼 동작을 겹치기', 'cycle'],
   'D-STALL': ['흙에 걸리면 레버를 끝까지 밀지 말고 붐을 조금 올리기', 'b-scoop'],
   'D-LIFT': ['붐으로 누르지 말고 이빨이 안 보일 만큼만 꽂고 암 당기기', 'b-scoop'],

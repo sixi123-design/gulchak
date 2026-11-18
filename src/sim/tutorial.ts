@@ -190,7 +190,7 @@ export const co = (msg: string, ...labels: string[]): Coach => ({ msg, labels })
 const swingBack = (s: DigSession, target: number, name: string): Coach | null => {
   const d = s.pose.swing - target;
   if (Math.abs(d) < 8 * deg) return null;
-  return co(`${name} 쪽으로 돌아오기`, d < 0 ? '▶ 선회' : '선회 ◀');
+  return co(`${name}으로 돌아오기`, d < 0 ? '▶ 선회' : '선회 ◀');
 };
 /** 암을 멈추고 있는 시간(프레임) 세기 */
 const armIdle = (s: DigSession, mem: Record<string, number>) => {
@@ -208,7 +208,7 @@ const straining = (s: DigSession) => s.engineLoad > 1.05 || s.lift > 1 * deg;
  * 오므림이 지나치면 반쯤 펴게 (흙 속에서는 펴도 흙이 안 쏟아짐 — session.pour)
  */
 const packCoach = (s: DigSession, mem: Record<string, number>): Coach | null => {
-  const sw = swingBack(s, SWING_A, 'A');
+  const sw = swingBack(s, SWING_A, '파는 곳');
   if (sw) return sw;
   if (straining(s)) return co('너무 깊어요 → 붐 살짝 올림', '붐 올림');
   const c = curlDeg(s);
@@ -228,7 +228,7 @@ const liftFirst = (s: DigSession): Coach | null =>
 const armSpent = (s: DigSession) => s.pose.arm <= s.m.limits.arm[0] + 4 * deg && s.load < 0.8 * SC(s);
 /** 평탄: 흙에 댄 채 끌기·밀기 지도 */
 const skimCoach = (s: DigSession, mem: Record<string, number>, pull: boolean): Coach | null => {
-  const sw = swingBack(s, SWING_C, 'C');
+  const sw = swingBack(s, SWING_C, '쏟는 곳');
   if (sw) return sw;
   if (s.pose.bucket < s.m.limits.bucket[1] - 30 * deg) return co('버킷 끝까지 펴기', '버킷 펴기');
   if (straining(s)) return co('너무 눌러요 → 붐 살짝 올림', '붐 올림');
@@ -337,7 +337,7 @@ export const LESSONS: Lesson[] = [
       {
         text: '이빨 수직으로 세우고 암 펴서 먼 끝으로',
         labels: ['버킷 펴기', '암 펴기'],
-        coach: (s) => swingBack(s, SWING_A, 'A') ?? liftFirst(s),
+        coach: (s) => swingBack(s, SWING_A, '파는 곳') ?? liftFirst(s),
         // 가운데는 이미 비었고 흙은 먼 끝에 남음. 버킷 등이 ⓑ선에 닿으면 실격
         done: (s) => bucketFar(s) >= bLine(s) - 0.4 && bucketFar(s) <= bLine(s) - 0.08 && teethVertical(s) <= 20,
         meter: (s) => needle(bucketFar(s) - bLine(s), -1.8, 0.2, -0.4, -0.08),
@@ -349,7 +349,7 @@ export const LESSONS: Lesson[] = [
         done: (s) => tipStation(s) === 'A' && s.groundGap() < -0.15,
         meter: (s, mem) => ({ v: clamp01((mem.g0 - s.groundGap()) / (mem.g0 + 0.15 || 1e-6)) }),
         // 붐을 내리면 버킷이 장비 쪽으로 눕는다. 이빨이 장비 쪽으로 넘어가면 버킷 바닥(배)이 흙을 눌러 안 들어감
-        coach: (s) => swingBack(s, SWING_A, 'A') ?? bellyPress(s),
+        coach: (s) => swingBack(s, SWING_A, '파는 곳') ?? bellyPress(s),
       },
       {
         text: '바닥을 땅과 평행하게 오므리고 암 당겨 담기 · 이빨 빠지면 붐 살짝 내림',
@@ -377,7 +377,7 @@ export const LESSONS: Lesson[] = [
     icon: 'stFlat',
     title: '평탄·마무리',
     why: {
-      title: '마지막은 C를 평평하게',
+      title: '마지막은 쏟은 구덩이를 평평하게',
       lines: [
         '쏟은 흙을 버킷을 <b>끝까지 편</b> 채로 끌어오고 밀어 고릅니다.',
         '암을 쓰는 동안 <b>붐을 같이</b> 써야 높이가 일정합니다. 붐을 세게 누르면 차체가 들립니다.',
@@ -407,7 +407,7 @@ export const LESSONS: Lesson[] = [
       {
         text: '암 펴서 흙더미 너머로 뻗기',
         labels: ['암 펴기'],
-        coach: (s) => swingBack(s, SWING_C, 'C') ?? (s.frame.tip.y > 2.2 ? co('너무 높아요 → 붐 내림', '붐 내림') : null),
+        coach: (s) => swingBack(s, SWING_C, '쏟는 곳') ?? (s.frame.tip.y > 2.2 ? co('너무 높아요 → 붐 내림', '붐 내림') : null),
         begin: (s, mem) => (mem.g0 = s.frame.tip.r),
         done: (s) => s.frame.tip.r >= s.site.stations[1].pitOut - 0.4,
         meter: (s, mem) => toward(s.frame.tip.r, mem, s.site.stations[1].pitOut - 0.4),
@@ -425,7 +425,7 @@ export const LESSONS: Lesson[] = [
       {
         text: '붐 올리고 암 당겨 밀 준비',
         labels: ['붐 올림', '암 당기기'],
-        coach: (s) => swingBack(s, SWING_C, 'C'),
+        coach: (s) => swingBack(s, SWING_C, '쏟는 곳'),
         begin: (s, mem) => (mem.g0 = s.frame.tip.r),
         done: (s) => s.frame.tip.r <= s.site.stations[1].pitIn + 0.2,
         meter: (s, mem) => toward(s.frame.tip.r, mem, s.site.stations[1].pitIn + 0.2),
@@ -447,7 +447,7 @@ export const LESSONS: Lesson[] = [
         text: '버킷 끝까지 편 채로 흙 위에 내려놓기',
         labels: ['붐 내림', '버킷 펴기'],
         coach: (s) =>
-          swingBack(s, SWING_C, 'C') ??
+          swingBack(s, SWING_C, '쏟는 곳') ??
           (s.pose.bucket < s.m.limits.bucket[1] - 10 * deg
             ? co('버킷 끝까지 펴기', '버킷 펴기')
             : s.groundGap() < -s.params.endSinkTol

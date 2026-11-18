@@ -153,7 +153,7 @@ describe('돌아오기: B 지나면 붐 내리고 버킷 펴며 A 중심선에 �
     expect(t.cleared).toBe(true);
     const g = BACK_LESSON.grade!(t.s, t.bag);
     expect(g.stars).toBe(2);
-    expect(g.note).toContain('B를 지나면');
+    expect(g.note).toContain('두 폴을 지나면');
   });
 
   it('A에 높이 든 채 서면 통과가 아니고 무엇을 할지 알려 준다', () => {

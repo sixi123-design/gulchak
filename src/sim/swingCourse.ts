@@ -39,7 +39,10 @@ interface SwingSpec {
   from: number;
   to: number;
   load: number;
-  name: 'A' | 'C';
+  /** 화면에 쓰는 장소 이름 (A·C는 유저에게 생소하다 — 말로) */
+  name: string;
+  /** 선회 지시 (예: '반대편으로 선회') */
+  toward: string;
   /** 시범이 놓기 시작하는 자리의 여유 (도): 계산한 미끄러짐에 더한다 */
   release: number;
   why: Lesson['why'];
@@ -74,7 +77,7 @@ function swingLesson(sp: SwingSpec): Lesson {
       done: (_s, mem) => ++mem.t >= 75,
     },
     {
-      text: `왼쪽 레버를 ${dir > 0 ? '오른쪽' : '왼쪽'} 끝까지\n${sp.name} 쪽으로 선회`,
+      text: `왼쪽 레버를 ${dir > 0 ? '오른쪽' : '왼쪽'} 끝까지\n${sp.toward}`,
       labels: [label],
       demo: (f) => ({ lx: lx(Math.min(1, f / 30)) }),
       // 놓는 자리는 지금 선회 속도로 정한다 (rpm·흙 무게에 따라 미끄러지는 거리가 다르다):
@@ -99,7 +102,7 @@ function swingLesson(sp: SwingSpec): Lesson {
   ];
 
   const practice: Step = {
-    text: `${sp.name}까지 선회\n${sp.name} 앞에서 레버 미리 놓기`,
+    text: `${sp.toward} · ${sp.name} 위에 서기\n앞에서 레버 미리 놓기`,
     labels: [label],
     begin: (s, mem, bag) => {
       setup(s);
@@ -159,20 +162,21 @@ function swingLesson(sp: SwingSpec): Lesson {
 
 export const CARRY_LESSON = swingLesson({
   id: 'b-carry',
-  title: '선회해 C로',
+  title: '반대편으로 선회',
   icon: 'stCarry',
   from: SWING_A,
   to: SWING_C,
   load: 1.1,
-  name: 'C',
+  name: '쏟는 곳',
+  toward: '반대편으로 선회',
   release: 0,
   why: {
     title: '선회는 놓는 자리가 전부입니다',
     lines: [
       '흙을 실은 상부는 무겁습니다. 레버를 놓아도 <b>그대로 더 돕니다</b>.',
-      '그래서 C에 닿은 다음 놓으면 지나칩니다. C 뒤 <b>ⓓ오버스윙 제한선</b>을 넘으면 시험에서는 실격입니다. <b>C 앞에서 미리</b> 서서히 놓으세요.',
+      '그래서 쏟는 곳에 닿은 다음 놓으면 지나칩니다. 그 뒤의 <b>오버스윙 제한선</b>을 넘으면 시험에서는 실격입니다. <b>쏟는 곳 앞에서 미리</b> 서서히 놓으세요.',
       '레버를 반대로 꺾어 세우면 덜컹하고 흙이 쏟아집니다.',
-      'B의 두 폴 사이, 줄 위로 지나갑니다. 흙 퍼기에서 만든 선회 자세면 닿지 않습니다.',
+      '가운데 <b>두 폴 사이</b>, 줄 위로 지나 반대편 구덩이로 갑니다. 흙 퍼기에서 만든 선회 자세면 닿지 않습니다.',
     ],
   },
 });
@@ -217,19 +221,19 @@ function backLesson(): Lesson {
       done: (_s, mem) => ++mem.t >= 75,
     },
     {
-      text: '왼쪽 레버를 오른쪽 끝까지\nA 쪽으로 선회 — 줄 위 그대로',
+      text: '왼쪽 레버를 오른쪽 끝까지\n제자리 쪽으로 선회 — 줄 위 그대로',
       labels: ['▶ 선회'],
       demo: (f) => ({ lx: lx(Math.min(1, f / 30)) }),
       done: (s) => s.pose.swing / deg >= BACK.passB,
     },
     {
-      text: 'B를 지나면 선회하면서\n버킷 펴고 붐은 줄 위까지만',
+      text: '두 폴을 지나면 선회하면서\n버킷 펴고 붐은 줄 위까지만',
       labels: ['▶ 선회', '붐 내림', '버킷 펴기'],
       demo: (_f, s) => ({ lx: 1, ...lower(s) }),
       done: (s) => left(s) <= coast(s),
     },
     {
-      text: 'A 앞에서 선회 레버를 서서히 놓기\n중심선에 서면 바로 팔 자세',
+      text: '파는 곳 앞에서 선회 레버를 서서히 놓기\n중심선에 서면 바로 팔 자세',
       // (줄 위 높이에서 선다 — 땅 가까이는 중심에 선 뒤 흙 퍼기에서)
       labels: ['붐 내림', '버킷 펴기'],
       begin: (_s, mem) => (mem.t = 0),
@@ -245,7 +249,7 @@ function backLesson(): Lesson {
     },
   ];
   const practice: Step = {
-    text: 'A로 돌아오기 · B 지나면 붐 내리고 버킷 펴기\nA 중심선에 맞춰 서기',
+    text: '제자리로 돌아오기 · 두 폴 지나면 붐 내리고 버킷 펴기\n구덩이 중심선에 맞춰 서기',
     labels: ['▶ 선회', '붐 내림', '버킷 펴기'],
     begin: (s, mem, bag) => {
       setup(s);
@@ -279,18 +283,18 @@ function backLesson(): Lesson {
       if (Math.abs(d) > BACK.pass && left(s) < 15 && s.groundGap() < BACK.rope + 0.2)
         return co('중심선에 맞춘 다음 내리기 — 줄에 닿으면 실격', '붐 올림');
       if (handOn(s) || !still(s)) return null;
-      if (left(s) > 15 && left(s) < 150) return co(`A까지 ${Math.round(left(s))}° — 더 돌리기`, '▶ 선회');
+      if (left(s) > 15 && left(s) < 150) return co(`제자리까지 ${Math.round(left(s))}° — 더 돌리기`, '▶ 선회');
       if (left(s) >= 150) return null;
       if (d < -BACK.pass) return co(`지나쳤어요 — 살살 되돌리기 (${Math.round(-d * 100)}cm) · 시험에서는 ⓓ선을 넘으면 실격`, '선회 ◀');
-      if (d > BACK.pass) return co(`A 중심선까지 ${Math.round(d * 100)}cm — 살살 더`, '▶ 선회');
+      if (d > BACK.pass) return co(`중심선까지 ${Math.round(d * 100)}cm — 살살 더`, '▶ 선회');
       if (!prepared(s)) return prepCoach(s);
       return null;
     },
     hud: (s) => {
       const L = left(s);
-      if (L > 15) return L < 90 ? `A까지 ${Math.round(L)}°` : null;
+      if (L > 15) return L < 90 ? `제자리까지 ${Math.round(L)}°` : null;
       const d = Math.round(lat(s) * 100);
-      return d === 0 ? 'A 중심선' : d > 0 ? `중심선까지 ${d}cm` : `${-d}cm 지나침`;
+      return d === 0 ? '중심선' : d > 0 ? `중심선까지 ${d}cm` : `${-d}cm 지나침`;
     },
   };
   return {
@@ -302,21 +306,21 @@ function backLesson(): Lesson {
     why: {
       title: '돌아오면 바로 팔 자세로',
       lines: [
-        '쏟고 나면 줄 위 그대로 A 쪽으로 돌립니다. 두 폴 사이를 지나갑니다.',
-        '<b>B를 지나면</b> 선회하면서 <b>버킷 펴고, 붐은 줄 위까지만</b> 내리기 — A에 서는 순간 바로 팔 수 있게.',
-        '중심에 서기 전에 줄 아래로 내리면 A의 줄에 닿아 실격입니다.',
+        '쏟고 나면 줄 위 그대로 <b>제자리(파는 곳)</b>로 돌립니다. 가운데 두 폴 사이를 지나갑니다.',
+        '<b>두 폴을 지나면</b> 선회하면서 <b>버킷 펴고, 붐은 줄 위까지만</b> 내리기 — 제자리에 서는 순간 바로 팔 수 있게.',
+        '중심에 서기 전에 줄 아래로 내리면 구덩이 둘레 줄에 닿아 실격입니다.',
         'A는 파는 곳입니다. <b>구덩이 중심선</b>에 맞춰 서야 합니다. 비켜 서서 파면 선을 넘어 실격입니다.',
-        '빈 버킷도 상부가 더 돕니다. A 앞에서 미리 놓으세요.',
+        '빈 버킷도 상부가 더 돕니다. 파는 곳 앞에서 미리 놓으세요.',
       ],
     },
     grade: (_s, bag): Grade => {
-      if (bag.jolt && bag.over) return { stars: 1, note: 'A에 섰어요. 늦게 놓고 반대로 꺾어 세웠어요. 앞에서 미리 놓아 미끄러지게' };
-      if (bag.jolt) return { stars: 2, note: 'A에 섰어요. 반대로 꺾어 세워 덜컹했어요. 미리 놓아 미끄러지게' };
-      if (bag.over) return { stars: 2, note: 'A에 섰어요. 지나쳤다 돌아왔어요. 레버를 더 앞에서 놓기' };
-      if (bag.near) return { stars: 2, note: 'A에 섰어요. 줄에 가까웠어요 (시험이면 실격 직전). 중심선에 맞춘 다음 내리기' };
-      if (bag.overlap === 0) return { stars: 2, note: 'A에 섰어요. 서고 나서 내렸어요. B를 지나면 선회하면서 붐 내리고 버킷 펴기' };
-      if (Math.round((bag.err ?? 0) * 100) > BACK.star * 100) return { stars: 2, note: `A에 섰어요. 중심선에서 ${Math.round((bag.err ?? 0) * 100)}cm 비켜 섰어요. 조금 더 맞춰 보기` };
-      return { stars: 3, note: '돌아오며 내려 A 중심선에 바로 팔 자세로 섰습니다' };
+      if (bag.jolt && bag.over) return { stars: 1, note: '제자리에 섰어요. 늦게 놓고 반대로 꺾어 세웠어요. 앞에서 미리 놓아 미끄러지게' };
+      if (bag.jolt) return { stars: 2, note: '제자리에 섰어요. 반대로 꺾어 세워 덜컹했어요. 미리 놓아 미끄러지게' };
+      if (bag.over) return { stars: 2, note: '제자리에 섰어요. 지나쳤다 돌아왔어요. 레버를 더 앞에서 놓기' };
+      if (bag.near) return { stars: 2, note: '제자리에 섰어요. 줄에 가까웠어요 (시험이면 실격 직전). 중심선에 맞춘 다음 내리기' };
+      if (bag.overlap === 0) return { stars: 2, note: '제자리에 섰어요. 서고 나서 내렸어요. 두 폴을 지나면 선회하면서 붐 내리고 버킷 펴기' };
+      if (Math.round((bag.err ?? 0) * 100) > BACK.star * 100) return { stars: 2, note: `제자리에 섰어요. 중심선에서 ${Math.round((bag.err ?? 0) * 100)}cm 비켜 섰어요. 조금 더 맞춰 보기` };
+      return { stars: 3, note: '돌아오며 내려 구덩이 중심선에 바로 팔 자세로 섰습니다' };
     },
     setup,
     steps: [...demo, practice],

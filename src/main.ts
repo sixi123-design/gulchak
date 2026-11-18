@@ -1783,7 +1783,7 @@ function onLessonClear() {
 }
 function onLessonFail(v: Violation) {
   if (!tutor || tutor.cleared) return;
-  $('fail-detail').textContent = v.detail;
+  $('fail-detail').textContent = plainDetail(v.detail);
   $('mission').hidden = true;
   $('fail').hidden = false;
 }
@@ -2262,6 +2262,29 @@ $('btn-retry').onclick = () => {
 };
 $('btn-home').onclick = () => newSession();
 
+/**
+ * 알림 문구의 장소·선 이름을 말로 (유저는 A·B·C, ⓑⓒⓓ 기호가 생소하다 — 앱 주인, 2026-11-18).
+ * 판정 내부 이름(site.ts)은 그대로 두고 화면에 보일 때만 바꾼다
+ */
+const PLAIN: [RegExp, string][] = [
+  [/A지점 /g, '파는 곳 '],
+  [/C지점 /g, '쏟는 곳 '],
+  [/B지점 /g, '가운데 폴 '],
+  [/B-ⓔ폴/g, '가운데 안쪽 폴'],
+  [/B-ⓕ폴/g, '가운데 바깥쪽 폴'],
+  [/B-장애물선/g, '가운데 줄'],
+  [/A-/g, '파는 곳 '],
+  [/C-/g, '쏟는 곳 '],
+  [/ⓑ선/g, '바깥 줄'],
+  [/ⓒ선\(바깥쪽\)/g, '옆 줄(바깥쪽)'],
+  [/ⓒ선\(B쪽\)/g, '옆 줄(가운데 쪽)'],
+  [/ⓒ선/g, '옆 줄'],
+  [/ⓓ오버스윙제한선/g, '오버스윙 제한선'],
+  [/ⓓ폴\(안\)/g, '오버스윙 폴(안)'],
+  [/ⓓ폴\(밖\)/g, '오버스윙 폴(밖)'],
+  [/ⓐ/g, ''],
+];
+const plainDetail = (t: string) => PLAIN.reduce((x, [re, to]) => x.replace(re, to), t);
 /** 사용자에게 보일 규칙 이름: 채점 기준 번호·[해석] 같은 내부 표기를 뺀다 */
 const plainTitle = (t: string) => t.replace(/\[[^\]]*\]\s*/g, '').trim();
 function showToast(v: Violation) {
@@ -2285,7 +2308,7 @@ function showToast(v: Violation) {
   const el = document.createElement('div');
   const dq = v.kind === 'disqualify' && !soft;
   el.className = 'toast' + (dq ? '' : ' warn');
-  el.innerHTML = `<b>${v.kind === 'disqualify' ? '실격' : '주의'}</b>${v.detail}`;
+  el.innerHTML = `<b>${v.kind === 'disqualify' ? '실격' : '주의'}</b>${plainDetail(v.detail)}`;
   const box = $('toasts');
   box.prepend(el);
   while (box.children.length > 3) box.lastElementChild!.remove();

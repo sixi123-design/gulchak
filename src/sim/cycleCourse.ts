@@ -42,7 +42,7 @@ const elapsed = (s: DigSession, bag: Record<string, number>) => s.t - (bag.t0 ??
 
 const steps: Step[] = [
   {
-    text: 'A에서 흙 퍼서 선회 자세까지\n시간을 잽니다',
+    text: '흙 퍼서 선회 자세까지\n시간을 잽니다',
     labels: [],
     begin: (s, _mem, bag) => {
       bag.t0 = s.t;
@@ -64,13 +64,13 @@ const steps: Step[] = [
     hud: (s, _m, bag) => `${Math.floor(elapsed(s, bag))}초`,
   },
   {
-    text: 'B 지나 C로 — C 앞에서 미리 놓기',
+    text: '두 폴 사이로 반대편까지 — 앞에서 미리 놓기',
     labels: ['선회 ◀'],
     // 흙을 실은 채로 C에 서야 한다 (가다 쏟았으면 아니다): 출발 때 실은 양의 80% 이상
     begin: (s, mem) => (mem.l0 = s.load),
     done: (s, mem) => near(s, SWING_C) && slow(s) && s.load >= 0.8 * mem.l0,
     // 가다가 흙을 쏟아 버렸으면 다시 퍼 와야 한다 (막다른 길이 되지 않게 처음으로)
-    fail: (s, mem) => (s.load < 0.8 * mem.l0 ? { to: 0, msg: '가다가 흙을 쏟았어요. A에서 다시 퍼 오기' } : null),
+    fail: (s, mem) => (s.load < 0.8 * mem.l0 ? { to: 0, msg: '가다가 흙을 쏟았어요. 제자리에서 다시 퍼 오기' } : null),
     coach: (s) => passing(s),
     hud: (s, _m, bag) => `${Math.floor(elapsed(s, bag))}초`,
   },
@@ -85,17 +85,17 @@ const steps: Step[] = [
       return bag.dumpAtC === 1 && s.load < MOVE.empty * SC(s) && swingReady(s);
     },
     // C 밖에서 쏟아 버렸으면 다시 퍼 와야 한다 (막다른 길이 되지 않게 처음으로)
-    fail: (_s, _mem, bag) => (bag.dumpAtC === 0 ? { to: 0, msg: 'C 밖에서 쏟았어요. A에서 다시 퍼 오기' } : null),
+    fail: (_s, _mem, bag) => (bag.dumpAtC === 0 ? { to: 0, msg: '구덩이 밖에서 쏟았어요. 제자리에서 다시 퍼 오기' } : null),
     coach: (s) =>
       !near(s, SWING_C) && s.load >= 0.5 * SC(s)
-        ? co('C 위로 돌아와 쏟기', s.pose.swing > 0 ? '선회 ◀' : '▶ 선회')
+        ? co('반대편 구덩이 위로 돌아와 쏟기', s.pose.swing > 0 ? '선회 ◀' : '▶ 선회')
         : s.load < MOVE.empty * SC(s) && !swingReady(s)
           ? co('오므리며 붐 올려 선회 자세', '버킷 오므림', '붐 올림')
           : null,
     hud: (s, _m, bag) => `${Math.floor(elapsed(s, bag))}초`,
   },
   {
-    text: 'A로 돌아오며 붐 내리고 버킷 펴기\n퍼기 준비 자세가 되면 끝',
+    text: '제자리로 돌아오며 붐 내리고 버킷 펴기\n퍼기 준비 자세가 되면 끝',
     labels: ['▶ 선회', '붐 내림', '버킷 펴기'],
     // 시간은 A에서 **퍼기 준비 자세**(버킷 펴고 땅 가까이)가 될 때 멈춘다 — 돌아오며 겹쳐 내리면 그만큼 빠르다
     done: (s, _mem, bag) => {
@@ -119,7 +119,7 @@ export const CYCLE_LESSON: Lesson = {
     title: '이제 끊지 말고 이어서',
     lines: [
       '시험은 4분 안에 네 번 퍼고 평탄까지 합니다. 한 사이클을 <b>45초</b> 안에 끝내야 여유가 있습니다.',
-      '동작을 <b>겹치세요</b>: 오므리며 붐 올리다 줄 위가 되면 선회 시작, 돌아오다 B를 지나면 붐 내리며 버킷 펴기.',
+      '동작을 <b>겹치세요</b>: 오므리며 붐 올리다 줄 위가 되면 선회 시작, 돌아오다 두 폴을 지나면 붐 내리며 버킷 펴기.',
       '레버를 같이 밀면 기름을 나눠 써서 하나하나는 조금 느려집니다. 그래도 끊어 하는 것보다 빠릅니다.',
       '시범은 없습니다. 기본기에서 배운 대로 한 번 이어서 해 보세요.',
     ],

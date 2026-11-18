@@ -301,7 +301,7 @@ export const LEVER_DRILL: Lesson = {
     s.teleport({ ...DRILL_START });
   },
   // 익히는 자리다. 끝까지 오면 별 3개 — 깎지 않는다
-  grade: () => ({ stars: 3, note: '붐으로 높이 · 버킷으로 각도 · 암으로 거리. 왼쪽 레버 좌우는 몸통 돌리기 — 「선회해 C로」에서' }),
+  grade: () => ({ stars: 3, note: '붐으로 높이 · 버킷으로 각도 · 암으로 거리. 왼쪽 레버 좌우는 몸통 돌리기 — 「반대편으로 선회」에서' }),
   steps: [
     dir({ j: 'boom', way: 1, text: '오른쪽 레버를 아래로', label: '붐 올림', said: '붐이 올라갑니다' }),
     toGround(),

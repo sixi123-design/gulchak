@@ -90,7 +90,7 @@ it('C를 벗어나 쏟으면 넘어가지 않고, 다 쏟았으면 처음(퍼기
   for (let i = 0; i < 300; i++) frame(t, {});
   // 아직 실었으면 C 위로 돌아오라고 한다
   frame(t, {});
-  expect(t.coach?.msg).toContain('C 위로');
+  expect(t.coach?.msg).toContain('구덩이 위로');
   dumpAndCurl(t);
   expect(t.step, 'C 밖에서 쏟으면 다음(A로)으로 안 넘어가고 처음으로').toBe(0);
   expect(t.notice).toContain('다시 퍼 오기');

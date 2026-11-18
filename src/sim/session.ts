@@ -2121,15 +2121,15 @@ export class DigSession {
     const sc = this.m.struckCapacity;
     const tipSt = this.stationOf(toWorld(this.pose.swing, this.frame.tip))?.name ?? null;
     if (this.load >= 0.3 * sc) {
-      if (tipSt === 'C') return 'C 위에서 버킷 펴 쏟기';
+      if (tipSt === 'C') return '쏟는 곳 위에서 버킷 펴 쏟기';
       if (!this.fullyCurled) return '버킷 끝까지 오므려 들기';
-      return '붐 올려 B 폴 사이로 선회';
+      return '붐 올려 가운데 두 폴 사이로 선회';
     }
     if (this.digCount < this.params.minDigCount)
-      return 'A: ⓑ선 안쪽 당기며 퍼 담기';
-    if (this.flattenVol < this.params.flattenMinVolume) return 'C 평탄: 버킷 펴서 밀기';
-    if (this.flattenPullDist < this.params.flattenMinPass) return 'C 평탄: 흙에 대고 당겨 오기 (왕복)';
-    if (this.flattenPushDist < this.params.flattenMinPass) return 'C 평탄: 버킷 펴서 밀기 (왕복)';
+      return '파는 곳: 바깥 선 안쪽에서 당기며 퍼 담기';
+    if (this.flattenVol < this.params.flattenMinVolume) return '쏟은 구덩이 평탄: 버킷 펴서 밀기';
+    if (this.flattenPullDist < this.params.flattenMinPass) return '쏟은 구덩이 평탄: 흙에 대고 당겨 오기 (왕복)';
+    if (this.flattenPushDist < this.params.flattenMinPass) return '쏟은 구덩이 평탄: 버킷 펴서 밀기 (왕복)';
     const open = this.pose.bucket >= this.m.limits.bucket[1] - (this.params.endOpenMarginDeg * Math.PI) / 180;
     const cm = Math.round(this.groundGap() * 100);
     if (!open) return '마무리: 버킷 끝까지 펴기';
