@@ -142,7 +142,8 @@ export const DRIVE_LESSONS: Lesson<DriveSession>[] = [
       {
         text: '핸들 계속 감으며 · 왼쪽 앞바퀴를 흰 정지선 사이 가운데로',
         labels: ['가속', '핸들 ◀'],
-        done: (s) => s.inStopZone() && s.stopZonePos() >= 0.3 && s.stopZonePos() <= 0.75,
+        // 시험 정지 판정과 같은 구간(정지선 사이 어디든)이면 넘긴다 — 바늘의 가운데 구간은 목표 안내일 뿐 (QA: 앞쪽에 서면 맞게 섰는데 멈춰 있었다)
+        done: (s) => s.inStopZone(),
         meter: (s) => needle(s.stopZonePos(), -1.5, 1.5, 0.3, 0.75),
       },
       {

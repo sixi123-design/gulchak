@@ -508,7 +508,8 @@ export class SoilView {
           // 이 칸의 '바닥' 색: 격자 가장자리는 둘레 바닥색, 구역 안쪽으로 갈수록 밟힌 흙색
           const edge = Math.min(i, nx - 1 - i, j, nz - 1 - j) * g.cell;
           const inZone = edge >= SoilView.EDGE - g.cell * 0.5;
-          this.gnd.copy(inZone ? this.trampled : this.padOn ? this.pad : this.ground);
+          // 한 톤 배우기 공간(padOn 꺼짐)은 바닥 한 색 그대로 — 흙이 번진 굴착장처럼 보이지 않게 (앱 주인)
+          this.gnd.copy(!this.padOn ? this.ground : inZone ? this.trampled : this.pad);
           if (Math.abs(h[k] - h0[k]) < 0.003 && h0[k] === 0 && !inPit) {
             col.setXYZ(k, this.gnd.r, this.gnd.g, this.gnd.b);
             continue;

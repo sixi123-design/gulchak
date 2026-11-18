@@ -196,7 +196,7 @@ const mark = (bag: Record<string, number>, key: string, reached: boolean, ok: ()
 };
 const missed = (bag: Record<string, number>, keys: string[]) => keys.filter((k) => bag[k] === 0);
 /** 퍼기 준비 지점: 내려오는 중간(높이 2m)에 버킷이 펴지기 시작했나, 땅 1m 앞에서 거의 펴졌나 */
-const READY_CP = { midGap: 2.0, midBucket: -95, lowGap: 1.0, lowBucket: -50 } as const;
+const READY_CP = { startDrop: 0.4, startBucket: -40, midGap: 2.0, midBucket: -95, lowGap: 1.0, lowBucket: -50 } as const;
 /** 아직 시작 자세 그대로인가 (손대기 전) */
 const untouched = (s: DigSession) => s.groundGap() > 1.2 && s.pose.bucket < -90 * deg;
 
@@ -216,7 +216,9 @@ const arcStep = (): Step => ({
     mem.rough = 0;
     delete bag.cpMid;
     delete bag.cpLow;
+    delete bag.cpStart;
     delete bag.jolt;
+    mem.g0 = s.groundGap();
   },
   guide: (s) => {
     const m = stickMag(s);
@@ -264,6 +266,8 @@ const arcStep = (): Step => ({
     // 별점 지점 두 곳 (지날 때 한 번)
     const g = s.groundGap();
     const b = s.pose.bucket / deg;
+    // 붐이 내려가기 시작할 때(처음보다 40cm 아래) 버킷이 아직 덜 펴져 있어야 '같이' — 버킷만 먼저 다 펴 두면 순서가 거꾸로 (QA)
+    mark(bag, 'cpStart', g < mem.g0 - READY_CP.startDrop, () => b <= READY_CP.startBucket);
     mark(bag, 'cpMid', g < READY_CP.midGap, () => b >= READY_CP.midBucket);
     mark(bag, 'cpLow', g < READY_CP.lowGap, () => b >= READY_CP.lowBucket);
     // 통과는 결과 자세만 본다. 어떤 순서로 왔든 맞는 자세면 '멈추기'로
@@ -493,7 +497,8 @@ export const READY_LESSON: Lesson = {
   },
   // 지점 두 곳(중간 높이·땅 1m 앞)에서 버킷이 범위 안이었나 + 덜컹. 결과 자세엔 이미 왔다
   grade: (_s, bag): Grade => {
-    const miss = missed(bag, ['cpMid', 'cpLow']);
+    const miss = missed(bag, ['cpStart', 'cpMid', 'cpLow']);
+    if (miss[0] === 'cpStart' && miss.length === 1) return { stars: 2, note: '자세는 맞았어요. 버킷만 먼저 펴지 말고, 붐 내리면서 같이 펴세요' };
     if (miss.length >= 2) return { stars: 1, note: '목표 자세는 맞았어요. 다음엔 내려오면서 버킷을 같이 펴 보세요' };
     if (miss[0] === 'cpMid') return { stars: 2, note: '자세는 맞았어요. 붐이 내려가기 시작하면 버킷도 같이 펴세요' };
     if (miss[0] === 'cpLow') return { stars: 2, note: '자세는 맞았어요. 땅에 가까워지기 전에 버킷을 거의 다 펴 두세요' };

@@ -203,10 +203,8 @@ const pressDown = (): Step =>
     done: (s, mem, bag) => {
       mem.t++;
       const warn = (s.params.liftWarnDeg * Math.PI) / 180;
-      if (s.lift > warn * DRILL.liftShare && !mem.lifted) {
-        mem.lifted = 1;
-        scold(bag);
-      }
+      // 시킨 일이다 — '잘못' 연출(scold)은 하지 않는다. 화면 글(hud)이 무슨 일이 일어났는지만 말한다 (QA)
+      if (s.lift > warn * DRILL.liftShare && !mem.lifted) mem.lifted = 1;
       // 들렸거나, 살살 해서 시간이 지났으면 손을 떼는 단계로
       if (!mem.lifted && mem.t < DRILL.pressGiveUp) return false;
       mem.ask = 1;
@@ -249,7 +247,8 @@ const HOLD1 = 30;
 // 올림 → 내림 → 올림으로 짜서 시범이 끝나면 처음 높이로 돌아온다. 처음 보는 사람이 읽고 볼 수 있게 길게 (유저 검토: 1.5초는 못 읽음)
 const feelSteps = (): Step[] => [
   show('레버는 미는 만큼 빨라집니다\n오른쪽 레버를 아래로 한 칸만', 120, () => -HAND1, 1, '붐 올림', (s) => s.teleport({ ...DRILL_START })),
-  show('오른쪽 레버를 위로\n끝까지 — 빠릅니다', 75, (f) => (f < 40 ? 1 : 1 - (f - 40) / 35), 3, '붐 내림'),
+  // 붐 내림이 45°/s로 빨라져 40프레임을 끝까지 밀면 버킷이 땅에 박혔다 (QA) — 짧게 끝까지, 서서히 놓기
+  show('오른쪽 레버를 위로\n끝까지 — 빠릅니다', 75, (f) => (f < 14 ? 1 : f < 34 ? 1 - (f - 14) / 20 : 0), 3, '붐 내림'),
   show('레버를 가운데로\n천천히 놓기', 120, (f) => (f < 60 ? -HAND1 : -HAND1 * (1 - (f - 60) / 60))),
   {
     text: '이제 직접\n오른쪽 레버를 아래로 한 칸만',

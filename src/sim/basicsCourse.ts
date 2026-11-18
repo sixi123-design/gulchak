@@ -18,7 +18,8 @@ const quizGrade = (steps: Step[]) => {
     const m = bag.miss ?? 0;
     const score = `${total - m}/${total} 정답`;
     if (m === 0) return { stars: 3, note: `${score}. 모두 맞혔습니다` };
-    if (m <= 2) return { stars: 2, note: `${score}. 틀린 문제의 풀이를 한 번 더 보세요` };
+    // 맞힌 비율로 (문제가 하나뿐인데 0/1이 별 2이던 것, QA)
+    if ((total - m) / total >= 0.6) return { stars: 2, note: `${score}. 틀린 문제의 풀이를 한 번 더 보세요` };
     return { stars: 1, note: `${score}. 다시 풀어 보세요` };
   };
 };

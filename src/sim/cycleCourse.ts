@@ -21,6 +21,8 @@ const PACE = { good: 45, ok: 60 } as const;
 /** 목표에 섰다고 볼 선회 범위 (도) — 선회 미션과 같다 */
 const TOL = 6;
 
+/** 한 사이클: 이만큼(평적 대비) 담았으면 퍼기 단계를 넘긴다 */
+const CYCLE_MIN = 0.6;
 const near = (s: DigSession, to: number) => Math.abs(s.pose.swing - to) <= TOL * deg;
 const slow = (s: DigSession) => Math.abs(s.vel.swing) < 0.05 * s.m.speeds.swing;
 /** B를 지나는 중 폴·줄에 닿을 자세면 먼저 그것 */
@@ -46,22 +48,29 @@ const steps: Step[] = [
       bag.t0 = s.t;
       delete bag.sec;
     },
-    done: (s) => s.load >= 0.9 * SC(s) && swingReady(s),
+    // 시간을 재는 미션이라 평적의 60%면 넘긴다 (덜 담으면 안내 — 아무 말 없이 멈춰 있지 않게, QA)
+    done: (s) => s.load >= CYCLE_MIN * SC(s) && swingReady(s),
+    // 덜 담은 채 선회 자세까지 들었으면 알려 준다 (시작할 때 빈 버킷으로 높이 있는 건 아니다)
     coach: (s) =>
-      s.load >= 0.9 * SC(s) && !swingReady(s)
-        ? -s.pose.bucket / deg < MOVE.curl
-          ? co('버킷 끝까지 오므리며 붐 올리기', '버킷 오므림', '붐 올림')
-          : co('줄 위까지 붐 올리기', '붐 올림')
-        : null,
+      s.load < CYCLE_MIN * SC(s)
+        ? s.load > 0.05 * SC(s) && swingReady(s)
+          ? co('덜 담겼어요 — 내려서 다시 퍼기', '붐 내림')
+          : null
+        : !swingReady(s)
+          ? -s.pose.bucket / deg < MOVE.curl
+            ? co('버킷 끝까지 오므리며 붐 올리기', '버킷 오므림', '붐 올림')
+            : co('줄 위까지 붐 올리기', '붐 올림')
+          : null,
     hud: (s, _m, bag) => `${Math.floor(elapsed(s, bag))}초`,
   },
   {
     text: 'B 지나 C로 — C 앞에서 미리 놓기',
     labels: ['선회 ◀'],
-    // 흙을 실은 채로 C에 서야 한다 (가다 쏟았으면 아니다)
-    done: (s) => near(s, SWING_C) && slow(s) && s.load >= 0.7 * SC(s),
+    // 흙을 실은 채로 C에 서야 한다 (가다 쏟았으면 아니다): 출발 때 실은 양의 80% 이상
+    begin: (s, mem) => (mem.l0 = s.load),
+    done: (s, mem) => near(s, SWING_C) && slow(s) && s.load >= 0.8 * mem.l0,
     // 가다가 흙을 쏟아 버렸으면 다시 퍼 와야 한다 (막다른 길이 되지 않게 처음으로)
-    fail: (s) => (s.load < 0.7 * SC(s) ? { to: 0, msg: '가다가 흙을 쏟았어요. A에서 다시 퍼 오기' } : null),
+    fail: (s, mem) => (s.load < 0.8 * mem.l0 ? { to: 0, msg: '가다가 흙을 쏟았어요. A에서 다시 퍼 오기' } : null),
     coach: (s) => passing(s),
     hud: (s, _m, bag) => `${Math.floor(elapsed(s, bag))}초`,
   },

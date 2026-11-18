@@ -239,6 +239,11 @@ function renderModePicker() {
       if (needPay(k)) return openPaywall(k);
       sound.start();
       sound.select();
+      // 배우기(한 톤 미션)에서 돌아왔으면 배우기용 겉모습을 먼저 끈다 — 새 판을 만들기 전에 (자유 연습이 배우기 차량으로 나왔다)
+      if (tutorLook) {
+        tutorLook = false;
+        if (modeKey === k) newSession();
+      }
       if (modeKey !== k) {
         modeKey = k;
         try {
@@ -297,7 +302,8 @@ function applySceneLook() {
     hemiLight.color.setHex(0xffffff);
     hemiLight.groundColor.setHex(0x9a8a70);
     hemiLight.intensity = 1.4;
-    fog.color.setHex(0xcfeeff);
+    // 한 톤 배우기 공간이면 하늘·안개는 그 색 그대로 (설정에서 시각을 바꿔도 푸른 띠가 생기지 않게, QA)
+    fog.color.setHex(document.body.classList.contains('flat-bg') ? TUTOR_SKY : 0xcfeeff);
     fog.near = 28;
     fog.far = 70;
   }
@@ -752,8 +758,10 @@ function wireSoilShown() {
 }
 
 function rebuildMachine() {
-  if (drive) return newSession();
+  // 코스 주행: 판을 새로 만들면 진행이 날아간다 — 다음 판부터 적용 (QA)
+  if (drive) return;
   if (!exc) return;
+  look = lookFor();
   world.remove(exc.root);
   exc.disposeCache();
   disposeTree(exc.root);
@@ -791,10 +799,15 @@ function setStickLabels(k: KindKey) {
 }
 /** 이번 세션에 쓸 장비 겉모습. 레버 익히기는 'T'(검정 없는 밝은 버전) */
 let look: LookKey = 'A';
+/**
+ * 겉모습은 여기서만 정한다: 배우기 판의 한 톤 미션일 때만 'T', 나머지는 고른 모델 (QA: 버튼마다 tutorLook을 끄다 빠뜨려
+ * 자유 연습·연습 시험이 배우기 차량으로 나왔다)
+ */
+const lookFor = (): LookKey => (tutorLook && modeKey === 'tutorial' ? 'T' : styleKey);
 function newSession(autoEnd?: boolean) {
   // 배우기 화면 상태(퀴즈·시작 점검)는 새 판마다 지운다 — 중간에 나가도 레버·점검판이 숨은 채 남지 않게
   document.body.classList.remove('quiz-on', 'check-lesson', 'flat-bg');
-  look = tutorLook ? 'T' : styleKey;
+  look = lookFor();
   $('btn-lookwheel').classList.remove('on');
   $('btn-lookmirror').classList.remove('on');
   $('btn-lookfront').classList.add('on');
@@ -1178,6 +1191,7 @@ function renderLessonMap() {
   });
 }
 function openLessonMap() {
+  tutorLook = false;
   // 미션 화면을 떠나는 길: 한 톤 배경을 거둔다 (성공 카드 뒤에서는 남겨 두었다)
   document.body.classList.remove('flat-bg');
   renderLessonMap();
@@ -1787,7 +1801,7 @@ $('btn-demo').onclick = () => {
   sound.select();
   startLesson(lessonIdx, true, guideLv, true);
 };
-$('btn-clear-less').onclick = () => startLesson(lessonIdx, true, Math.min(2, guideLv + 1));
+$('btn-clear-less').onclick = () => startLesson(lessonIdx, true, Math.min(2, guideLv + 1), false);
 /** 시범 0.5배속 (켜 두면 다음 시범에도 유지 — 이 기기에만 기억) */
 let demoSlow = (() => {
   try {
@@ -1883,8 +1897,12 @@ $('btn-clear-map').onclick = () => {
 $('btn-clear-exam').onclick = () => {
   $('clear').hidden = true;
   tutor = null;
-  // 시험 기준이 걸린 판으로. 잠겨 있으면 결제 벽이 뜬다
-  if (needPay('practice')) return openPaywall('practice');
+  tutorLook = false;
+  // 시험 기준이 걸린 판으로. 잠겨 있으면 결제 벽이 뜬다 — 그 뒤 창을 닫아도 갇히지 않게 홈(시작 화면)을 깔아 둔다
+  if (needPay('practice')) {
+    newSession();
+    return openPaywall('practice');
+  }
   modeKey = 'practice';
   save('exc-mode', modeKey);
   newSession();
@@ -1892,6 +1910,7 @@ $('btn-clear-exam').onclick = () => {
 $('btn-clear-free').onclick = () => {
   $('clear').hidden = true;
   tutor = null;
+  tutorLook = false;
   modeKey = 'free';
   save('exc-mode', modeKey);
   newSession();
@@ -2472,6 +2491,8 @@ function showRuns() {
 
 function showResult() {
   const s = session;
+  // 시작 점검 중 기권하면 점검판이 결과 뒤에 남았다 (QA)
+  resetExamCheck();
   if (s.flags.key === 'tutorial') {
     // 배우기: 결과표 대신 미션 판정(마무리 미션은 종료가 곧 성공), 그만하기는 스테이지 맵으로
     if (tutor && !s.abandoned) return;
@@ -2495,7 +2516,6 @@ function showResult() {
     return;
   }
   const r = s.result();
-  showRuns();
   showRuns();
   const sum = s.engine.summary();
   const dq = sum.filter((x) => x.kind === 'disqualify');
@@ -2539,7 +2559,7 @@ function showResult() {
   const dr = avg(r.entries.map((e) => Math.abs(e.dr)));
   const dl = avg(r.entries.map((e) => Math.abs(e.dl)));
   const pack = avg(r.packRatios);
-  const mmss = (t: number) => `${Math.floor(t / 60)}:${String(Math.round(t % 60)).padStart(2, '0')}`;
+  const mmss = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
   // 큰 숫자 3개 (아케이드 결과판): [이름, 값, 문제 있음]
   const hero: [string, string, boolean][] = [
     ['굴착', mode === 'free' ? `${r.digCount}회` : `${r.digCount}/4`, mode !== 'free' && r.digCount < 4],
@@ -2598,6 +2618,9 @@ function precheckLi(pc: { belt: boolean; lever: boolean; rpm: boolean }) {
 function showDriveResult() {
   const d = drive;
   if (!d) return;
+  // 연습 횟수는 굴착 판만 센다 — 주행 결과에 굴착 판의 문구가 남지 않게 (QA)
+  $('res-runs').hidden = true;
+  resetExamCheck();
   const s = d.s;
   const mode = s.flags.key;
   if (testPass === mode) testPass = null;
@@ -2641,7 +2664,7 @@ function showDriveResult() {
       ? ''
       : '<li class="ok"><b>실격 없음</b></li>';
   if (mode === 'exam') $('res-dq').innerHTML += precheckLi(s.precheck);
-  const mmss = (t: number) => `${Math.floor(t / 60)}:${String(Math.round(t % 60)).padStart(2, '0')}`;
+  const mmss = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
   const hero: [string, string, boolean][] = [
     ['시간', s.stage === 'READY' ? '-' : mmss(s.taskT), s.taskT > s.p.timeLimit],
     ['정지선', s.stopped ? '정지' : '-', !s.stopped],

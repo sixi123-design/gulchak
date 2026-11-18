@@ -148,7 +148,8 @@ function swingLesson(sp: SwingSpec): Lesson {
       if (rough && bag.over) return { stars: 1, note: `${sp.name}에 섰어요. 늦게 놓고 반대로 꺾어 세웠어요 — ${why}. 앞에서 미리 놓아 미끄러지게` };
       if (rough) return { stars: 2, note: `${sp.name}에 섰어요. 반대로 꺾어 세웠어요 — ${why}. 미리 놓아 미끄러지게` };
       if (bag.over) return { stars: 2, note: `${sp.name}에 섰어요. 지나쳤다 돌아왔어요 — 레버를 더 앞에서 놓기` };
-      if ((bag.err ?? 0) > TOL.star) return { stars: 2, note: `${sp.name}에 섰어요. ${Math.round(bag.err)}° 비켜 섰어요 — 조금 더 맞춰 보기` };
+      // 화면에 보이는 반올림 값으로 비교 ('3° 비켜 섰어요'인데 별 3 기준이 ±3°면 모순, QA)
+      if (Math.round(bag.err ?? 0) > TOL.star) return { stars: 2, note: `${sp.name}에 섰어요. ${Math.round(bag.err)}° 비켜 섰어요 — 조금 더 맞춰 보기` };
       return { stars: 3, note: `${sp.name} 위에 정확히 섰습니다` };
     },
     setup,
@@ -314,7 +315,7 @@ function backLesson(): Lesson {
       if (bag.over) return { stars: 2, note: 'A에 섰어요. 지나쳤다 돌아왔어요. 레버를 더 앞에서 놓기' };
       if (bag.near) return { stars: 2, note: 'A에 섰어요. 줄에 가까웠어요 (시험이면 실격 직전). 중심선에 맞춘 다음 내리기' };
       if (bag.overlap === 0) return { stars: 2, note: 'A에 섰어요. 서고 나서 내렸어요. B를 지나면 선회하면서 붐 내리고 버킷 펴기' };
-      if ((bag.err ?? 0) > BACK.star) return { stars: 2, note: `A에 섰어요. 중심선에서 ${Math.round((bag.err ?? 0) * 100)}cm 비켜 섰어요. 조금 더 맞춰 보기` };
+      if (Math.round((bag.err ?? 0) * 100) > BACK.star * 100) return { stars: 2, note: `A에 섰어요. 중심선에서 ${Math.round((bag.err ?? 0) * 100)}cm 비켜 섰어요. 조금 더 맞춰 보기` };
       return { stars: 3, note: '돌아오며 내려 A 중심선에 바로 팔 자세로 섰습니다' };
     },
     setup,

@@ -461,7 +461,8 @@ export class DigSession {
   /** 기권(중도 종료). 정상 종료는 버킷을 펴서 지면에 내려놓았을 때만 (명세 4장) */
   abandoned = false;
   abandon() {
-    if (this.phase !== 'working' && this.phase !== 'ready') return;
+    // 시작 점검 중(precheck)에도 기권할 수 있어야 한다 — 나갈 길이 없었다 (QA)
+    if (this.phase !== 'working' && this.phase !== 'ready' && this.phase !== 'precheck') return;
     this.abandoned = true;
     this.phase = 'finished';
     for (const fn of this.finishListeners) fn();

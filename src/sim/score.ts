@@ -75,7 +75,7 @@ export function scoreDig(r: DigResult, o: { dq: boolean; abandoned: boolean; mod
     { name: '굴착 위치', got: r.entries.length ? lin(pos, 0.1, 0.4, 10) : 0, max: 10, note: r.entries.length ? `오차 ${cm(pos)}` : '-' },
     { name: '운반 중 흘림', got: lin(r.carrySpill, 0.005, 0.04, 10), max: 10, note: `${Math.round(r.carrySpill * 1000)}L` },
     { name: '평탄', got: fl ? lin(fl.meanDev, 0.05, 0.2, 20) : 0, max: 20, note: fl ? `편차 ${cm(fl.meanDev)}` : '안 함' },
-    { name: '시간', got: lin(r.elapsed, 180, 240, 5), max: 5, note: `${Math.floor(r.elapsed / 60)}:${String(Math.round(r.elapsed % 60)).padStart(2, '0')}` },
+    { name: '시간', got: lin(r.elapsed, 180, 240, 5), max: 5, note: `${Math.floor(r.elapsed / 60)}:${String(Math.floor(r.elapsed % 60)).padStart(2, '0')}` },
     { name: '부드러운 조작', got: Math.max(0, 5 - rough), max: 5, note: `충격·덜컹 ${rough}회` },
   ];
   return finish(items, o.dq, o.abandoned);
@@ -92,7 +92,7 @@ export function scoreDrive(s: DriveSession): Score {
     { name: '1분 안에 출발', got: started ? 5 : 0, max: 5 },
     { name: '정지선 정지', got: s.stopped ? 15 : 0, max: 15 },
     { name: '왼쪽 선 간격 유지', got: s.gapN ? lin(dev, 0.15, 0.6, 25) : 0, max: 25, note: s.gapN ? `평균 ${cm(dev)} 벗어남` : '-' },
-    { name: '시간', got: done ? lin(s.taskT, 60, 120, 15) : 0, max: 15, note: started ? `${Math.floor(s.taskT / 60)}:${String(Math.round(s.taskT % 60)).padStart(2, '0')}` : '-' },
+    { name: '시간', got: done ? lin(s.taskT, 60, 120, 15) : 0, max: 15, note: started ? `${Math.floor(s.taskT / 60)}:${String(Math.floor(s.taskT % 60)).padStart(2, '0')}` : '-' },
     { name: '주차', got: s.parkedOk ? 15 : 0, max: 15, note: s.parkedOk === null ? '-' : s.parkedOk ? '구역 안' : '구역 밖' },
     { name: '부드러운 조작', got: Math.max(0, 10 - warns * 3), max: 10, note: `주의 ${warns}회` },
   ];

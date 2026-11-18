@@ -8410,3 +8410,21 @@ body.quiz-on .exam-check {
     animation: none;
   }
 }
+
+/* 설정 > 조작: 좁은 세로 화면에서 키보드 패드 둘이 옆으로 넘쳐 잘렸다 (QA) — 줄바꿈하고 칸을 조금 줄인다 */
+.key-grid {
+  flex-wrap: wrap;
+}
+@media (max-width: 440px) {
+  .key-pad {
+    grid-template-columns: repeat(3, 52px);
+    grid-template-rows: repeat(3, 40px);
+  }
+}
+
+/* 설정 창: 세로 스크롤바가 오른쪽 칩·안내문을 덮지 않게 자리를 따로 둔다 (QA). 스크롤되는 곳은 탭 안쪽(section) */
+.settings-card section:not([hidden]) {
+  scrollbar-gutter: stable;
+  padding-right: 8px;
+  box-sizing: border-box;
+}

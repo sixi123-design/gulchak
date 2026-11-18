@@ -31,6 +31,12 @@ export const SCOOP = {
   full: 0.95,
   /** 가상굴착제한선(점선)에서 이만큼 앞이면 들 준비 (m) */
   lineMargin: 0.5,
+  /** 점선까지 시킨 대로 당겼을 때 이만큼 담겼으면 넘긴다 (평적의 60%) — 그 아래만 되돌린다 */
+  shortOk: 0.6,
+  /** 이보다 적게 담으면 별 1 (통과는 했어도) */
+  shortStar: 0.8,
+  /** 평행 단계에서 이 각(도)보다 더 오므리면 바닥이 들려 덜 담긴다 `[측정: QA]` — 12~19°는 다 찼고 −10°는 0.73 */
+  flatGood: 8,
   /** 들어 올리는 동안 지켜야 하는 비율 (담았던 양 대비) */
   keep: 0.9,
 } as const;
@@ -181,10 +187,18 @@ export const SCOOP_LESSON: Lesson = {
     const inBand = peak >= SCOOP.full && peak <= HEAP_WARN;
     if (bag.jolt && kept >= 0.93) return { stars: 2, note: '레버를 확 놓아 덜컹했어요. 천천히 가운데로' };
     if (inBand && kept >= 0.97) return { stars: 3, note: '평적(초록 칸)만큼 담아 흘리지 않고 들었습니다' };
+    // 모자란 원인: 얕게 꽂았나(깊이), 너무 오므려 바닥이 들렸나(각도) — 엉뚱한 탓을 하지 않게 (QA)
+    const why =
+      (bag.biteD ?? 1) < SCOOP.biteDemo - 0.04
+        ? '조금 더 깊이(20cm쯤) 꽂아 보세요'
+        : (bag.flatA ?? 20) < SCOOP.flatGood
+          ? '평행 단계에서 덜 오므려 이빨이 살짝 아래를 보게 해 보세요'
+          : '암을 점선 앞까지 끝까지 당겨 보세요';
+    if (peak < SCOOP.shortStar && kept >= 0.93) return { stars: 1, note: `평적의 ${Math.round(peak * 100)}%만 담겼어요. ${why}` };
     if (kept >= 0.93)
       return {
         stars: 2,
-        note: peak < SCOOP.full ? '평적에 조금 모자라요. 조금 더 깊이(20cm쯤) 꽂아 보세요' : peak > HEAP_WARN ? '너무 많이 담았어요. 초록 칸까지만' : '조금 흘렸어요. 들 때 버킷을 더 오므려 보세요',
+        note: peak < SCOOP.full ? `평적에 조금 모자라요. ${why}` : peak > HEAP_WARN ? '너무 많이 담았어요. 초록 칸까지만' : '조금 흘렸어요. 들 때 버킷을 더 오므려 보세요',
       };
     return { stars: 1, note: '흘렸어요. 오므리면서 드세요' };
   },
@@ -225,7 +239,10 @@ export const SCOOP_LESSON: Lesson = {
       spot: digSpot,
       labels: ['붐 내림'],
       // 꽂고 멈춰야 넘어간다 (붐이 내려가는 중에 창을 지나치기만 하면 안 됨)
-      done: (s, mem) => hold(mem, bite(s) >= SCOOP.biteLo && bite(s) <= SCOOP.biteHi && Math.abs(s.vel.boom) < 0.05 * s.m.speeds.boom, 10),
+      done: (s, mem, bag) => {
+        bag.biteD = bite(s); // 별점 문구: 모자란 원인이 깊이인지 각도인지 가리려고
+        return hold(mem, bite(s) >= SCOOP.biteLo && bite(s) <= SCOOP.biteHi && Math.abs(s.vel.boom) < 0.05 * s.m.speeds.boom, 10);
+      },
       meter: (s) => needle(bite(s), 0, 0.4, SCOOP.biteLo, SCOOP.biteHi),
       coach: (s) => (bite(s) > SCOOP.biteHi || s.lift > 2 * deg ? co('너무 깊어요 — 붐을 살짝 올리기', '붐 올림') : null),
     },
@@ -233,7 +250,10 @@ export const SCOOP_LESSON: Lesson = {
       text: T_FLAT,
       labels: ['버킷 오므림'],
       // 평행에서 멈춰야 넘어간다 (오므리는 중에 지나치기만 하면 안 됨)
-      done: (s, mem) => hold(mem, flatOk(s) && Math.abs(s.vel.bucket) < 0.05 * s.m.speeds.bucket, 8),
+      done: (s, mem, bag) => {
+        bag.flatA = bottomAngle(s);
+        return hold(mem, flatOk(s) && Math.abs(s.vel.bucket) < 0.05 * s.m.speeds.bucket, 8);
+      },
       meter: (s) => flatMeter(s),
       coach: (s) =>
         bottomAngle(s) < SCOOP.overCurl ? co('너무 오므렸어요 — 버킷을 조금 펴기', '버킷 펴기') : bite(s) < 0.03 ? co('이빨이 떴어요 — 붐 살짝 내리기', '붐 내림') : null,
@@ -242,21 +262,26 @@ export const SCOOP_LESSON: Lesson = {
       text: T_PULL,
       labels: ['암 당기기'],
       hud: (s) => loadHud(s),
-      begin: (s, mem) => (mem.arm0 = s.pose.arm),
-      // 암으로 당겨 담고, 암을 멈추거나(손을 뗌) 점선 앞에 오면 넘어간다. 평적에 모자라면 별에서 깎는다
+      begin: (s, mem) => {
+        mem.arm0 = s.pose.arm;
+        mem.bk0 = s.pose.bucket;
+      },
+      // 암으로 당겨 담고, 암을 멈추거나(손을 뗌) 점선 앞에 오면 넘어간다. 평적에 모자라면 별에서 깎는다.
+      // 시킨 대로(평행 범위 안에서 암만) 점선까지 당겼는데 조금 모자라면 되돌리지 않고 넘긴다 — 별에서만 깎는다 (억울하지 않게, QA)
       done: (s, mem, bag) => {
         track(s, bag);
         const pulled = mem.arm0 - s.pose.arm >= SCOOP.armPull * deg;
         const armStill = Math.abs(s.vel.arm) < 0.02 * s.m.speeds.arm;
         const atLine = toLine(s) <= SCOOP.lineMargin;
+        if (pulled && atLine && fillOf(s) >= SCOOP.shortOk) return true;
         return pulled && fillOf(s) >= SCOOP.fill && (atLine || hold(mem, armStill, 8));
       },
       meter: (s) => loadMeter(s),
       fail: (s, mem) => {
         // 점선 앞까지 왔는데 덜 찼다 — 더 당길 자리가 없다
-        if (toLine(s) <= SCOOP.lineMargin && fillOf(s) < SCOOP.fill) {
+        if (toLine(s) <= SCOOP.lineMargin && fillOf(s) < SCOOP.shortOk) {
           mem.short = (mem.short ?? 0) + 1;
-          if (mem.short >= 45) return { to: pracStart(), msg: '덜 찼어요 — 깊이 맞춰 꽂고, 암으로 당겨 담기' };
+          if (mem.short >= 45) return { to: pracStart(), msg: '덜 찼어요 — 이빨이 안 보이게 꽂고 바닥 평행하게, 암으로 당겨 담기' };
         } else mem.short = 0;
         // 점선(가상굴착제한선)을 넘으면 시험에서는 실격 — 처음부터 다시
         if (toLine(s) < 0) return { to: pracStart(), msg: '점선을 넘었어요 (시험이면 실격) — 다시' };
@@ -270,7 +295,8 @@ export const SCOOP_LESSON: Lesson = {
       coach: (s, mem) => {
         if (toLine(s) < SCOOP.lineMargin) return fillOf(s) >= SCOOP.fill ? co('점선이 가까워요 — 이제 들기', '붐 올림') : null;
         // 버킷으로 긁어 담으면 안 된다 — 정석은 평행 그대로 암으로
-        if (bottomAngle(s) < SCOOP.overCurl) return co('담는 중엔 버킷은 그대로 — 암만 당기기', '암 당기기');
+        // 버킷 레버를 실제로 오므렸을 때만 (암을 당기면 기하 때문에 바닥 각이 저절로 바뀐다 — 그건 유저 탓이 아니다, QA)
+        if (s.pose.bucket < mem.bk0 - 6 * deg) return co('담는 중엔 버킷은 그대로 — 암만 당기기', '암 당기기');
         if (bite(s) > SCOOP.biteHi + 0.1 || s.lift > 2 * deg) return co('너무 깊어요 — 붐을 살짝 올리기', '붐 올림');
         // 암을 멈추고 있으면 안 찬다
         mem.idle = Math.abs(s.vel.arm) < 0.02 * s.m.speeds.arm ? (mem.idle ?? 0) + 1 : 0;

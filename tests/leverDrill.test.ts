@@ -214,13 +214,14 @@ it('붐이 많이 섞이면 잘못했다는 신호를 올린다 (프레임마다
   expect(t.hud() ?? '', '되돌리는 중').toMatch(/처음 자세/);
 });
 
-it('차체가 들리면 잘못했다는 신호를 올린다', () => {
+it('시킨 대로 눌러 차체가 들려도 잘못 연출은 없고, 무슨 일인지만 말한다', () => {
   const t = drill();
   until(t, { ry: -1 });
   until(t, { ry: 1 });
   const bad0 = t.bag.badN ?? 0;
   run(t, { ry: 1 }, 200); // 계속 누른다
-  expect(t.bag.badN).toBe(bad0 + 1);
+  expect(t.bag.badN ?? 0).toBe(bad0);
+  expect(t.hud() ?? '').toContain('실격');
 });
 
 it('배우기용 겉모습에는 검정이 없다', () => {
