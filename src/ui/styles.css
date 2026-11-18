@@ -8392,3 +8392,21 @@ body.quiz-on .exam-check {
 #hud > .drill .dr-slow {
   white-space: nowrap;
 }
+
+/* 덜컹: 화면이 짧게 흔들린다 (0.35초) */
+#view.jolt {
+  animation: joltShake 0.35s cubic-bezier(0.3, 0.7, 0.4, 1);
+}
+@keyframes joltShake {
+  0% { transform: translate(0, 0); }
+  15% { transform: translate(-7px, 5px); }
+  35% { transform: translate(6px, -4px); }
+  55% { transform: translate(-4px, 3px); }
+  75% { transform: translate(2px, -1px); }
+  100% { transform: translate(0, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #view.jolt {
+    animation: none;
+  }
+}

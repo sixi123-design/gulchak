@@ -79,7 +79,7 @@ export const ARC = {
   smooth: 0.2,
   /** 끝났다고 보는 각도 (3시 근처) */
   endAng: 12,
-  /** 버킷 바닥이 이 높이에 닿을 때 레버가 3시에 와 있어야 한다 (m) — 결과 자세 창(READY_GOAL 0.35~0.75) 가운데 */
+  /** 버킷 바닥이 이 높이에 닿을 때 레버가 3시에 와 있어야 한다 (m) — 결과 자세 창(READY_GOAL 0.15~0.75) 안 */
   land: 0.5,
   /** 이 높이부터 레버를 3시로 굴리기 시작한다 (land + roll) */
   roll: 2.8, // 시범처럼 붐이 내려가기 시작하면 바로 3시 쪽으로 (별점 지점: 2m에서 펴지기 시작, 1m 앞에서 거의 다)
@@ -153,10 +153,10 @@ const toMachine = (k: { rx: number; ry: number }) => ({
 
 /**
  * 퍼기 준비 **결과 자세** (아스트라 기준, 2026-11-17) — 통과는 이것만 본다. 레버를 굴린 과정은 별점으로만.
- * 버킷이 암과 일직선(±8°), 버킷 바닥이 땅에서 0.35~0.75m, 암·선회는 시작 그대로.
+ * 버킷이 암과 일직선(±8°), 버킷 바닥이 땅에서 0.15~0.75m (낮은 자세도 통과 — 앱 주인, 2026-11-18), 암·선회는 시작 그대로.
  * 과정으로 통과를 막으면 맞는 자세에 온 사람을 되돌려 보낸다 (앱 주인 지적)
  */
-export const READY_GOAL = { bucketTol: 8, gapLo: 0.35, gapHi: 0.75, armTol: 5, swingTol: 8 } as const;
+export const READY_GOAL = { bucketTol: 8, gapLo: 0.15, gapHi: 0.75, armTol: 5, swingTol: 8 } as const;
 const readyErr = (s: DigSession) => ({
   bucket: s.pose.bucket / deg,
   gap: s.groundGap(),

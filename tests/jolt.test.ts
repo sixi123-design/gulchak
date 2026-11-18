@@ -107,6 +107,8 @@ it('고봉으로 담은 채 붐을 내리면 덜컹과 무관하게 흙이 흐�
   // 오므려 입구를 세워야 하므로 동시조작(3단계) 내용이다.
   const s = laden();
   let mx = go(s, { ry: -1 }, 40); // 먼저 올린다 (올릴 때는 흐르지 않는다)
+  // 서서히 놓는다 — 확 놓으면 덜컹으로 위의 흙이 털린다 (그건 다른 테스트)
+  for (let i = 30; i >= 0; i--) mx = Math.max(mx, go(s, { ry: -i / 30 }, 1));
   settle(s, 'boom');
   const l0 = s.load;
   expect(l0 / SC).toBeCloseTo(1.25, 3);
@@ -130,4 +132,13 @@ it('선회 중 반대로 살짝(0.3 미만) 밀면 그냥 놓은 것과 같다 �
   const light = slide(0.25);
   expect(light.deg).toBeGreaterThan(0.8 * free.deg);
   expect(light.mx).toBeLessThan(R.params.joltWarn);
+});
+
+it('덜컹 경고가 날 만큼 확 놓으면 가득 담은 흙이 조금 털린다 (경고만 뜨고 흙은 그대로인 일 없게)', () => {
+  const s = laden();
+  go(s, { ry: -1 }, 40);
+  const l0 = s.load;
+  const mx = go(s, {}, 30); // 확 놓기
+  if (mx >= R.params.joltWarn) expect(l0 - s.load).toBeGreaterThan(0.002);
+  expect(s.particles.some((p) => p.big) || l0 - s.load < 1e-6).toBe(true);
 });

@@ -890,13 +890,15 @@ export class ExcavatorView {
     this.cavity = cavity;
     const bk = new Batch();
     bk.add(new THREE.ExtrudeGeometry(shell, { depth: W, bevelEnabled: false }).translate(0, 0, -W / 2), PALETTE.rust, 0.03);
-    const sideG = new THREE.ExtrudeGeometry(bside, { depth: 0.06, bevelEnabled: false });
-    bk.add(sideG.clone().translate(0, 0, -W / 2 - 0.06), bucketSide, 0.02);
+    // 겉폭 = 안폭 W + 옆판 둘 = 1.10m (HW140 재원표 0.58㎥ 사이드커터 포함 1,100mm). 전에는 옆판 6cm라 1.17m로 커 보였다
+    const SIDE = 0.025;
+    const sideG = new THREE.ExtrudeGeometry(bside, { depth: SIDE, bevelEnabled: false });
+    bk.add(sideG.clone().translate(0, 0, -W / 2 - SIDE), bucketSide, 0.02);
     bk.add(sideG.clone().translate(0, 0, W / 2), bucketSide, 0.02);
     // 날판·이빨은 바닥판(힐→날 끝) 연장선 방향으로 앞을 향함 (판정의 이빨 위치와 같은 방향)
     const heelP = { x: Math.cos(m.heelAngle) * m.heelLen, y: Math.sin(m.heelAngle) * m.heelLen };
     const bladeAng = Math.atan2(-heelP.y, m.L3 - heelP.x);
-    bk.add(boxG(0.1, 0.04, W + 0.1, -0.04, 0.01, 0).rotateZ(bladeAng).translate(m.L3, 0, 0), PALETTE.metal, 0);
+    bk.add(boxG(0.1, 0.04, W + 2 * SIDE, -0.04, 0.01, 0).rotateZ(bladeAng).translate(m.L3, 0, 0), PALETTE.metal, 0);
     // 이빨: 날에 끼운 받침(어댑터) + 넓적한 쐐기 (끝은 일자 날)
     const toothG = toothGeometry();
     // 받침 0.08m는 날 뒤로 덮고 0.14m 앞으로 튀어나옴 (판정 toothLen 0.12와 비슷하게)

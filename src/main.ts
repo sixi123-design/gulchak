@@ -1038,7 +1038,23 @@ function updateCamera(dt: number) {
     }
   }
   camera.lookAt(camLook);
+  // 운전석: 차체가 앞뒤로 숙고 옆으로 기우는 만큼 시야도 같이 (lookAt이 흔들림을 지워 덜컹이 안 보였다 — 앱 주인 지적)
+  if (camMode === 'cab') {
+    // 큰 충격(반대로 꺾기 4~6°)도 화면이 6° 넘게 기울지 않게 — 멀미 나지 않게
+    const lim = (x: number) => THREE.MathUtils.clamp(x * CAB_ROCK, -CAB_ROCK_MAX, CAB_ROCK_MAX);
+    camera.rotateX(lim(-s.rock.pitch));
+    camera.rotateZ(lim(s.rock.roll));
+    // 덜컹 순간 시선이 튄다 (위치 흔들림만으로는 2~3cm라 안 보였다). 붐을 확 놓는 경고(충격 0.1) 때 약 ±0.6°
+    const jj = Math.min(0.6, s.lastJolt);
+    if (jj > 0.02) {
+      camera.rotateX((Math.random() - 0.5) * jj * 0.2);
+      camera.rotateY((Math.random() - 0.5) * jj * 0.12);
+    }
+  }
 }
+/** 운전석 시야가 차체 기울기를 따라가는 비율 (1 = 차체와 똑같이) */
+const CAB_ROCK = 2;
+const CAB_ROCK_MAX = (6 * Math.PI) / 180;
 
 
 // ---------- 배우기: 스테이지 맵 → 미션 → CLEAR ----------
@@ -2238,7 +2254,14 @@ function showToast(v: Violation) {
   if (v.kind === 'disqualify' && !soft) sound.whistle('fail');
   // 레버 익히기: 실격 대신 주의지만 소리는 냄 (낮은 쿵)
   else if (v.kind === 'disqualify') sound.thump(0.5);
-  if (v.id === 'W-JOLT' || v.id === 'W-IMPACT') sound.thump(0.8);
+  if (v.id === 'W-JOLT' || v.id === 'W-IMPACT') {
+    sound.thump(0.8);
+    // 화면이 덜컹 (캔버스만 짧게 흔든다 — CSS transform이라 저가폰 부담 없음)
+    const cv = $('view');
+    cv.classList.remove('jolt');
+    void cv.offsetWidth;
+    cv.classList.add('jolt');
+  }
   if (v.kind === 'warning' && !session.flags.feedback) return; // 실제 시험: 경고 알림 없음
   const el = document.createElement('div');
   const dq = v.kind === 'disqualify' && !soft;

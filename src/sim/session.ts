@@ -170,6 +170,8 @@ export interface Particle {
   vol: number;
   /** 화면에서 덩어리 모양을 고정하기 위한 번호 */
   id: number;
+  /** 덜컹으로 털린 흙: 화면에서 크게 그린다 (부피는 그대로) */
+  big?: boolean;
 }
 
 /** 흙이 땅에 떨어진 자리 (화면 먼지·소리용, 화면이 꺼내 감) */
@@ -1009,19 +1011,23 @@ export class DigSession {
       }[why];
       this.report('W-JOLT', msg);
     }
-    // 고봉으로 담긴 흙은 충격에 쏟아진다
+    // 덜컹하면 위에 얹힌 흙이 쏟아진다: 평적의 90% 넘게 담았으면 경고가 날 정도 충격부터 (전에는 고봉·큰 충격만이라
+    // 경고가 떠도 흙이 그대로였다 — 앱 주인 지적). 위로 넘친 만큼에 충격 세기를 곱한 양
     const sc = this.m.struckCapacity;
-    if (shock >= this.params.joltSpill && this.load > sc) {
-      const v = Math.min(this.load - sc, (this.load - sc) * clamp(shock, 0, 1) + 0.01);
+    const top = this.load - 0.9 * sc;
+    if (shock >= this.params.joltWarn && top > 0) {
+      const k = clamp((shock - this.params.joltWarn) / (this.params.joltSpill - this.params.joltWarn), 0, 1);
+      const v = Math.min(top, top * (0.25 + 0.75 * k * clamp(shock, 0, 1) * 2) + 0.004);
       if (this.isCarrying()) this.carrySpill += v;
       this.load -= v;
       this.pourStep += v;
       this.loadBack = Math.min(this.loadBack, this.load);
       const W = this.m.bucketWidth;
-      const n = Math.max(1, Math.min(6, Math.round(v / 0.004)));
+      // 보이는 모양은 과장: 덩이를 많이·크게, 털리듯 튀게 (흘린 양은 실제 장부 그대로)
+      const n = Math.max(4, Math.min(14, Math.round(v / 0.002)));
       for (let i = 0; i < n; i++) {
-        const tip = toWorld(this.pose.swing, this.frame.tip, (this.rand() - 0.5) * W * 0.8);
-        const p = { p: tip, v: v3((this.rand() - 0.5) * 0.8, 0.3, (this.rand() - 0.5) * 0.8), vol: v / n, id: this.particleId++ };
+        const tip = toWorld(this.pose.swing, this.frame.tip, (this.rand() - 0.5) * W * 0.9);
+        const p = { p: tip, v: v3((this.rand() - 0.5) * 1.8, 0.4 + this.rand() * 0.8, (this.rand() - 0.5) * 1.8), vol: v / n, id: this.particleId++, big: true };
         if (this.particles.length < 140) this.particles.push(p);
         else this.land(tip, v / n);
       }

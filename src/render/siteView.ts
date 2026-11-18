@@ -336,9 +336,15 @@ export class SoilView {
   /** 흙 주변 다진 바닥색. 튜토리얼 공간에서는 글자가 잘 보이게 밝게 올린다 */
   setGround(hex: number) {
     this.ground.setHex(hex);
+    for (const g of this.grids) g.dirty = true;
   }
   private dark = new THREE.Color(0x24160c);
   private tmp = new THREE.Color();
+  /** 굴착장 바닥: 여러 번 파고 밟아 흙이 깔린 땅 (구덩이만 갈색이면 '구덩이에만 흙'처럼 보였다 — 앱 주인 지적) */
+  private trampled = new THREE.Color(0x7a5a3e);
+  private gnd = new THREE.Color();
+  /** 흙 격자 가장자리에서 이 거리(m)까지 바닥색 → 밟힌 흙색으로 서서히 (격자는 구역선 밖 1.2m까지) */
+  private static EDGE = 1.2;
   /** 평탄 도움(연습 모드, 첫 덤프 뒤): C 흙을 목표면(지면 0) 대비 높으면 밝게·낮으면 어둡게, 버킷이 고른 자리는 몇 초 매끈한 자국 */
   flatGuide = false;
   /** 시뮬 시각 (긁은 자국이 바래는 기준) */
@@ -420,8 +426,12 @@ export class SoilView {
           const il = 1 / Math.sqrt(hx * hx + 1 + hz * hz);
           nrm.setXYZ(k, -hx * il, il, -hz * il);
           const inPit = guide && g.pit[k] > 0;
+          // 이 칸의 '바닥' 색: 격자 가장자리는 둘레 바닥색, 구역 안쪽으로 갈수록 밟힌 흙색
+          const edge = Math.min(i, nx - 1 - i, j, nz - 1 - j) * g.cell;
+          const we = THREE.MathUtils.smoothstep(edge, 0, SoilView.EDGE);
+          this.gnd.copy(this.ground).lerp(this.trampled, we);
           if (Math.abs(h[k] - h0[k]) < 0.003 && h0[k] === 0 && !inPit) {
-            col.setXYZ(k, this.ground.r, this.ground.g, this.ground.b);
+            col.setXYZ(k, this.gnd.r, this.gnd.g, this.gnd.b);
             continue;
           }
           // 오목하면 어둡게(가짜 그늘), 볼록하면 밝게
@@ -450,7 +460,7 @@ export class SoilView {
           // 꼭짓점마다 둘 중 하나로 칠하면 얇은 흙더미 가장자리가 삼각형 톱니로 끊겨 보인다 (유저 검토)
           if (h0[k] === 0 && !inPit) {
             const w = Math.min(1, Math.abs(h[k] - h0[k]) / FADE_H);
-            this.tmp.multiplyScalar(s).lerp(this.ground, 1 - w);
+            this.tmp.multiplyScalar(s).lerp(this.gnd, 1 - w);
             col.setXYZ(k, this.tmp.r, this.tmp.g, this.tmp.b);
             continue;
           }
@@ -545,7 +555,7 @@ export class FxView {
       const big = Math.cbrt(Math.max(pt.vol, 0.0005) / 0.004);
       for (let j = 0; j < plan.clumps; j++) {
         const h = pt.id * 7 + j;
-        const sz = (0.7 + hash(h) * 0.9) * THREE.MathUtils.clamp(big, 0.5, 1.6);
+        const sz = (0.7 + hash(h) * 0.9) * THREE.MathUtils.clamp(big, 0.5, 1.6) * (pt.big ? 1.7 : 1);
         this.pos.set(
           pt.p.x + (hash(h + 0.3) - 0.5) * 0.22,
           pt.p.y + (hash(h + 0.6) - 0.5) * 0.25 + j * 0.06,
