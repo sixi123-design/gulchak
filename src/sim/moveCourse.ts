@@ -1,6 +1,7 @@
-import { bucketLow, co, hold, ropeClear, SC, fill, type Grade, type Lesson, type Step } from './tutorial';
+import { bucketLow, co, hold, passFix, ropeClear, SC, fill, type Grade, type Lesson, type Step } from './tutorial';
 import { SMOOTH_MAX, spanJolt, startSpan, tickSpan, type Joint } from './gauge';
 import type { DigSession, Sticks } from './session';
+import { shapeOf, staticHits } from './judge';
 
 const deg = Math.PI / 180;
 
@@ -602,8 +603,19 @@ const dumpDemo = (): Step[] => [
   phaseStep({ text: '선회 자세가 되면\n레버를 천천히 놓기', labels: [], a: LIFT_ANG, m: 0, ramp: 50, min: 70, arc: DUMP_ARC, until: (s) => swingPose(s) && still(s) }),
 ];
 
-/** 선회 자세: 버킷 다 접음 + 버킷 최저점이 줄보다 넉넉히 위 (흙 퍼기 들기와 같은 기준) */
-export const swingPose = (s: DigSession) => -s.pose.bucket / deg >= MOVE.curl - 1e-6 && bucketLow(s) >= ropeClear(s);
+/**
+ * 이 자세 그대로 가운데 두 폴(선회 π/2)을 지나면 붐·암·버킷이 폴·줄에 안 닿는가.
+ * 버킷만 줄 위면 된다고 보면, 붐이 45°보다 낮을 때 붐이 안쪽 폴(높이 3.75m)에 걸린다 (앱 주인 지적: 한 사이클에서 자꾸 닿음)
+ */
+export const clearsB = (s: DigSession) => {
+  const site = { ...s.site, poles: s.site.poles.filter((p) => p.name.startsWith('B-')), ropes: s.site.ropes.filter((r) => r.name.startsWith('B-')), stations: [] as unknown as typeof s.site.stations };
+  return staticHits(site, shapeOf(s.m, s.frame, Math.PI / 2), -Infinity).length === 0;
+};
+/** 선회 자세인데 이대로 돌면 닿는다: 버킷이 폴 쪽에 치우쳤으면 그 레버, 아니면 붐이 낮은 것 */
+export const clearCoach = (s: DigSession) =>
+  clearsB(s) ? null : (passFix(s) ?? co('붐을 더 올리기 — 이대로 돌면 붐이 가운데 폴에 닿아요', '붐 올림'));
+/** 선회 자세: 버킷 다 접음 + 버킷 최저점이 줄보다 넉넉히 위 + 이대로 돌아도 폴·줄에 안 닿음 (흙 퍼기 들기와 같은 기준) */
+export const swingPose = (s: DigSession) => -s.pose.bucket / deg >= MOVE.curl - 1e-6 && bucketLow(s) >= ropeClear(s) && clearsB(s);
 
 export const DUMP_LESSON: Lesson = {
   id: 'b-dump',
@@ -682,7 +694,7 @@ export const DUMP_LESSON: Lesson = {
             ? co('버킷을 끝까지 오므리기', '버킷 오므림')
             : bucketLow(s) < ropeClear(s)
               ? co('붐을 더 올리기', '붐 올림')
-              : null,
+              : clearCoach(s),
       },
       ['bucket', 'boom'],
     ),
@@ -700,6 +712,7 @@ export const DUMP_LESSON: Lesson = {
           if (!handOn(s) && -s.pose.bucket / deg < MOVE.curl) return co('버킷을 끝까지 오므리기', '버킷 오므림');
           // 줄보다 낮으면 멈춰도 안 넘어간다 — 말해 주지 않으면 막대만 차고 끝이 안 난다
           if (!handOn(s) && bucketLow(s) < ropeClear(s)) return co('버킷이 줄보다 낮아요 — 붐 올리기', '붐 올림');
+          if (!handOn(s)) return clearCoach(s);
           return null;
         },
         hud: (s) => (handOn(s) ? '레버를 천천히 가운데로' : null),

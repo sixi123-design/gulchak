@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BASIC_LESSONS } from '../src/sim/leverSchool';
 import { ease, frame, tutorFor, until, type Hand } from './harness';
-import { ARC, MOVE, READY_ARM, READY_GOAL, readyResult, still, swingPose, wantAngle } from '../src/sim/moveCourse';
+import { ARC, clearCoach, clearsB, MOVE, READY_ARM, READY_GOAL, readyResult, still, swingPose, wantAngle } from '../src/sim/moveCourse';
 import { SCOOP_LESSON, swingReady } from '../src/sim/digCourse';
 import { bucketLow, ropeClear, SC, type Tutor } from '../src/sim/tutorial';
 import type { DigSession } from '../src/sim/session';
@@ -268,10 +268,23 @@ describe('흙 퍼기 들기: 같은 선회 자세 기준', () => {
       expect(swingReady(s), `${b}°`).toBe(ok);
       expect(swingPose(s)).toBe(ok);
     }
+    // 높이 경계는 버킷 기준 그대로, 그 위에 '이대로 돌면 폴·줄에 안 닿는가'가 더해졌다 (붐이 낮으면 안쪽 폴에 걸림)
     atRope(s, 0.005, -132);
-    expect(swingReady(s), '줄 위 +5mm').toBe(true);
+    expect(bucketLow(s) >= ropeClear(s), '줄 위 +5mm').toBe(true);
+    expect(swingReady(s), '줄 위 +5mm: 폴에 안 닿을 때만').toBe(clearsB(s));
     atRope(s, -0.005, -132);
     expect(swingReady(s), '줄 위 −5mm').toBe(false);
+  });
+  it('붐이 낮아 가운데 안쪽 폴에 걸릴 자세는 선회 자세가 아니다 — 붐을 더 올리라고 알려 준다', () => {
+    const s = dump().s;
+    // 버킷은 줄 위·다 접음인데 붐 40°(폴 높이 3.75m 아래로 지나감)
+    s.teleport({ swing: 0, boom: 40 * deg, arm: -60 * deg, bucket: -132 * deg });
+    expect(bucketLow(s)).toBeGreaterThanOrEqual(ropeClear(s) - 0.1);
+    expect(clearsB(s)).toBe(false);
+    expect(swingPose(s)).toBe(false);
+    expect(clearCoach(s)?.labels).toContain('붐 올림');
+    s.teleport({ swing: 0, boom: 50 * deg, arm: -72 * deg, bucket: -132 * deg });
+    expect(clearsB(s)).toBe(true);
   });
   for (const [b, ok] of [[-129, false], [-130, true]] as const)
     it(`D10 흙 퍼기 실습 들기 단계: ${b}°로 줄 위면 ${ok ? '넘어간다' : '안 넘어간다'}`, () => {

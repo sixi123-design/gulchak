@@ -17,14 +17,28 @@ export interface Shape {
 }
 
 export function shapeOf(m: MachineSpec, f: Frame, swing: number): Shape {
-  const P0 = toWorld(swing, f.P0);
   const P1 = toWorld(swing, f.P1);
   const P2 = toWorld(swing, f.P2);
   const bucket = bucketCorners(m, f, swing);
-  const capsules: Capsule[] = [
-    { a: P0, b: P1, r: m.radii.boom, part: '붐' },
-    { a: P1, b: P2, r: m.radii.arm, part: '암' },
+  // 붐: 곧은 막대(P0→P1)로 보면 무릎 부근에서 화면의 붐 아랫면보다 약 0.4m 낮아, 화면에서는 폴 위로 넉넉히 지나가는데
+  // 닿았다고 판정했다 (앱 주인 지적). 그리는 모양(excavatorView 붐 아랫면: 발→0.2L→0.42L 무릎→0.7L→끝)을 따라 꺾인 캡슐로 —
+  // 캡슐 아래 끝이 아랫면과 같게 중심을 r만큼 올린다
+  const dr = f.P1.r - f.P0.r;
+  const dy = f.P1.y - f.P0.y;
+  const L = Math.hypot(dr, dy) || 1;
+  const rb = m.radii.boom;
+  const at = (x: number, y: number) => toWorld(swing, { r: f.P0.r + (dr * x - dy * y) / L, y: f.P0.y + (dy * x + dr * y) / L });
+  const BOOM_UNDER: [number, number][] = [
+    [0, -0.3],
+    [0.2, -0.1],
+    [0.42, 0.19],
+    [0.7, 0.02],
+    [1, -0.2],
   ];
+  const boomPts = BOOM_UNDER.map(([k, y]) => at(k * L, y + rb));
+  const capsules: Capsule[] = [];
+  for (let i = 0; i + 1 < boomPts.length; i++) capsules.push({ a: boomPts[i], b: boomPts[i + 1], r: rb, part: '붐' });
+  capsules.push({ a: P1, b: P2, r: m.radii.arm, part: '암' });
   for (const [i, j] of BUCKET_EDGES) capsules.push({ a: bucket[i], b: bucket[j], r: m.radii.bucket, part: '버킷' });
   return { capsules, bucket, armEnd: P2 };
 }

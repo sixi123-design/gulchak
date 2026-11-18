@@ -9,8 +9,8 @@
  * 레버를 같이 밀면 기름을 나눠 써서 조금씩 느려진다 — 그래도 하나씩 하는 것보다 빠르다.
  */
 import { swingReady } from './digCourse';
-import { MOVE, readyPose } from './moveCourse';
-import { co, passFix, SC, type Grade, type Lesson, type Step } from './tutorial';
+import { clearCoach, MOVE, readyPose } from './moveCourse';
+import { bucketLow, co, passFix, ropeClear, SC, type Grade, type Lesson, type Step } from './tutorial';
 import type { DigSession } from './session';
 
 const deg = Math.PI / 180;
@@ -59,9 +59,10 @@ const steps: Step[] = [
         : !swingReady(s)
           ? -s.pose.bucket / deg < MOVE.curl
             ? co('버킷 끝까지 오므리며 붐 올리기', '버킷 오므림', '붐 올림')
-            : co('줄 위까지 붐 올리기', '붐 올림')
+            : bucketLow(s) < ropeClear(s)
+              ? co('줄 위까지 붐 올리기', '붐 올림')
+              : (clearCoach(s) ?? co('줄 위까지 붐 올리기', '붐 올림'))
           : null,
-    hud: (s, _m, bag) => `${Math.floor(elapsed(s, bag))}초`,
   },
   {
     text: '두 폴 사이로 반대편까지 — 앞에서 미리 놓기',
@@ -72,7 +73,6 @@ const steps: Step[] = [
     // 가다가 흙을 쏟아 버렸으면 다시 퍼 와야 한다 (막다른 길이 되지 않게 처음으로)
     fail: (s, mem) => (s.load < 0.8 * mem.l0 ? { to: 0, msg: '가다가 흙을 쏟았어요. 제자리에서 다시 퍼 오기' } : null),
     coach: (s) => passing(s),
-    hud: (s, _m, bag) => `${Math.floor(elapsed(s, bag))}초`,
   },
   {
     text: '땅 가까이 쏟고\n오므리며 붐 올려 선회 자세',
@@ -90,9 +90,8 @@ const steps: Step[] = [
       !near(s, SWING_C) && s.load >= 0.5 * SC(s)
         ? co('반대편 구덩이 위로 돌아와 쏟기', s.pose.swing > 0 ? '선회 ◀' : '▶ 선회')
         : s.load < MOVE.empty * SC(s) && !swingReady(s)
-          ? co('오므리며 붐 올려 선회 자세', '버킷 오므림', '붐 올림')
+          ? (bucketLow(s) >= ropeClear(s) && -s.pose.bucket / deg >= MOVE.curl ? clearCoach(s) : null) ?? co('오므리며 붐 올려 선회 자세', '버킷 오므림', '붐 올림')
           : null,
-    hud: (s, _m, bag) => `${Math.floor(elapsed(s, bag))}초`,
   },
   {
     text: '제자리로 돌아오며 붐 내리고 버킷 펴기\n퍼기 준비 자세가 되면 끝',
@@ -106,7 +105,6 @@ const steps: Step[] = [
     coach: (s) =>
       passing(s) ??
       (near(s, SWING_A) && slow(s) && !prepared(s) ? prepCoach(s) : null),
-    hud: (s, _m, bag) => `${Math.floor(elapsed(s, bag))}초`,
   },
 ];
 

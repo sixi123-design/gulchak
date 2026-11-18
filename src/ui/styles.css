@@ -8428,3 +8428,11 @@ body.quiz-on .exam-check {
   padding-right: 8px;
   box-sizing: border-box;
 }
+
+/* 배우기 세로 화면: 오른쪽 위 버튼(다시·설정·목록)이 세로로 쌓여 알림이 설정 버튼에 겹쳤다 — 버튼 아래로 */
+@media (max-aspect-ratio: 1/1) {
+  body[data-mode='tutorial'] .toasts {
+    top: calc(env(safe-area-inset-top) + 216px);
+    width: min(320px, 72vw);
+  }
+}

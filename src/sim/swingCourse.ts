@@ -134,7 +134,6 @@ function swingLesson(sp: SwingSpec): Lesson {
       if (left(s) > TOL.pass && !handOn(s) && still(s)) return co(`${sp.name}까지 조금 더`, label);
       return null;
     },
-    hud: (s) => (Math.abs(left(s)) < 60 ? `${sp.name}까지 ${Math.max(0, Math.round(left(s)))}°` : null),
   };
 
   return {
@@ -152,7 +151,7 @@ function swingLesson(sp: SwingSpec): Lesson {
       if (rough) return { stars: 2, note: `${sp.name}에 섰어요. 반대로 꺾어 세웠어요 — ${why}. 미리 놓아 미끄러지게` };
       if (bag.over) return { stars: 2, note: `${sp.name}에 섰어요. 지나쳤다 돌아왔어요 — 레버를 더 앞에서 놓기` };
       // 화면에 보이는 반올림 값으로 비교 ('3° 비켜 섰어요'인데 별 3 기준이 ±3°면 모순, QA)
-      if (Math.round(bag.err ?? 0) > TOL.star) return { stars: 2, note: `${sp.name}에 섰어요. ${Math.round(bag.err)}° 비켜 섰어요 — 조금 더 맞춰 보기` };
+      if (Math.round(bag.err ?? 0) > TOL.star) return { stars: 2, note: `${sp.name}에 섰어요. 조금 비켜 섰어요 — 버킷이 구덩이 가운데 오게 맞춰 보기` };
       return { stars: 3, note: `${sp.name} 위에 정확히 섰습니다` };
     },
     setup,
@@ -283,18 +282,12 @@ function backLesson(): Lesson {
       if (Math.abs(d) > BACK.pass && left(s) < 15 && s.groundGap() < BACK.rope + 0.2)
         return co('중심선에 맞춘 다음 내리기 — 줄에 닿으면 실격', '붐 올림');
       if (handOn(s) || !still(s)) return null;
-      if (left(s) > 15 && left(s) < 150) return co(`제자리까지 ${Math.round(left(s))}° — 더 돌리기`, '▶ 선회');
+      if (left(s) > 15 && left(s) < 150) return co('제자리까지 더 돌리기', '▶ 선회');
       if (left(s) >= 150) return null;
-      if (d < -BACK.pass) return co(`지나쳤어요 — 살살 되돌리기 (${Math.round(-d * 100)}cm) · 시험에서는 ⓓ선을 넘으면 실격`, '선회 ◀');
-      if (d > BACK.pass) return co(`중심선까지 ${Math.round(d * 100)}cm — 살살 더`, '▶ 선회');
+      if (d < -BACK.pass) return co('지나쳤어요 — 살살 되돌려 버킷을 구덩이 가운데로 · 시험에서는 오버스윙 선을 넘으면 실격', '선회 ◀');
+      if (d > BACK.pass) return co('버킷이 구덩이 가운데 오게 살살 더', '▶ 선회');
       if (!prepared(s)) return prepCoach(s);
       return null;
-    },
-    hud: (s) => {
-      const L = left(s);
-      if (L > 15) return L < 90 ? `제자리까지 ${Math.round(L)}°` : null;
-      const d = Math.round(lat(s) * 100);
-      return d === 0 ? '중심선' : d > 0 ? `중심선까지 ${d}cm` : `${-d}cm 지나침`;
     },
   };
   return {
@@ -319,7 +312,7 @@ function backLesson(): Lesson {
       if (bag.over) return { stars: 2, note: '제자리에 섰어요. 지나쳤다 돌아왔어요. 레버를 더 앞에서 놓기' };
       if (bag.near) return { stars: 2, note: '제자리에 섰어요. 줄에 가까웠어요 (시험이면 실격 직전). 중심선에 맞춘 다음 내리기' };
       if (bag.overlap === 0) return { stars: 2, note: '제자리에 섰어요. 서고 나서 내렸어요. 두 폴을 지나면 선회하면서 붐 내리고 버킷 펴기' };
-      if (Math.round((bag.err ?? 0) * 100) > BACK.star * 100) return { stars: 2, note: `제자리에 섰어요. 중심선에서 ${Math.round((bag.err ?? 0) * 100)}cm 비켜 섰어요. 조금 더 맞춰 보기` };
+      if (Math.round((bag.err ?? 0) * 100) > BACK.star * 100) return { stars: 2, note: '제자리에 섰어요. 조금 비켜 섰어요. 버킷이 구덩이 가운데(초록 선) 오게 맞춰 보기' };
       return { stars: 3, note: '돌아오며 내려 구덩이 중심선에 바로 팔 자세로 섰습니다' };
     },
     setup,

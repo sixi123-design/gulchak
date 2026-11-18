@@ -1,4 +1,4 @@
-import { handOn, MOVE, phaseStep, still as stillAll, swingPose, type Phase } from './moveCourse';
+import { clearCoach, handOn, MOVE, phaseStep, still as stillAll, swingPose, type Phase } from './moveCourse';
 import type { DigSession } from './session';
 import { bucketLow, co, hold, ropeClear, SC, type Grade, type Lesson, type Meter, type Step } from './tutorial';
 import { toWorld } from './kinematics';
@@ -321,7 +321,7 @@ export const SCOOP_LESSON: Lesson = {
             ? { to: pracStart(), msg: '점선을 넘었어요 (시험이면 실격) — 다시' }
             : null,
       coach: (s) =>
-        -s.pose.bucket / deg < MOVE.curl ? co('드는 중 — 버킷을 더 오므리기', '버킷 오므림') : bucketLow(s) < ropeClear(s) ? co('붐을 더 올리기', '붐 올림') : null,
+        -s.pose.bucket / deg < MOVE.curl ? co('드는 중 — 버킷을 더 오므리기', '버킷 오므림') : bucketLow(s) < ropeClear(s) ? co('붐을 더 올리기', '붐 올림') : clearCoach(s),
     },
     {
       text: T_RELEASE,
