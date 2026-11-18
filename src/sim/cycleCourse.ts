@@ -26,8 +26,8 @@ const slow = (s: DigSession) => Math.abs(s.vel.swing) < 0.05 * s.m.speeds.swing;
 /** B를 지나는 중 폴·줄에 닿을 자세면 먼저 그것 */
 const passing = (s: DigSession) => (s.pose.swing > 20 * deg && s.pose.swing < 160 * deg ? passFix(s) : null);
 /** 퍼기 준비 자세 (넉넉하게): 버킷이 암과 거의 일직선, 버킷 바닥이 땅에서 1m 안 */
-const PREP = { bucket: 20, gap: 1.0 } as const;
-const prepared = (s: DigSession) => Math.abs(s.pose.bucket / deg) <= PREP.bucket && s.groundGap() <= PREP.gap && s.groundGap() > 0;
+export const PREP = { bucket: 20, gap: 1.0 } as const;
+export const prepared = (s: DigSession) => Math.abs(s.pose.bucket / deg) <= PREP.bucket && s.groundGap() <= PREP.gap && s.groundGap() > 0;
 /** 퍼기 준비 자세까지 무엇을 할지: 땅에 닿았으면 올리기, 높으면 내리기, 버킷은 모자란 쪽으로 */
 export const prepCoach = (s: Pick<DigSession, 'groundGap' | 'pose'>) => {
   const g = s.groundGap();

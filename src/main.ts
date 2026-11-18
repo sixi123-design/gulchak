@@ -1541,6 +1541,13 @@ function updateMeter() {
     badge.textContent = d === 'user' ? '직접 해보기' : '시범 중';
     // 배속 버튼: 시범이 도는 단계와 '다시 볼까요?'에서만 (다시 보기 전에 느리게 고를 수 있게)
     $('btn-slow').hidden = !(tutor.current?.ask || (tutor.current?.demo && d !== 'user'));
+    // 시범 건너뛰기: 시범이 도는 동안 언제든 실습으로 (퀴즈 미션은 시범이 곧 문제라 빼고)
+    $('btn-skip').hidden = !(
+      tutor.hasDemo &&
+      !tutor.current?.ask &&
+      tutor.step < tutor.practiceStart() &&
+      !tutor.lesson.steps.some((st) => st.quiz)
+    );
     // 실습 중에 시범을 다시 보는 길. 막혀서 처음으로 돌아간 적이 있으면 눈에 띄게
     const demoBtn = $('btn-demo');
     demoBtn.hidden = !(tutor.hasDemo && d === 'user' && !tutor.current?.ask && tutor.practiceStart() > 0 && tutor.step >= tutor.practiceStart());
@@ -1667,6 +1674,8 @@ function onRewind() {
   renderMission();
 }
 function onLessonClear() {
+  // 실격 패널('다시!')이 떠 있으면 성공으로 치지 않는다 (둘이 같이 뜨면 안 된다)
+  if (!$('fail').hidden) return;
   const L = tutor!.lesson;
   // 한 톤 배경은 성공 카드 뒤에서도 그대로 둔다 (장면·안개와 맞게). 다음 판(newSession)에서 지운다
   const done = new Set(loadCleared());
@@ -1751,6 +1760,12 @@ function onLessonFail(v: Violation) {
 $('btn-clear-next').onclick = () => startLesson(lessonIdx + 1);
 $('btn-clear-again').onclick = () => startLesson(lessonIdx, true, guideLv, false);
 $('btn-clear-demo').onclick = () => startLesson(lessonIdx, true, guideLv, true);
+$('btn-skip').onclick = () => {
+  if (!tutor || tutor.cleared) return;
+  sound.select();
+  tutor.skipDemo();
+  renderMission();
+};
 $('btn-demo').onclick = () => {
   if (lessonIdx < 0 || !tutor) return;
   sound.select();

@@ -8371,3 +8371,24 @@ body.quiz-on .exam-check {
 .lab {
   white-space: nowrap;
 }
+
+/* 세로 화면: 위의 '노란 판 가운데' 폭(56vw)이 세로 규칙을 덮어 카드가 왼쪽에 몰리고 배지가 잘렸다 — 세로에서는 꽉 채운다 */
+@media (max-aspect-ratio: 1/1) {
+  body.stage-on #precheck .mode-pick {
+    width: 100%;
+    margin-right: 0;
+    max-height: none;
+  }
+  body.stage-on #precheck .mb-badge {
+    max-width: calc(100% - 16px);
+  }
+}
+
+/* 시범 줄(배지·배속·건너뛰기): 좁은 세로 화면에서 '시범 중'이 세로로 쪼개지지 않게, 넘치면 다음 줄로 */
+.dr-row {
+  flex-wrap: wrap;
+}
+#hud > .drill .dr-badge,
+#hud > .drill .dr-slow {
+  white-space: nowrap;
+}

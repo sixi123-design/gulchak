@@ -46,7 +46,7 @@ export function staticHits(site: Site, s: Shape, workHeight: number): Hit[] {
     for (const c of s.capsules) {
       const rr = c.r + POLE_R;
       if (segSegDist2(c.a, c.b, a, b) < rr * rr) {
-        hits.push({ id: 'D-POLE', detail: `${c.part}가 ${p.name}에 접촉` });
+        hits.push({ id: 'D-POLE', detail: `${c.part}이 ${p.name}에 접촉` });
         break;
       }
     }
@@ -55,7 +55,7 @@ export function staticHits(site: Site, s: Shape, workHeight: number): Hit[] {
     for (const c of s.capsules) {
       const rr = c.r + ROPE_R;
       if (segSegDist2(c.a, c.b, rope.a, rope.b) < rr * rr) {
-        hits.push({ id: 'D-POLE', detail: `${c.part}가 ${rope.name}에 접촉` });
+        hits.push({ id: 'D-POLE', detail: `${c.part}이 ${rope.name}에 접촉` });
         break;
       }
     }

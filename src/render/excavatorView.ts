@@ -338,6 +338,8 @@ const MAX_CLUMPS = 40;
 
 /** 덜 들어간(푸석한) 흙 색 */
 const LOOSE_DIRT = 0xa8763f;
+/** 날 앞에 밀리는 흙: 땅 흙(PALETTE.dirt, 같은 Lambert 조명)보다 조금 어둡게 — 구덩이 속 그늘진 흙과 이어지게 */
+const SUR_DIRT = 0x7a4e2c;
 
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 const TMP_M = new THREE.Matrix4();
@@ -909,7 +911,8 @@ export class ExcavatorView {
     this.lipMound.visible = false;
     this.bucket.add(this.lipMound);
     // 날 앞 덧쌓임: 땅 위 흙더미. 매 프레임 지표를 따라 정점을 다시 잡으므로 차체(root) 좌표로 직접 씀
-    this.surMound = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshToonMaterial({ color: LOOSE_DIRT, gradientMap: gradientMap(), side: THREE.DoubleSide }));
+    // 날 앞 흙더미는 땅 흙과 같은 재질·색으로 (밝은 황토 툰 재질이면 구덩이 속에서 따로 노는 밝은 덩어리로 보였다 — 앱 주인 지적)
+    this.surMound = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshLambertMaterial({ color: SUR_DIRT, side: THREE.DoubleSide }));
     this.surMound.visible = false;
     this.surMound.frustumCulled = false;
     this.root.add(this.surMound);
