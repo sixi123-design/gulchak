@@ -9,7 +9,7 @@ export const PALETTE = {
   tire: 0x2b2a3a,
   dirt: 0x8c5a32, // 흙: 따뜻한 갈색 (판 흙·흙더미, 바닥보다 밝고 붉게)
   yard: 0xbfbdb6, // 포장 바닥 (콘크리트)
-  sand: 0x5e5a55, // 굴착장 다진 바닥 (회갈색, 흙보다 어둡고 덜 붉게)
+  sand: 0x9b968e, // 굴착장 다진 바닥 (회갈색). 짙은 회색이 무거워 밝게 — 앱 주인, 2026-11-18
   rust: 0xb4b8bd, // 버킷 몸체: 밝은 회색 (흙과 구분)
   rustDark: 0x8d9298,
   metal: 0xe6e8ea, // 이빨·날

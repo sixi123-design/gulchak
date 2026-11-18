@@ -74,6 +74,80 @@ export class SiteView {
     }
     for (const s of this.labels) s.visible = false;
   }
+  /**
+   * 굴착장 정돈 (2026-11-18, 앱 주인): 흙판 둘레에 낮은 경계석(모서리 둥글게) + 바깥 콘크리트에 반듯한 줄눈.
+   * 흙판 바깥 칸은 SoilView가 연베이지 판으로 칠한다. 경계석이 판의 네 모서리를 덮어 판이 둥근 사각으로 보인다
+   */
+  private addCurbsAndJoints(grids: SoilGrid[]) {
+    const W = 0.14; // 경계석 폭
+    const H = 0.06; // 높이
+    const R = 0.5; // 판 모서리 반지름
+    const rr = (x0: number, z0: number, x1: number, z1: number, r: number) => {
+      // Shape 평면 (x, y=-z)에서 둥근 사각형
+      const sh = new THREE.Path();
+      sh.moveTo(x0 + r, -z0);
+      sh.lineTo(x1 - r, -z0);
+      sh.quadraticCurveTo(x1, -z0, x1, -z0 - r);
+      sh.lineTo(x1, -z1 + r);
+      sh.quadraticCurveTo(x1, -z1, x1 - r, -z1);
+      sh.lineTo(x0 + r, -z1);
+      sh.quadraticCurveTo(x0, -z1, x0, -z1 + r);
+      sh.lineTo(x0, -z0 - r);
+      sh.quadraticCurveTo(x0, -z0, x0 + r, -z0);
+      return sh;
+    };
+    const curbMat = new THREE.MeshLambertMaterial({ color: 0xdedad2 });
+    const rects: [number, number, number, number][] = [];
+    for (const g of grids) {
+      const x0 = g.ox;
+      const x1 = g.ox + (g.nx - 1) * g.cell;
+      const z0 = g.oz;
+      const z1 = g.oz + (g.nz - 1) * g.cell;
+      rects.push([x0 - W, z0 - W, x1 + W, z1 + W]);
+      const outer = new THREE.Shape(rr(x0 - W, z0 - W, x1 + W, z1 + W, R + W).getPoints(8));
+      outer.holes.push(new THREE.Path(rr(x0, z0, x1, z1, R).getPoints(8).reverse()));
+      const geo = new THREE.ExtrudeGeometry(outer, { depth: H, bevelEnabled: false, curveSegments: 8 });
+      geo.rotateX(-Math.PI / 2);
+      const curb = new THREE.Mesh(geo, curbMat);
+      curb.name = 'curb';
+      this.group.add(curb);
+    }
+    // 줄눈: 2.5m 간격, 흙판(경계석 포함) 자리는 건너뛴다
+    const J = 2.5;
+    const X0 = -12, X1 = 12, Z0 = -6, Z1 = 11;
+    const pts: number[] = [];
+    const cut = (a0: number, a1: number, spans: [number, number][]) => {
+      let segs: [number, number][] = [[a0, a1]];
+      for (const [s0, s1] of spans)
+        segs = segs.flatMap(([u, v]) => (s1 <= u || s0 >= v ? [[u, v]] : ([[u, s0], [s1, v]] as [number, number][]).filter(([p, q]) => q - p > 0.05)));
+      return segs;
+    };
+    for (let x = X0 + J; x < X1 - 0.01; x += J) {
+      const spans = rects.filter(([a, , c]) => x > a && x < c).map(([, b, , d]) => [b, d] as [number, number]);
+      for (const [u, v] of cut(Z0, Z1, spans)) pts.push(x, 0.004, u, x, 0.004, v);
+    }
+    for (let z = Z0 + J; z < Z1 - 0.01; z += J) {
+      const spans = rects.filter(([, b, , d]) => z > b && z < d).map(([a, , c]) => [a, c] as [number, number]);
+      for (const [u, v] of cut(X0, X1, spans)) pts.push(u, 0.004, z, v, 0.004, z);
+    }
+    // 선(1px)은 폰에서 티가 안 났다 — 폭 6cm 홈 띠(얇은 사각형)로 (앱 주인)
+    const JW = 0.06;
+    const pos: number[] = [];
+    for (let i = 0; i < pts.length; i += 6) {
+      const [ax, , az, bx, , bz] = pts.slice(i, i + 6);
+      const along = Math.abs(bx - ax) > Math.abs(bz - az);
+      const nx = along ? 0 : JW / 2;
+      const nz = along ? JW / 2 : 0;
+      const y = 0.004;
+      pos.push(ax - nx, y, az - nz, bx - nx, y, bz - nz, bx + nx, y, bz + nz, ax - nx, y, az - nz, bx + nx, y, bz + nz, ax + nx, y, az + nz);
+    }
+    const jg = new THREE.BufferGeometry();
+    jg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    jg.computeVertexNormals();
+    const joints = new THREE.Mesh(jg, new THREE.MeshBasicMaterial({ color: 0xaca89f, side: THREE.DoubleSide }));
+    joints.name = 'joints';
+    this.group.add(joints);
+  }
   /** exam: 실제 시험 모드 배경(시험장)으로 */
   constructor(site: Site, grids: SoilGrid[], exam = false) {
     // 바닥: 넓은 잔디(작업장 자리는 구멍) + 작업장 흙마당(흙 격자 자리는 구멍)
@@ -110,6 +184,7 @@ export class SiteView {
     const yardM = new THREE.Mesh(yardG, new THREE.MeshLambertMaterial({ color: PALETTE.yard }));
     yardM.name = 'floor';
     this.group.add(yardM);
+    this.addCurbsAndJoints(grids);
 
     // 바닥 표시선 (구덩이·굴착구역·가상선)
     const solid: number[] = [];
@@ -336,14 +411,18 @@ export class SoilView {
   /** 흙 주변 다진 바닥색. 튜토리얼 공간에서는 글자가 잘 보이게 밝게 올린다 */
   setGround(hex: number) {
     this.ground.setHex(hex);
+    this.padOn = false;
     for (const g of this.grids) g.dirty = true;
   }
+  /** 흙판 바깥(구역선~경계석) 연베이지 판 — 반듯한 구획으로 화면이 정돈돼 보이게 */
+  private pad = new THREE.Color(0xcfc6b4);
+  private padOn = true;
   private dark = new THREE.Color(0x24160c);
   private tmp = new THREE.Color();
   /** 굴착장 바닥: 여러 번 파고 밟아 흙이 깔린 땅 (구덩이만 갈색이면 '구덩이에만 흙'처럼 보였다 — 앱 주인 지적) */
   private trampled = new THREE.Color(0x7a5a3e);
   private gnd = new THREE.Color();
-  /** 흙 격자 가장자리에서 이 거리(m)까지 바닥색 → 밟힌 흙색으로 서서히 (격자는 구역선 밖 1.2m까지) */
+  /** 흙 격자는 구역선(실격선) 밖 1.2m까지 — 가장자리에서 이만큼 안쪽이 구역선. 흙색은 거기서 딱 끊는다 (흐릿하게 번지면 안 예쁘다 — 앱 주인) */
   private static EDGE = 1.2;
   /** 평탄 도움(연습 모드, 첫 덤프 뒤): C 흙을 목표면(지면 0) 대비 높으면 밝게·낮으면 어둡게, 버킷이 고른 자리는 몇 초 매끈한 자국 */
   flatGuide = false;
@@ -428,8 +507,8 @@ export class SoilView {
           const inPit = guide && g.pit[k] > 0;
           // 이 칸의 '바닥' 색: 격자 가장자리는 둘레 바닥색, 구역 안쪽으로 갈수록 밟힌 흙색
           const edge = Math.min(i, nx - 1 - i, j, nz - 1 - j) * g.cell;
-          const we = THREE.MathUtils.smoothstep(edge, 0, SoilView.EDGE);
-          this.gnd.copy(this.ground).lerp(this.trampled, we);
+          const inZone = edge >= SoilView.EDGE - g.cell * 0.5;
+          this.gnd.copy(inZone ? this.trampled : this.padOn ? this.pad : this.ground);
           if (Math.abs(h[k] - h0[k]) < 0.003 && h0[k] === 0 && !inPit) {
             col.setXYZ(k, this.gnd.r, this.gnd.g, this.gnd.b);
             continue;
