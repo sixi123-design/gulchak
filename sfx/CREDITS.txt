@@ -1,0 +1,4 @@
+소리 출처 (freesound.org, 모두 CC0) — 필요한 구간만 잘라 반복 재생용으로 가공
+eng_idle.wav  SieuAmThanh  #770430  https://freesound.org/s/770430/
+eng_high.wav  itinerantmonk108  #737208  https://freesound.org/s/737208/
+pour.wav      craigsmith  #481824  https://freesound.org/s/481824/
