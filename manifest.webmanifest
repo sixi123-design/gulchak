@@ -1,0 +1,14 @@
+{
+  "name": "도전! 굴착기 실기",
+  "short_name": "도전! 굴착기",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#7fd3ff",
+  "theme_color": "#7fd3ff",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
